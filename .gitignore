@@ -1,1 +1,5 @@
-llama/*
+llama/
+retico_whisperasr/
+__pycache__/
+.vscode/
+Google_API_Key.json
