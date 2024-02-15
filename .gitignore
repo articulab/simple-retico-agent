@@ -3,3 +3,4 @@ retico_whisperasr/
 __pycache__/
 .vscode/
 Google_API_Key.json
+hf_token.txt

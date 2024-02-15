@@ -11,7 +11,7 @@
 
 # microphone_module.subscribe(speaker_module)
 
-## This Plays the audio input by the mic into the speakers
+# This Plays the audio input by the mic into the speakers
 
 # retico_core.network.run(microphone_module)
 # # Wait for an input from the user
@@ -19,10 +19,10 @@
 # retico_core.network.stop(microphone_module)
 
 
-### I am trying to create a way to use a wav file instead of the microphone as the audio input.
+# I am trying to create a way to use a wav file instead of the microphone as the audio input.
 
 
-## This Plays the audio input by the mic into the speakers
+# This Plays the audio input by the mic into the speakers
 # r_files = wave.open("test.wav", "rb")
 # a = r_files.readframes(10)
 # p = pyaudio.PyAudio()
@@ -107,7 +107,7 @@ def callback_google_asr(update_msg):
         print(x.final)
 
 
-## System 1
+# System 1
 
 # m1 = WaveModule(file_name="audios/test2.wav")
 # m2 = GoogleASRModule("en-US", rate=m1.rate)  # en-US or de-DE or ....
@@ -134,16 +134,17 @@ def callback_google_asr(update_msg):
 # retico_core.network.load_and_execute("networks/wav_asr_debug_speaker_net.rtc")
 
 
-## System 2
+# System 2
 # from retico_core.text import IncrementalizeASRModule, EndOfUtteranceModule
 # from SpeakerModule import SpeakerModule2
 from retico_core import *
 from retico_core.audio import (
-    AudioDispatcherModule,
+    # AudioDispatcherModule,
     SpeakerModule,
     MicrophoneModule,
 )
-from retico_core.debug import CallbackModule
+
+# from retico_core.debug import CallbackModule
 from WaveModule import WaveModule
 from retico_googleasr import *
 
@@ -161,7 +162,6 @@ from retico_whisperasr.retico_whisperasr.whisperasr import WhisperASRModule
 
 wav = WaveModule(file_name="audios/test2.wav")
 mic = MicrophoneModule()
-# dis = AudioDispatcherModule(rate=wav.rate)
 # asr = GoogleASRModule("en-US", rate=wav.rate)  # en-US or de-DE or ....
 asr = WhisperASRModule()
 # end_turn = EndOfUtteranceModule()
@@ -169,19 +169,9 @@ asr = WhisperASRModule()
 cback = debug.CallbackModule(callback=callback)
 speaker = SpeakerModule(rate=wav.rate)
 
-# m1.subscribe(m3)
 wav.subscribe(asr)
 wav.subscribe(speaker)
 asr.subscribe(cback)
-
-# asr.subscribe(iasr)
-# iasr.subscribe(cback)
-
-
-# asr.subscribe(end_turn)
-# end_turn.subscribe(cback)
-# wav.subscribe(speaker)
-
 
 network.run(wav)
 

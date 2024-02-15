@@ -26,12 +26,7 @@ class WaveModule(retico_core.AbstractProducingModule):
         # return SpeechIU
 
     def __init__(
-        self,
-        file_name="audios/test.wav",
-        frame_length=0.02,
-        rate=16000,
-        sample_width=2,
-        **kwargs
+        self, file_name="audios/test.wav", frame_length=0.02, **kwargs
     ):
         """
         Initialize the Wave Module.
@@ -46,11 +41,6 @@ class WaveModule(retico_core.AbstractProducingModule):
         self.r_file = None
         self.frame_length = frame_length
         self.r_file = wave.open(file_name, "rb")
-        print("Number of channels", self.r_file.getnchannels())
-        print("Sample width", self.r_file.getsampwidth())
-        print("Frame rate.", self.r_file.getframerate())
-        print("Number of frames", self.r_file.getnframes())
-        print("parameters:", self.r_file.getparams())
         self.sample_width = self.r_file.getsampwidth()
         self.rate = self.r_file.getframerate() * 2
         # self.rate = self.r_file.getframerate() * self.sample_width ?
@@ -61,7 +51,7 @@ class WaveModule(retico_core.AbstractProducingModule):
     def process_update(self, _):
         time.sleep(
             self.frame_length * 0.5
-        )  ## Why is it not == to self.frame_length ??
+        )  # Why is it not == to self.frame_length ??
         sample = self.r_file.readframes(self.chunk_size)
         output_iu = self.create_iu()
         output_iu.set_audio(

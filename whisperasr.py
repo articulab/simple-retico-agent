@@ -39,7 +39,7 @@ class WhisperASR:
             whisper_model
         )
 
-        if language == None:
+        if language is None:
             self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
                 language="english", task="transcribe"
             )
@@ -70,7 +70,7 @@ class WhisperASR:
             )
             s = s.set_frame_rate(16_000)
             return s._data
-        # maybe it is stereo and webrtcasr only accepts 10, 20 or 30ms mono (20ms stereo is too big)
+        # maybe it is stereo and webrtcvad only accepts 10, 20 or 30ms mono (20ms stereo is too big)
         # if len(audio) / (sample_width * frame_rate) > 0,03 (if the audio length in more than 30ms)
         # but if stereo it's 10ms max
         if self.get_audio_length(audio) > 0.03:
@@ -199,7 +199,7 @@ class WhisperASRModule(retico_core.AbstractModule):
                 self.framerate = iu.rate
                 self.acr.framerate = self.framerate
             # Here we should check if the IU raw audio length is more than 960,
-            # because webrtcasr takes max 960 (30ms for mono audio)
+            # because webrtcvad takes max 960 (30ms for mono audio)
             # if it's not the case because it's stereo, cut the IU into two IUs ?
             self.acr.add_audio(iu.raw_audio)
             if not self.latest_input_iu:
