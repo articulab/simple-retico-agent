@@ -22,6 +22,8 @@ class Llama:
         do_sample=True,
         num_return_sequences=1,
         max_length=400,
+        device_map="cuda",
+        load_in_4bit=True,
         **kwargs
     ):
         self.model_name = model_name
@@ -29,10 +31,15 @@ class Llama:
         with open(self.HF_TOKEN_FILE, "r") as f:
             self.access_token = f.readline()
 
+        # inference linguistics args
         self.top_k = top_k
         self.do_sample = do_sample
         self.num_return_sequences = num_return_sequences
         self.max_length = max_length
+
+        # inference hardware args
+        self.device_map = device_map
+        self.load_in_4bit = load_in_4bit
 
         # Model is not loaded for the moment
         self.model = None
@@ -40,8 +47,13 @@ class Llama:
         self.pipeline = None
 
     def load_model(self):
+        # load_in_4bit=True,
+        # device_map="cuda",
         self.model = LlamaForCausalLM.from_pretrained(
-            self.model_name, token=self.access_token
+            self.model_name,
+            token=self.access_token,
+            device_map=self.device_map,
+            load_in_4bit=self.load_in_4bit,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name, token=self.access_token
@@ -98,24 +110,50 @@ class LlamaModule(retico_core.AbstractModule):
 
     def setup(self):
         # We create the model
-        self.llama.load_model()
+        # self.llama.load_model()
+        pass
 
     def process_update(self, update_message):
         if not update_message:
             return None
         for iu, ut in update_message:
             if ut == retico_core.UpdateType.ADD:
-                self.process_ui(iu)
+                continue
             elif ut == retico_core.UpdateType.REVOKE:
-                self.process_revoke(iu)
-            # elif ut == retico_core.UpdateType.COMMIT:
-            #     self.commit(iu)
+                # self.process_revoke(iu)
+                continue
+            elif (
+                ut == retico_core.UpdateType.COMMIT
+            ):  # we want to call process full sentence only if this is an end-of-sentence token
+                # self.commit(iu)
+                # process the full sentence, append the update message and then pass to stop processing the rest or ius ?? do we want this behavior ?
+                self.process_full_sentence(update_message)
+                pass
 
-    def process_iu(self, iu):
-        async def async_generate(async_iu):
-            result = await self.llama.generate(async_iu)
+    def recreate_sentence_from_um(um):
+        sentence = ""
+        for iu, ut in um:
+            sentence += iu.get_text() + " "
+        print("sentence recreated = " + str(sentence))
+
+    def process_full_sentence(self, um):
+        sentence = self.recreate_sentence_from_um(um)
+
+        async def async_generate(sentence):
+            # result = await self.llama.generate(sentence)
+            result = sentence
+            self.append(result)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        coroutine = async_generate(iu)
+        coroutine = async_generate(sentence)
         loop.run_until_complete(coroutine)
+
+    # def process_iu(self, iu):
+    #     async def async_generate(async_iu):
+    #         result = await self.llama.generate(async_iu)
+
+    #     loop = asyncio.new_event_loop()
+    #     asyncio.set_event_loop(loop)
+    #     coroutine = async_generate(iu)
+    #     loop.run_until_complete(coroutine)

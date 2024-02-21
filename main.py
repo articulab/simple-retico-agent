@@ -155,6 +155,8 @@ import sys
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
 from retico_whisperasr.retico_whisperasr.whisperasr import WhisperASRModule
+from llama import LlamaModule
+from WozAsrModule import WozAsrModule
 
 # from retico_whisperasr import WhisperASRModule
 
@@ -168,14 +170,21 @@ asr = WhisperASRModule()
 # iasr = IncrementalizeASRModule()
 cback = debug.CallbackModule(callback=callback)
 speaker = SpeakerModule(rate=wav.rate)
+woz = WozAsrModule()
 
-wav.subscribe(asr)
-wav.subscribe(speaker)
-asr.subscribe(cback)
+model_name = "meta-llama/Llama-2-7b-hf"
+llama = LlamaModule(model_name)
 
-network.run(wav)
+# wav.subscribe(asr)
+# wav.subscribe(speaker)
+# # asr.subscribe(cback)
+# asr.subscribe(llama)
+woz.subscribe(llama)
+llama.subscribe(cback)
+
+network.run(woz)
 
 print("Running")
 input()
 
-network.stop(wav)
+network.stop(woz)
