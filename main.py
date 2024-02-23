@@ -146,45 +146,64 @@ from retico_core.audio import (
 
 # from retico_core.debug import CallbackModule
 from WaveModule import WaveModule
-from retico_googleasr import *
+# from retico_googleasr import *
 
 
 # from retico_whisperasr import WhisperASRModule
 import sys
+from llama_chat import LlamaChatModule
 
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
-from retico_whisperasr.retico_whisperasr.whisperasr import WhisperASRModule
+# from retico_whisperasr.retico_whisperasr.whisperasr import WhisperASRModule
+from whisperasr import WhisperASRModule
 from llama import LlamaModule
 from WozAsrModule import WozAsrModule
+from speechbraintts import SpeechBrainTTSModule
 
 # from retico_whisperasr import WhisperASRModule
 
 # from retico_core.audio import AudioDispatcherModule
 
-wav = WaveModule(file_name="audios/test2.wav")
+# wav = WaveModule(file_name="audios/test2.wav")
 mic = MicrophoneModule()
 # asr = GoogleASRModule("en-US", rate=wav.rate)  # en-US or de-DE or ....
 asr = WhisperASRModule()
 # end_turn = EndOfUtteranceModule()
 # iasr = IncrementalizeASRModule()
-cback = debug.CallbackModule(callback=callback)
-speaker = SpeakerModule(rate=wav.rate)
-woz = WozAsrModule()
+# cback = debug.CallbackModule(callback=callback)
+tts = SpeechBrainTTSModule("en")
+speaker = audio.SpeakerModule(rate=22050)
+# speaker = SpeakerModule(rate=mic.rate)
+# woz = WozAsrModule()
 
-model_name = "meta-llama/Llama-2-7b-hf"
-llama = LlamaModule(model_name)
+# model_name = "meta-llama/Llama-2-7b-hf"
+model_name = 'mediocredev/open-llama-3b-v2-chat'
+# chat_history = [
+#     {"role": "user", "content": "Hello"}, 
+#     {"role": "assistant", "content": "Hello! I am your math teacher and I will teach you addition today."},
+#     {"role": "user", "content": "I am your 8 years old child student and I can't wait to learn about mathematics !"},
+# ]
+chat_history = [
+    {"role": "user", "content": "Hello"}, 
+    {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
+]
+# llama = LlamaModule(model_name)
+llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
 
 # wav.subscribe(asr)
 # wav.subscribe(speaker)
 # # asr.subscribe(cback)
-# asr.subscribe(llama)
-woz.subscribe(llama)
-llama.subscribe(cback)
+# woz.subscribe(llama_chat)
+mic.subscribe(asr)
+# asr.subscribe(cback)
+asr.subscribe(llama_chat)
+llama_chat.subscribe(tts)
+tts.subscribe(speaker)
 
-network.run(woz)
+network.run(mic)
 
 print("Running")
 input()
 
-network.stop(woz)
+network.stop(mic)

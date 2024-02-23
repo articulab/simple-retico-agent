@@ -1,5 +1,5 @@
-llama/
-retico_whisperasr/
+retico_whisperasr
+retico_speechbraintts
 __pycache__/
 .vscode/
 Google_API_Key.json

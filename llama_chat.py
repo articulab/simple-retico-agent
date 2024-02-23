@@ -12,7 +12,7 @@ from transformers import (
 import torch
 
 
-class Llama:
+class LlamaChat:
 
     # HF_TOKEN_FILE = "./hf_token.txt"
 
@@ -96,6 +96,9 @@ class Llama:
             max_length=self.max_length,
         )
         return sequences
+
+    def add_user_sentence(self, sentence):
+        self.chat_history.append({"role": "user", "content": sentence})
     
     def generate_next_sentence(self):
         # print("chat_history\n")
@@ -118,12 +121,12 @@ class Llama:
         return output_text
 
 
-class LlamaModule(retico_core.AbstractModule):
-    """An implementation of Llama-2 with retico"""
+class LlamaChatModule(retico_core.AbstractModule):
+    """An implementation of LlamaChat-2 with retico"""
 
     @staticmethod
     def name():
-        return "Llama-2 Module"
+        return "LlamaChat-2 Module"
 
     @staticmethod
     def description():
@@ -137,7 +140,7 @@ class LlamaModule(retico_core.AbstractModule):
     def output_iu():
         return TextIU
 
-    def __init__(self, model_name, **kwargs):
+    def __init__(self, model_name, chat_history, **kwargs):
         """Initializes the LlamaModule.
 
         Args:
@@ -145,16 +148,18 @@ class LlamaModule(retico_core.AbstractModule):
         """
         super().__init__(**kwargs)
         self.model_name = model_name
-        self.llama = Llama(self.model_name)
+        self.llama = LlamaChat(self.model_name, chat_history=chat_history)
 
     def setup(self):
         # We create the model
-        # self.llama.load_model()
-        pass
+        self.llama.load_model()
+        # pass
 
     def process_update(self, update_message):
         if not update_message:
             return None
+        commit = False
+        msg = []
         for iu, ut in update_message:
             if ut == retico_core.UpdateType.ADD:
                 continue
@@ -166,27 +171,48 @@ class LlamaModule(retico_core.AbstractModule):
             ):  # we want to call process full sentence only if this is an end-of-sentence token
                 # self.commit(iu)
                 # process the full sentence, append the update message and then pass to stop processing the rest or ius ?? do we want this behavior ?
-                self.process_full_sentence(update_message)
+                # print("commit")
+                # print(iu)
+                # print(ut)
+                msg.append(iu)
+                commit = True
                 pass
+        if commit:
+            self.process_full_sentence(msg)
 
-    def recreate_sentence_from_um(um):
+    def recreate_sentence_from_um(self, msg):
         sentence = ""
-        for iu, ut in um:
+        for iu in msg:
+            # print("recreate")
+            # print(iu)
             sentence += iu.get_text() + " "
-        print("sentence recreated = " + str(sentence))
+        # print("sentence recreated = " + str(sentence))
+        return sentence
 
-    def process_full_sentence(self, um):
-        sentence = self.recreate_sentence_from_um(um)
+    def process_full_sentence(self, msg):
+        sentence = self.recreate_sentence_from_um(msg)
+        print("user sentence : "+str(sentence))
+        self.llama.add_user_sentence(sentence)
+        agent_sentence = self.llama.generate_next_sentence()
+        print("agent sentence : "+str(agent_sentence))
+        # should trigger modules subscribed to llama :
+        payload = agent_sentence
+        output_ui = self.create_iu()
+        output_ui.payload = payload
+        next_um = retico_core.abstract.UpdateMessage()
+        next_um.add_iu(output_ui, update_type=retico_core.UpdateType.ADD)
+        next_um.add_iu(output_ui, update_type=retico_core.UpdateType.COMMIT)
+        self.append(next_um)
+        
+        # async def async_generate(sentence):
+        #     # result = await self.llama.generate_next_sentence()
+        #     result = sentence
+        #     self.append(result)
 
-        async def async_generate(sentence):
-            # result = await self.llama.generate(sentence)
-            result = sentence
-            self.append(result)
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        coroutine = async_generate(sentence)
-        loop.run_until_complete(coroutine)
+        # loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(loop)
+        # coroutine = async_generate(sentence)
+        # loop.run_until_complete(coroutine)
 
     # def process_iu(self, iu):
     #     async def async_generate(async_iu):
