@@ -43,13 +43,19 @@ if __name__ == "__main__":
     #     As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation. You play the role of a teacher."
     # prompt_without_prefix = "Teacher : Hi! How are your today ? \
     # Child : I am fine, and I can't wait to learn mathematics !"
-    my_prompt = "<s>[INST] This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+    # my_prompt = "<s>[INST] This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+    # The teacher is teaching mathemathics to the child student. \
+    # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+    # You play the role of a teacher. Here is the beginning of the conversation : [/INST] \
+    # Teacher : Hi! How are your today ? \
+    # Child : I am fine, and I can't wait to learn mathematics !</s>\
+    # [INST] Generate the next Teacher sentence [/INST]"
+    my_prompt = "[INST]This is a spoken dialog scenario between a teacher and a 8 years old child student. \
     The teacher is teaching mathemathics to the child student. \
     As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-    You play the role of a teacher. Here is the beginning of the conversation : [/INST] \
+    You play the role of a teacher. Here is the beginning of the conversation : \
     Teacher : Hi! How are your today ? \
-    Child : I am fine, and I can't wait to learn mathematics !</s>\
-    [INST] Generate the next Teacher sentence [/INST]"
+    Child : I am fine, and I can't wait to learn mathematics ![/INST]"
     # my_prompt = "<s>[INST] What do you think about the inclusion policies in Tech companies? [/INST]"
     model_output = generate_text_from_prompt(my_prompt)
     print(model_output)
