@@ -3,6 +3,7 @@ from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer
 import torch
 
 # conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=11.8 -c pytorch -c nvidia
+# nvidia cuda 11.6.134 driver
 
 # prefix = "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
 #     The teacher is teaching mathemathics to the child student. \

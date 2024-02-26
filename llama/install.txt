@@ -1,0 +1,11 @@
+# Windows
+$env:CMAKE_ARGS = "-DLLAMA_BLAS=ON"
+pip install llama-cpp-python
+
+set FORCE_CMAKE=1 && set CMAKE_ARGS=-DLLAMA_CUBLAS=on -DLLAMA_AVX=off -DLLAMA_AVX2=off -DLLAMA_FMA=off
+pip install llama-cpp-python --no-cache-dir
+
+set CMAKE_ARGS=-DLLAMA_CUBLAS=on
+pip install llama-cpp-python --no-cache-dir
+
+set "CMAKE_ARGS=-DLLAMA_CUBLAS=on" && pip install llama-cpp-python --no-cache-dir
