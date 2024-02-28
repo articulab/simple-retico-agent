@@ -1,6 +1,15 @@
+"""
+Conda environment to activate before running the code : llama
+conda activate llama
+"""
+
 import transformers
 import torch
 from transformers import AutoTokenizer, LlamaForCausalLM, LlamaTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+# ==================================================
+# MODELS
 
 # model = "meta-llama/Llama-2-7b-hf" # too big, needs 16GB GPU
 
@@ -15,9 +24,11 @@ model = "openlm-research/open_llama_3b_v2" # works with every thing, but what wo
 # work with auto and generate
 # work with auto and pipeline
 
-access_token = "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"
 
-print(torch.cuda.is_available())
+# ==================================================
+# CONFIG
+
+access_token = "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"
 
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -30,16 +41,18 @@ bnb_config = BitsAndBytesConfig(
 # device_map = {"":0}
 device_map = "auto"
 
+
+# ==================================================
+# MODEL & TOKENIZER
 # NOT AUTO FOR OPENLLAMA
 # tokenizer = LlamaTokenizer.from_pretrained(model, access_token=access_token, legacy=False)
 # m = LlamaForCausalLM.from_pretrained(
 #     model,
 #     device_map=device_map,
 #     quantization_config=bnb_config
-#     # load_in_4bit=True,
 # )
 
-# # AUTO
+# AUTO
 tokenizer = AutoTokenizer.from_pretrained(model, access_token=access_token)
 m = AutoModelForCausalLM.from_pretrained(
     model,
@@ -48,22 +61,8 @@ m = AutoModelForCausalLM.from_pretrained(
 )
 
 
-# NO PIPELINE
-# # # prompt = 'Q: What is the largest animal?\nA:'
-# # # prompt = 'Q: who will win in a fight opposing a crocodile to a grizzly ?\nA:'
-# prompt = 'Who will win in a fight opposing a crocodile to a grizzly ? Explain step by step.'
-# inputs = tokenizer(prompt, return_tensors="pt")
-# input_ids = inputs.input_ids
-# input_ids = input_ids.to('cuda')
-
-# generation_output = m.generate(
-#     input_ids=input_ids,
-#     max_new_tokens=100
-# )
-# print(tokenizer.decode(generation_output[0]))
-
-
-# PIPELINE
+# ==================================================
+# PROMPT
 
 # prompt = "The settings is a mathematics tutoring session between a teacher and a 8 years old child. \
 # The exchange is a dialogue, you are the teacher and I am the child. \
@@ -94,6 +93,9 @@ prompt = "This is a spoken dialog scenario between a teacher and a 8 years old c
 
 # prompt = 'Who will win in a fight opposing a crocodile to a grizzly ? Explain step by step.'
 
+
+# ==================================================
+# PIPELINE
 text_generation_pipeline = transformers.pipeline(
     "text-generation",
     model=m,
@@ -118,18 +120,6 @@ for seq in sequences:
     print(f"Result: {seq['generated_text']}")
 
 
-
-# # conversational pipeline
-# from transformers import Conversation
-
-# prefix = "This is a conversation between a teacher and a 8 years old child student. \
-#     The teacher is teaching mathemathics to the child student. \
-#     As the student is a child, the teacher needs to stay gentle all the time."
-# prompt_without_prefix = "Teacher : Hi! How are your today ? \
-# Child : I am fine, and I can't wait to learn mathematics !"
-
-
-
 # ## usage of chat template
 # # chat = [
 # #    {"role": "user", "content": "Hello, how are you?"},
@@ -140,31 +130,18 @@ for seq in sequences:
 
 # # usage of chat template
 # messages = [
-#     {
-#         "role": "system",
-#         "content": "You are a friendly chatbot who always responds in the style of a pirate",
-#     },
+#     {"role": "system", "content": "You are a friendly chatbot who always responds in the style of a pirate"},
 #     {"role": "user", "content": "How many helicopters can a human eat in one sitting?"},
 #  ]
 # tokenized_chat = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt")
 # print(tokenizer.decode(tokenized_chat[0]))
-# outputs = m.generate(tokenized_chat, max_new_tokens=128) 
-# print("OUT\n")
+# outputs = m.generate(tokenized_chat, max_new_tokens=128)
 # print(tokenizer.decode(outputs[0]))
 
-# # # usage of chat template
-# # messages = [
-# #     {
-# #         "role": "system",
-# #         "content": "You are a friendly chatbot who always responds in the style of a pirate",
-# #     },
-# #     {"role": "user", "content": "How many helicopters can a human eat in one sitting?"},
-# # ]
-# # print(pipe(messages, max_new_tokens=128)[0]['generated_text'][-1])  # Print the assistant's response
 
-
-
-
+# # conversational pipeline
+# from transformers import Conversation
+    
 # # conversational_pipeline = transformers.pipeline(
 # #     "conversational",
 # #     # model=model,

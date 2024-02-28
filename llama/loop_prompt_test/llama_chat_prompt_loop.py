@@ -1,3 +1,8 @@
+"""
+Conda environment to activate before running the code : llama
+conda activate llama
+"""
+
 import time
 from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer
 import torch

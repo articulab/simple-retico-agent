@@ -1,3 +1,8 @@
+"""
+Conda environment to activate before running the code : llama
+conda activate llama
+"""
+
 import time
 import transformers
 import torch

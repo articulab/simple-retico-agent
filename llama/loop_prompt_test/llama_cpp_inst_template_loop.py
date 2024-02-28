@@ -1,3 +1,8 @@
+"""
+Conda environment to activate before running the code : llama_cpp_cuda
+conda activate llama_cpp_cuda
+"""
+
 import time
 # from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer
 # import torch
@@ -59,12 +64,13 @@ def get_total_prompt(base_instructions, total_conv, instruction):
 
 CONV_LENGTH = 10
 CONTEXT_SIZE = 512
+N_GPU_LAYERS = 100
 
 def main():
 
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
 
-    my_model = Llama(model_path=model_path, n_ctx=CONTEXT_SIZE)
+    my_model = Llama(model_path=model_path, n_ctx=CONTEXT_SIZE, n_gpu_layers=N_GPU_LAYERS)
 
     # my_prompt = "<s>[INST] This is a spoken dialog scenario between a teacher and a 8 years old child student. \
     # The teacher is teaching mathemathics to the child student. \
@@ -133,3 +139,13 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+## example for llama 2 chat format : 
+# <s>[INST] <<SYS>>
+
+# You are are a helpful... bla bla.. assistant
+
+# <</SYS>>
+
+# Hi there! [/INST] Hello! How can I help you today? </s><s>[INST] What is a neutron star? [/INST] A neutron star is a ... </s><s> [INST] Okay cool, thank you! [/INST] 

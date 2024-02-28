@@ -1,24 +1,27 @@
+"""
+Conda environment to activate before running the code : llama_cpp_cuda
+conda activate llama_cpp_cuda
+"""
+
 from llama_cpp import Llama
 # from llama_cpp_python import Llama
 
 # Instanciate the model
-# model_path = "./model/zephyr-7b-beta.Q4_0.gguf"
-model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+# MODEL_PATH = "./model/zephyr-7b-beta.Q4_0.gguf"
+MODEL_PATH = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
 
 CONTEXT_SIZE = 512
-
-my_model = Llama(model_path=model_path, n_ctx=CONTEXT_SIZE)
+N_GPU_LAYERS = 100
 
 def generate_text_from_prompt(
     my_prompt,
+    my_model,
     max_tokens = 100,
     temperature = 0.3,
     top_p = 0.1,
     echo = True,
     stop = ["Q", "\n"],
     ):
-    
-
 
     # Define the parameters
     model_output = my_model(
@@ -32,6 +35,8 @@ def generate_text_from_prompt(
     return model_output
 
 if __name__ == "__main__":
+
+    my_model = Llama(model_path=MODEL_PATH, n_ctx=CONTEXT_SIZE, n_gpu_layers=N_GPU_LAYERS)
    
 #    my_prompt = "What do you think about the inclusion policies in Tech companies?"
 #    chat_history = [
@@ -56,8 +61,8 @@ if __name__ == "__main__":
     You play the role of a teacher. Here is the beginning of the conversation : \
     Teacher : Hi! How are your today ? \
     Child : I am fine, and I can't wait to learn mathematics ![/INST]"
-    # my_prompt = "<s>[INST] What do you think about the inclusion policies in Tech companies? [/INST]"
-    model_output = generate_text_from_prompt(my_prompt)
+    
+    model_output = generate_text_from_prompt(my_prompt, my_model)
     print(model_output)
     text = model_output["choices"][0]["text"].strip()
     print(text)
