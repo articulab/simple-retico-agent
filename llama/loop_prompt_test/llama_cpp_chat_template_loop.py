@@ -1,6 +1,7 @@
 """
 Conda environment to activate before running the code : llama_cpp_cuda
 conda activate llama_cpp_cuda
+python llama/loop_prompt_test/llama_cpp_chat_template_loop.py
 """
 
 import time

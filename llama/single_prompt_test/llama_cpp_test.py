@@ -4,14 +4,6 @@ conda activate llama_cpp_cuda
 """
 
 from llama_cpp import Llama
-# from llama_cpp_python import Llama
-
-# Instanciate the model
-# MODEL_PATH = "./model/zephyr-7b-beta.Q4_0.gguf"
-MODEL_PATH = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
-
-CONTEXT_SIZE = 512
-N_GPU_LAYERS = 100
 
 def generate_text_from_prompt(
     my_prompt,
@@ -33,6 +25,22 @@ def generate_text_from_prompt(
         stop=stop,
     )
     return model_output
+
+# Instanciate the model
+# LOCAL MODELS
+# MODEL_PATH = "./models/llama-2-7b-chat.Q4_K_S.gguf"
+MODEL_PATH = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+# MODEL_PATH = "./models/mistral-7b-v0.1.Q4_K_S.gguf"
+# MODEL_PATH = "./models/zephyr-7b-beta.Q4_0.gguf"
+# MODEL_PATH = "./models/llama-2-13b-chat.Q4_K_S.gguf"
+# MODEL_PATH = "./models/llama-2-13b.Q4_K_S.gguf"
+
+# DISTANT MODELS
+# MODEL_PATH = "mediocredev/open-llama-3b-v2-chat"
+# MODEL_PATH = "openlm-research/open_llama_3b_v2"
+
+CONTEXT_SIZE = 512
+N_GPU_LAYERS = 100
 
 if __name__ == "__main__":
 
