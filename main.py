@@ -1,10 +1,57 @@
-# import retico_core
-# from retico_core.audio import MicrophoneModule, SpeakerModule
-# import wave
-# import pyaudio
-# import queue
-# import time
-# from WaveModule import WaveModule
+import sys
+prefix = "/home/mlechape/retico_system_test/"
+sys.path.append(prefix + "retico-whisperasr")
+from WaveModule import WaveModule
+from whisperasr import WhisperASRModule
+from WozAsrModule import WozAsrModule
+from speechbraintts import SpeechBrainTTSModule
+from llama import LlamaModule
+from llama_cpp_chat import LlamaCppModule
+from llama_chat import LlamaChatModule
+from retico_core import *
+from retico_core.audio import (
+    # AudioDispatcherModule,
+    SpeakerModule,
+    MicrophoneModule,
+)
+
+def callback(update_msg):
+    global msg
+    for x, ut in update_msg:
+        if ut == UpdateType.ADD:
+            msg.append(x)
+        if ut == UpdateType.REVOKE:
+            msg.remove(x)
+    txt = ""
+    committed = False
+    for x in msg:
+        # if x.final:
+        #     print("final commited" + str(x.committed))
+        txt += x.text + " "
+        committed = committed or x.committed
+    print(" " * 80, end="\r")
+    print(f"{txt}", end="\r")
+    if committed:
+        msg = []
+        print("")
+
+
+def callback2(update_msg):
+    # print("lalala")
+    # print(update_msg)
+    for x, ut in update_msg:
+        print(x)
+        print(ut)
+
+
+def callback_google_asr(update_msg):
+    # print("lalala")
+    # print(update_msg)
+    for x, ut in update_msg:
+        print(x)
+        print(ut)
+        print(x.final)
+
 
 # microphone_module = MicrophoneModule()
 # speaker_module = SpeakerModule()
@@ -61,52 +108,6 @@
 # retico_core.network.load_and_execute("wav_to_speaker_net.rtc")
 
 
-#####
-
-# from retico_core import *
-# from retico_googleasr import *
-
-msg = []
-
-
-def callback(update_msg):
-    global msg
-    for x, ut in update_msg:
-        if ut == UpdateType.ADD:
-            msg.append(x)
-        if ut == UpdateType.REVOKE:
-            msg.remove(x)
-    txt = ""
-    committed = False
-    for x in msg:
-        # if x.final:
-        #     print("final commited" + str(x.committed))
-        txt += x.text + " "
-        committed = committed or x.committed
-    print(" " * 80, end="\r")
-    print(f"{txt}", end="\r")
-    if committed:
-        msg = []
-        print("")
-
-
-def callback2(update_msg):
-    # print("lalala")
-    # print(update_msg)
-    for x, ut in update_msg:
-        print(x)
-        print(ut)
-
-
-def callback_google_asr(update_msg):
-    # print("lalala")
-    # print(update_msg)
-    for x, ut in update_msg:
-        print(x)
-        print(ut)
-        print(x.final)
-
-
 # System 1
 
 # m1 = WaveModule(file_name="audios/test2.wav")
@@ -133,77 +134,128 @@ def callback_google_asr(update_msg):
 
 # retico_core.network.load_and_execute("networks/wav_asr_debug_speaker_net.rtc")
 
+# # from retico_whisperasr import WhisperASRModule
 
-# System 2
-# from retico_core.text import IncrementalizeASRModule, EndOfUtteranceModule
-# from SpeakerModule import SpeakerModule2
-from retico_core import *
-from retico_core.audio import (
-    # AudioDispatcherModule,
-    SpeakerModule,
-    MicrophoneModule,
-)
+# # from retico_core.audio import AudioDispatcherModule
 
-# from retico_core.debug import CallbackModule
-from WaveModule import WaveModule
-# from retico_googleasr import *
+# # wav = WaveModule(file_name="audios/test2.wav")
+# mic = MicrophoneModule()
+# # asr = GoogleASRModule("en-US", rate=wav.rate)  # en-US or de-DE or ....
+# asr = WhisperASRModule()
+# # end_turn = EndOfUtteranceModule()
+# # iasr = IncrementalizeASRModule()
+# # cback = debug.CallbackModule(callback=callback)
+# tts = SpeechBrainTTSModule("en")
+# speaker = audio.SpeakerModule(rate=22050)
+# # speaker = SpeakerModule(rate=mic.rate)
+# # woz = WozAsrModule()
 
-
-# from retico_whisperasr import WhisperASRModule
-import sys
-from llama_chat import LlamaChatModule
-
-prefix = "/home/mlechape/retico_system_test/"
-sys.path.append(prefix + "retico-whisperasr")
-# from retico_whisperasr.retico_whisperasr.whisperasr import WhisperASRModule
-from whisperasr import WhisperASRModule
-from llama import LlamaModule
-from WozAsrModule import WozAsrModule
-from speechbraintts import SpeechBrainTTSModule
-
-# from retico_whisperasr import WhisperASRModule
-
-# from retico_core.audio import AudioDispatcherModule
-
-# wav = WaveModule(file_name="audios/test2.wav")
-mic = MicrophoneModule()
-# asr = GoogleASRModule("en-US", rate=wav.rate)  # en-US or de-DE or ....
-asr = WhisperASRModule()
-# end_turn = EndOfUtteranceModule()
-# iasr = IncrementalizeASRModule()
-# cback = debug.CallbackModule(callback=callback)
-tts = SpeechBrainTTSModule("en")
-speaker = audio.SpeakerModule(rate=22050)
-# speaker = SpeakerModule(rate=mic.rate)
-# woz = WozAsrModule()
-
-# model_name = "meta-llama/Llama-2-7b-hf"
-model_name = 'mediocredev/open-llama-3b-v2-chat'
+# # model_name = "meta-llama/Llama-2-7b-hf"
+# model_name = 'mediocredev/open-llama-3b-v2-chat'
+# # chat_history = [
+# #     {"role": "user", "content": "Hello"}, 
+# #     {"role": "assistant", "content": "Hello! I am your math teacher and I will teach you addition today."},
+# #     {"role": "user", "content": "I am your 8 years old child student and I can't wait to learn about mathematics !"},
+# # ]
 # chat_history = [
 #     {"role": "user", "content": "Hello"}, 
-#     {"role": "assistant", "content": "Hello! I am your math teacher and I will teach you addition today."},
-#     {"role": "user", "content": "I am your 8 years old child student and I can't wait to learn about mathematics !"},
+#     {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
 # ]
-chat_history = [
-    {"role": "user", "content": "Hello"}, 
-    {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
-]
-# llama = LlamaModule(model_name)
-llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
+# # llama = LlamaModule(model_name)
+# llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
 
-# wav.subscribe(asr)
-# wav.subscribe(speaker)
+# # wav.subscribe(asr)
+# # wav.subscribe(speaker)
+# # # asr.subscribe(cback)
+# # woz.subscribe(llama_chat)
+# mic.subscribe(asr)
 # # asr.subscribe(cback)
-# woz.subscribe(llama_chat)
-mic.subscribe(asr)
-# asr.subscribe(cback)
-asr.subscribe(llama_chat)
-llama_chat.subscribe(tts)
-tts.subscribe(speaker)
+# asr.subscribe(llama_chat)
+# llama_chat.subscribe(tts)
+# tts.subscribe(speaker)
 
-network.run(mic)
+# network.run(mic)
 
-print("Running")
-input()
+# print("Running")
+# input()
 
-network.stop(mic)
+# network.stop(mic)
+
+
+
+
+
+def main_llama_cpp_python_chat_7b():
+
+    # Usable model
+    # model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    # model_path = "./models/mistral-7b-v0.1.Q4_K_S.gguf"
+    # model_path = "./models/zephyr-7b-beta.Q4_0.gguf"
+    # model_path = "./models/llama-2-13b-chat.Q4_K_S.gguf"
+    # model_path = "./models/llama-2-13b.Q4_K_S.gguf"
+
+    # LLM info
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    chat_history = [
+        {"role": "system", "content": "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+            The teacher is teaching mathemathics to the child student. \
+            As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+            You play the role of a teacher. Here is the beginning of the conversation :"},
+        {"role": "user", "content": "Hello !"}, 
+        {"role": "assistant", "content": "Hi! How are your today ?"},
+        {"role": "user", "content": "I am fine, and I can't wait to learn mathematics !"},
+    ]
+
+    # creating modules
+    mic = MicrophoneModule()
+    asr = WhisperASRModule()
+    llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
+    tts = SpeechBrainTTSModule("en")
+    speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+
+    # creating network
+    mic.subscribe(asr)
+    asr.subscribe(llama_cpp)
+    llama_cpp.subscribe(tts)
+    tts.subscribe(speaker)
+
+    # running system
+    network.run(mic)
+    print("Running")
+    input()
+    network.stop(mic)
+
+
+
+def main_llama_chat_3b():
+
+    # LLM info
+    model_name = 'mediocredev/open-llama-3b-v2-chat'
+    chat_history = [
+        {"role": "user", "content": "Hello"}, 
+        {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
+    ]
+
+    # creating modules
+    mic = MicrophoneModule()
+    asr = WhisperASRModule()
+    llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
+    tts = SpeechBrainTTSModule("en")
+    speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+
+    # creating network
+    mic.subscribe(asr)
+    asr.subscribe(llama_chat)
+    llama_chat.subscribe(tts)
+    tts.subscribe(speaker)
+
+    # running system
+    network.run(mic)
+    print("Running")
+    input()
+    network.stop(mic)
+
+
+if __name__ == "__main__":
+    main_llama_chat_3b()
+    # main_llama_cpp_python_chat_7b()
