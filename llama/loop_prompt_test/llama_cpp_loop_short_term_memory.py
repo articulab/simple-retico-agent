@@ -266,6 +266,9 @@ def main():
                 last_sentence += my_model.detokenize([token])
                 last_sentence_nb_tokens += 1
             time_1 = time.time()
+            my_prompt += last_sentence + b"\n"            
+            print(my_prompt.decode("utf-8"))
+            print("["+str(round(time_1 - time_0, 3)) + "s]")
 
             # Add model sentence to short term memory
             # add the last sentence from model to the last utterance which contains only the sentence from user
@@ -275,9 +278,6 @@ def main():
             size_per_utterance[-1] += tmp_utt_size
 
             # Ask for user sentence
-            my_prompt += last_sentence + b"\n"            
-            print(my_prompt.decode("utf-8"))
-            print("["+str(round(time_1 - time_0, 3)) + "s]")
             user_sentence = bytes(ask_for_sentence(), 'utf-8')
             user_sentence_complete =  b"[INST]Child : " + user_sentence + b"[/INST]"
             my_prompt += user_sentence_complete
