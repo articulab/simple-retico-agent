@@ -67,11 +67,11 @@ class LlamaCppModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [retico_core.SpeechRecognitionIU]
+        return [retico_core.text.SpeechRecognitionIU]
 
     @staticmethod
     def output_iu():
-        return retico_core.TextIU
+        return retico_core.text.TextIU
 
     def __init__(self, model_path, chat_history, **kwargs):
         """Initializes the LlamaCpp Module.

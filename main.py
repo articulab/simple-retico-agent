@@ -7,6 +7,8 @@ from WozAsrModule import WozAsrModule
 from speechbraintts import SpeechBrainTTSModule
 from llama import LlamaModule
 from llama_cpp_chat import LlamaCppModule
+from llama_cpp_memory import LlamaCppMemoryModule
+from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from llama_chat import LlamaChatModule
 from retico_core import *
 from retico_core.audio import (
@@ -206,17 +208,36 @@ def main_llama_cpp_python_chat_7b():
         {"role": "user", "content": "I am fine, and I can't wait to learn mathematics !"},
     ]
 
+    initial_prompt = b"<<SYS>>This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+            You play the role of a teacher. Here is the beginning of the conversation :<</SYS>>\
+        [INST]Child : Hello ![/INST]\
+        Teacher : Hi! How are your today ?\
+        [INST]Child : I am fine, and I can't wait to learn mathematics ![/INST]\
+        Teacher : Great news! I'm excited to help you learn as well. Let's start with something simple. Can you tell me what comes before the number five ?\
+        [INST]Child : four ?[/INST]\
+        Teacher : Excellent job! Keep it up. Let's move on to something a little more challenging. Can you tell me how many apples you have if I give you two baskets, each having three apples?\
+        [INST]Child : six ?[/INST]\
+        Teacher : Correct! Now let's see if you can find 3 + 3. Great work! Keep going like this and we will learn maths together step by step.\
+        [INST]Child : okay.[/INST]\
+        Teacher: That's the spirit! Let's continue practicing these simple addition problems together. If you ever feel confused or have any doubts, please don't hesitate to ask questions.\
+        [INST]Child : yeah ! let's do another exercice.[/INST]\
+        Teacher: "
+
     # creating modules
     mic = MicrophoneModule()
     asr = WhisperASRModule()
     llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
+    llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, initial_prompt)
     tts = SpeechBrainTTSModule("en")
     speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
 
     # creating network
     mic.subscribe(asr)
-    asr.subscribe(llama_cpp)
-    llama_cpp.subscribe(tts)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)
 
     # running system
@@ -257,5 +278,5 @@ def main_llama_chat_3b():
 
 
 if __name__ == "__main__":
-    main_llama_chat_3b()
-    # main_llama_cpp_python_chat_7b()
+    # main_llama_chat_3b()
+    main_llama_cpp_python_chat_7b()

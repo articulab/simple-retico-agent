@@ -235,7 +235,8 @@ def main():
         Teacher : Correct! Now let's see if you can find 3 + 3. Great work! Keep going like this and we will learn maths together step by step.\
         [INST]Child : okay.[/INST]\
         Teacher: That's the spirit! Let's continue practicing these simple addition problems together. If you ever feel confused or have any doubts, please don't hesitate to ask questions.\
-        [INST]Child : yeah ! let's do another exercice.[/INST]"
+        [INST]Child : yeah ! let's do another exercice.[/INST]\
+        Teacher: "
 
         DELIMITER = b"[INST]"
         # Initialize short term memory from first prompt
@@ -279,7 +280,7 @@ def main():
 
             # Ask for user sentence
             user_sentence = bytes(ask_for_sentence(), 'utf-8')
-            user_sentence_complete =  b"[INST]Child : " + user_sentence + b"[/INST]"
+            user_sentence_complete =  b"[INST]Child : " + user_sentence + b"[/INST]     Teacher: "
             my_prompt += user_sentence_complete
 
             # Add user sentence to short term memory

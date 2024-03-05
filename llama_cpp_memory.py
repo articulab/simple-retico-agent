@@ -25,7 +25,6 @@ class LlamaCppMemory:
         self.model_repo = model_repo
         self.model_name = model_name
 
-
         # self.chat_history = chat_history
         self.initial_prompt = initial_prompt
         self.stop_token_ids = [2,13]
@@ -43,12 +42,12 @@ class LlamaCppMemory:
         self.model = None
 
     def load_model(self):
-        if self.model is not None:
+        if self.model_path is not None:
 
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers)
+                n_gpu_layers=self.n_gpu_layers) 
             
         elif self.model_repo is not None and self.model_name is not None :
 
@@ -58,7 +57,7 @@ class LlamaCppMemory:
                 device_map="cuda",
                 n_ctx=self.context_size,
                 n_gpu_layers=self.n_gpu_layers)
-        
+            
         else : 
             raise NotImplementedError("Please, when creating the module, you must give a model_path or model_repo and model_name")
     
@@ -153,11 +152,11 @@ class LlamaCppMemoryModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [retico_core.SpeechRecognitionIU]
+        return [retico_core.text.SpeechRecognitionIU]
 
     @staticmethod
     def output_iu():
-        return retico_core.TextIU
+        return retico_core.text.TextIU
 
     def __init__(self, model_path, model_repo, model_name, initial_prompt, **kwargs):
         """Initializes the LlamaCpp Module.
@@ -211,11 +210,11 @@ class LlamaCppMemoryModule(retico_core.AbstractModule):
         user_sentence = self.recreate_sentence_from_um(msg)
         print("user sentence : "+str(user_sentence))
         # self.model_wrapper.add_user_sentence(sentence)
-        user_sentence_complete =  b"[INST]Child : " + user_sentence + b"[/INST]"
+        user_sentence_complete =  b"[INST]Child : " + bytes(user_sentence, 'utf-8') + b"[/INST]"
         
         # Add user sentence to short term memory
         # append last sentence from user as the last utterance
-        user_sentence_complete_nb_tokens = len(self.my_model.tokenize(user_sentence_complete))
+        user_sentence_complete_nb_tokens = len(self.model_wrapper.model.tokenize(user_sentence_complete))
         self.utterances.append(user_sentence_complete)
         self.size_per_utterance.append(user_sentence_complete_nb_tokens)
         self.my_prompt += user_sentence_complete
