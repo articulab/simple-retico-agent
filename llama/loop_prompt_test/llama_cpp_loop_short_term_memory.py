@@ -2,7 +2,7 @@
 Conda environment to activate before running the code : llama_cpp_cuda
 conda activate llama_cpp_cuda
 
-python llama/loop_prompt_test/llama_cpp_loop_context_size.py
+python llama/loop_prompt_test/llama_cpp_loop_short_term_memory.py
 """
 
 import time
