@@ -238,17 +238,19 @@ def main():
         [INST]Child : yeah ! let's do another exercice.[/INST]"
 
         DELIMITER = b"[INST]"
-        # split_utterances = my_prompt.split(DELIMITER)
+        # Initialize short term memory from first prompt
+        split_utterances = my_prompt.split(DELIMITER)
         # print("nb QA = "+str(len(split_utterances)))
-        # utterances = [split_utterances[0]]
-        # size_per_utterance = []
-        # for u in split_utterances[1:]:
-        #     utterances.append(DELIMITER+u)
-        #     size_per_utterance.append(len(my_model.tokenize(utterances[-1])))
+        utterances = [split_utterances[0]]
+        size_per_utterance = []
+        for u in split_utterances[1:]:
+            utterances.append(DELIMITER+u)
+            size_per_utterance.append(len(my_model.tokenize(utterances[-1])))
 
         for i in range(CONV_LENGTH):
 
             print("Loading...")
+            # Ask for model sentence
             time_0 = time.time()
             tokens = my_model.tokenize(my_prompt)
             last_sentence = b""
@@ -265,6 +267,14 @@ def main():
                 last_sentence_nb_tokens += 1
             time_1 = time.time()
 
+            # Add model sentence to short term memory
+            # add the last sentence from model to the last utterance which contains only the sentence from user
+            tmp_utt = last_sentence
+            tmp_utt_size = last_sentence_nb_tokens
+            utterances[-1] += tmp_utt
+            size_per_utterance[-1] += tmp_utt_size
+
+            # Ask for user sentence
             my_prompt += last_sentence + b"\n"            
             print(my_prompt.decode("utf-8"))
             print("["+str(round(time_1 - time_0, 3)) + "s]")
@@ -272,34 +282,17 @@ def main():
             user_sentence_complete =  b"[INST]Child : " + user_sentence + b"[/INST]"
             my_prompt += user_sentence_complete
 
-            # # append last_sentence from model & user
-            # tmp_utt = last_sentence + user_sentence_complete
-            # tmp_utt_size = last_sentence_nb_tokens + len(my_model.tokenize(user_sentence_complete))
-            # utterances.append(tmp_utt)
-            # size_per_utterance.append(tmp_utt_size)
+            # Add user sentence to short term memory
+            # append last sentence from user as the last utterance
+            tmp_utt = user_sentence_complete
+            tmp_utt_size = len(my_model.tokenize(user_sentence_complete))
+            utterances.append(tmp_utt)
+            size_per_utterance.append(tmp_utt_size)
 
-            # nb_tokens = sum(size_per_utterance)
-            # print("num token : "+str(nb_tokens))
-            # if nb_tokens >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
-            #     print("nb QA = "+str(len(utterances)))
-            #     print("size_per_utterance = "+str(size_per_utterance))
-            #     while sum(size_per_utterance) >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
-            #         utterances.pop(1) # do not pop the system prompt explaining the scenario
-            #         res = size_per_utterance.pop(1)
-            #         print("POP "+str(res))
-            #     my_prompt = b"".join(utterances)
-            #     print(my_prompt)
-
-            tokens = my_model.tokenize(my_prompt)
-            print("num token : "+str(len(tokens)))
-            if len(tokens) >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
-                split_utterances = my_prompt.split(DELIMITER)
-                print("nb QA = "+str(len(split_utterances)))
-                size_per_utterance = []
-                utterances = [split_utterances[0]]
-                for u in split_utterances[1:]:
-                    utterances.append(DELIMITER+u)
-                    size_per_utterance.append(len(my_model.tokenize(utterances[-1])))
+            # Calculate short term memory
+            nb_tokens = sum(size_per_utterance)
+            print("num token : "+str(nb_tokens))
+            if nb_tokens >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
                 print("nb QA = "+str(len(utterances)))
                 print("size_per_utterance = "+str(size_per_utterance))
                 while sum(size_per_utterance) >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
@@ -308,6 +301,26 @@ def main():
                     print("POP "+str(res))
                 my_prompt = b"".join(utterances)
                 print(my_prompt)
+
+            # recalculate every turn (more calculation)
+            # tokens = my_model.tokenize(my_prompt)
+            # print("num token : "+str(len(tokens)))
+            # if len(tokens) >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
+            #     split_utterances = my_prompt.split(DELIMITER)
+            #     print("nb QA = "+str(len(split_utterances)))
+            #     size_per_utterance = []
+            #     utterances = [split_utterances[0]]
+            #     for u in split_utterances[1:]:
+            #         utterances.append(DELIMITER+u)
+            #         size_per_utterance.append(len(my_model.tokenize(utterances[-1])))
+            #     print("nb QA = "+str(len(utterances)))
+            #     print("size_per_utterance = "+str(size_per_utterance))
+            #     while sum(size_per_utterance) >= SHORT_TERM_MEMORY_CONTEXT_SIZE:
+            #         utterances.pop(1) # do not pop the system prompt explaining the scenario
+            #         res = size_per_utterance.pop(1)
+            #         print("POP "+str(res))
+            #     my_prompt = b"".join(utterances)
+            #     print(my_prompt)
 
                 # TODO: find a way to not calculate these split and tokenize operations every time.
 
