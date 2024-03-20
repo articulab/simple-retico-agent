@@ -6,7 +6,7 @@ python llama/loop_prompt_test/llama_cpp_loop_short_term_memory.py
 """
 
 import time
-from llama_cpp import Llama
+from llama_cpp import Llama, llama_token_eos
 
 def ask_for_sentence():
     sentence = input("your answer : ")
@@ -40,26 +40,38 @@ def generate_text_from_chat_history(
     chat_history,
     my_model,
     # max_tokens = 200,
-    max_tokens = 100,
-    temperature = 0.3,
-    top_p = 0.9,
+    # max_tokens = 100,
+    # temperature = 0.3,
+    # top_p = 0.9,
     # stop = ["Q", "\n"],
     ):
 
     # stop = [str(my_model.token_eos()), "</s>"]
-    stop = ["</s>", "<|im_end|>"]
-    # stop = ["</s>"]
+    # stop = ["</s>", "<|im_end|>"]
+    stop = ["</s>"]
     # stop = ["<|im_end|>"]
 
     # Define the parameters
     model_output = my_model.create_chat_completion(
         chat_history,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
+        # max_tokens=max_tokens,
+        # temperature=temperature,
+        # top_p=top_p,
         stop=stop,
     )
     return model_output
+
+def calculate_short_memory_chat(my_model, chat_history):
+    formatted_chat = format_llama2(chat_history).prompt
+    print("formatted_chat = ", formatted_chat)
+    formatted_chat_nb_tokens = len(my_model.tokenize(bytes(formatted_chat, "utf-8")))
+    print("formatted_chat_nb_tokens = ", formatted_chat_nb_tokens)
+    while formatted_chat_nb_tokens > SHORT_TERM_MEMORY_CONTEXT_SIZE :
+        chat_history.pop(1)
+        formatted_chat = format_llama2(chat_history).prompt
+        formatted_chat_nb_tokens = len(my_model.tokenize(bytes(formatted_chat, "utf-8")))
+        print("formatted_chat_nb_tokens = ", formatted_chat_nb_tokens)
+    return chat_history
 
 def calculate_short_memory(chat_history):
     if len(chat_history) > SHORT_TERM_MEMORY_SIZE+1:
@@ -139,7 +151,8 @@ MODEL_PATH = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
 
 CONV_LENGTH = 10
 # CONTEXT_SIZE = 512
-CONTEXT_SIZE = 8192
+CONTEXT_SIZE = 1000
+# CONTEXT_SIZE = 8192
 # CONTEXT_SIZE = 32768
 # CONTEXT_SIZE = 0 # from model
 SHORT_TERM_MEMORY_SIZE = 5
@@ -155,7 +168,9 @@ N_GPU_LAYERS = 100
 # TEMPLATE = "mistral-instruct"
 # TEMPLATE = "instruct"
 # TEMPLATE = "instruct_2"
-TEMPLATE = "generate"
+# TEMPLATE = "generate"
+TEMPLATE = "chat"
+
 
 MODEL_REPO = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
 MODEL_NAME = "mistral-7b-instruct-v0.2.Q4_K_S.gguf"
@@ -171,6 +186,7 @@ STOP_TOKEN_IDS = [2,13]
 STOP_TOKEN_TEXT = [b"\n", b"        "]
 
 from transformers import AutoTokenizer
+from llama_cpp.llama_chat_format import LlamaChatCompletionHandlerRegistry, hf_tokenizer_config_to_chat_formatter, ChatFormatter, chat_formatter_to_chat_completion_handler, register_chat_format, format_llama2, format_zephyr, format_mistral_instruct
 # import tiktoken
 # TOKENIZER_PATH = "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
 TOKENIZER_PATH = "mistralai/Mistral-7B-Instruct-v0.2"
@@ -243,10 +259,13 @@ def main():
         split_utterances = my_prompt.split(DELIMITER)
         # print("nb QA = "+str(len(split_utterances)))
         utterances = [split_utterances[0]]
-        size_per_utterance = []
+        # size_per_utterance = []
+        size_per_utterance = [len(my_model.tokenize(utterances[0]))]
         for u in split_utterances[1:]:
             utterances.append(DELIMITER+u)
             size_per_utterance.append(len(my_model.tokenize(utterances[-1])))
+
+        print(size_per_utterance)
 
         for i in range(CONV_LENGTH):
 
@@ -326,7 +345,25 @@ def main():
                 # TODO: find a way to not calculate these split and tokenize operations every time.
 
 
-    elif TEMPLATE == "llama-2":
+    elif TEMPLATE == "chat":
+
+        # my_model = Llama(
+        #     model_path=MODEL_PATH,
+        #     n_ctx=CONTEXT_SIZE,
+        #     n_gpu_layers=N_GPU_LAYERS,
+        #     # chat_format="llama-2"
+        #     )
+        
+        my_model = Llama.from_pretrained(
+            repo_id=MODEL_REPO, 
+            filename=MODEL_NAME,
+            # device_map=DEVICE_MAP,
+            n_ctx=CONTEXT_SIZE, 
+            n_gpu_layers=N_GPU_LAYERS,
+            # chat_format=chat_format,
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_REPO)
 
         chat_history = [
             {"role": "system", "content": "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
@@ -336,22 +373,56 @@ def main():
             {"role": "user", "content": "Hello !"}, 
             {"role": "assistant", "content": "Hi! How are your today ?"},
             {"role": "user", "content": "I am fine, and I can't wait to learn mathematics !"},
-        ] 
+        ]
+
+
+        print(tokenizer.apply_chat_template(chat_history))
+        print(my_model.apply_chat_template(chat_history))
+        print("handler = ",my_model.chat_handler)
+        print("handler = ",my_model.chat_format)
+        print(register_chat_format)
+        print(register_chat_format(my_model.chat_format))
+        # print(register_chat_format(my_model.chat_format)(chat_history))
+        # print(LlamaChatCompletionHandlerRegistry)
+        a = LlamaChatCompletionHandlerRegistry().get_chat_completion_handler_by_name(name=my_model.chat_format)
+        print(a)
+        print(a(llama=my_model, messages=chat_history))
+        # print(ChatFormatter)
+        # print(ChatFormatter(my_model.chat_format))
+        # a = chat_formatter_to_chat_completion_handler(my_model.chat_format)
+        # a = chat_formatter_to_chat_completion_handler(ChatFormatter)
+        # a = hf_autotokenizer_to_chat_formatter(pretrained_model_name_or_path)
+        # bos = my_model.detokenize([my_model.token_bos()])
+        # eos = my_model.detokenize([my_model.token_eos()])
+        # print(my_model.token_bos())
+        # print(llama_token_eos())
+        # print(bos)
+        # print(eos)
+        # bos = "<s>"
+        # eos = "</s>"
+        # tokenizer_config = {'chat_template':my_model.chat_format, "bos_token":bos, "eos_token":eos}
+        # a = hf_tokenizer_config_to_chat_formatter(
+        #     tokenizer_config
+        # )
+        # print("handler = ",a)
+        # # print("handler = ",a())
+        # print("handler = ",a(llama=my_model, messages=chat_history))
+        # b = a(chat_history)
+        # print(b)
 
         for i in range(CONV_LENGTH):
 
-            short_term_memory = calculate_short_memory(chat_history)
+            chat_history = calculate_short_memory_chat(my_model, chat_history)
 
             time_0 = time.time()
-            model_output = generate_text_from_chat_history(short_term_memory, my_model)
+            model_output = generate_text_from_chat_history(chat_history, my_model)
             time_1 = time.time()
 
             role = model_output["choices"][0]["message"]['role']
             text = model_output["choices"][0]["message"]['content']
             assert role == "assistant"
             chat_history.append({"role":role, "content":text})
-            short_term_memory.append({"role":role, "content":text})
-            print_chat_history(short_term_memory)
+            print_chat_history(chat_history)
             print("\n["+str(round(time_1 - time_0, 3)) + "s]")
 
             user_sentence = ask_for_sentence()
@@ -360,8 +431,7 @@ def main():
     elif TEMPLATE == "zephyr": # doesn't work yet because we haven't found zephyr stop parameter yet : the stop parameter of the create_chat_completion function
 
         # my_model = Llama(model_path=MODEL_PATH, n_ctx=CONTEXT_SIZE, n_gpu_layers=N_GPU_LAYERS, chat_format=TEMPLATE)
-        my_model = Llama(model_path=MODEL_PATH, n_ctx=CONTEXT_SIZE, n_gpu_layers=N_GPU_LAYERS)
-
+        # my_model = Llama(model_path=MODEL_PATH, n_ctx=CONTEXT_SIZE, n_gpu_layers=N_GPU_LAYERS)
 
         chat_history = [
             {"role": "system", "content": "This is a spoken dialog scenario between a teacher and a 8 years old child student. \

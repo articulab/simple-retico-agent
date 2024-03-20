@@ -39,8 +39,8 @@ def callback(update_msg):
 
 
 def callback2(update_msg):
-    # print("lalala")
-    # print(update_msg)
+    print("lalala")
+    print(update_msg)
     for x, ut in update_msg:
         print(x)
         print(ut)
@@ -233,12 +233,14 @@ def main_llama_cpp_python_chat_7b():
     llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, initial_prompt)
     tts = SpeechBrainTTSModule("en")
     speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+    cback = debug.CallbackModule(callback=callback2)
 
     # creating network
     mic.subscribe(asr)
-    asr.subscribe(llama_mem_icr)
-    llama_mem_icr.subscribe(tts)
-    tts.subscribe(speaker)
+    asr.subscribe(cback)
+    # asr.subscribe(llama_mem_icr)
+    # llama_mem_icr.subscribe(tts)
+    # tts.subscribe(speaker)
 
     # running system
     network.run(mic)
