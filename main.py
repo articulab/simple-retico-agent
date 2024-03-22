@@ -224,23 +224,28 @@ def main_llama_cpp_python_chat_7b():
         Teacher: That's the spirit! Let's continue practicing these simple addition problems together. If you ever feel confused or have any doubts, please don't hesitate to ask questions.\
         [INST]Child : yeah ! let's do another exercice.[/INST]\
         Teacher: "
+    
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
 
     # creating modules
     mic = MicrophoneModule()
     asr = WhisperASRModule()
     llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
     llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, initial_prompt)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt)
     tts = SpeechBrainTTSModule("en")
     speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
     cback = debug.CallbackModule(callback=callback2)
 
     # creating network
     mic.subscribe(asr)
-    asr.subscribe(cback)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+    # asr.subscribe(cback)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
 
     # running system
     network.run(mic)
