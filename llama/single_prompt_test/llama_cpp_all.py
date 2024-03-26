@@ -204,9 +204,9 @@ MODEL_LOADING_METHOD = "local_file"
 
 # MODEL_GENERATION_METHOD = "stream"
 # MODEL_GENERATION_METHOD = "chat_completion"
-MODEL_GENERATION_METHOD = "model_call"
+# MODEL_GENERATION_METHOD = "model_call"
 # MODEL_GENERATION_METHOD = "generate_function"
-# MODEL_GENERATION_METHOD = "special"
+MODEL_GENERATION_METHOD = "special"
 
 # PROMPT_TEMPLATE = "mistral"
 # PROMPT_TEMPLATE = "llama"
@@ -243,6 +243,14 @@ def set_prompt():
         ]
 
     elif PROMPT_TEMPLATE == "instruct":
+
+        my_prompt = "<<SYS>>[INST]This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        The teacher is teaching mathemathics to the child student. \
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation : \
+        Child : Hello !\
+        Teacher : Hi! How are your today ? \
+        Child : I am fine, and I can't wait to learn mathematics ![/INST]<</SYS>>"
 
         # works
         # my_prompt = "[INST]This is a spoken dialog scenario between a teacher and a 8 years old child student. \

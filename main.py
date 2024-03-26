@@ -1,3 +1,5 @@
+from asyncio import Queue
+import os
 import sys
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
@@ -16,6 +18,8 @@ from retico_core.audio import (
     SpeakerModule,
     MicrophoneModule,
 )
+
+
 
 def callback(update_msg):
     global msg
@@ -37,14 +41,43 @@ def callback(update_msg):
         msg = []
         print("")
 
-
 def callback2(update_msg):
-    print("lalala")
-    print(update_msg)
+    # print("lalala")
+    # print(update_msg)
     for x, ut in update_msg:
-        print(x)
-        print(ut)
+        # print(x)
+        # print(ut)
+        print(str(x.payload) + " " + str(ut))
 
+def callback_ponct(update_msg):
+    global SENTENCE
+    ponctuation = [".", ",", "?", "!", ":", ";"]
+    for x, ut in update_msg:
+        if ut == UpdateType.COMMIT:
+            SENTENCE += str(x.payload) + " "
+            # print(SENTENCE)
+            if str(x.payload)[-1] in ponctuation:
+                print(SENTENCE)
+                SENTENCE = ""
+
+def callback_stream_ponct(update_msg):
+    global SENTENCE
+    is_ponct = False
+    ponctuation = [".", ",", "?", "!", ":", ";"]
+    for x, ut in update_msg:
+        # if ut == UpdateType.ADD:
+        #     SENTENCE += str(x.payload) + " "
+        if ut == UpdateType.COMMIT:
+            SENTENCE += str(x.payload) + " "
+            is_ponct = str(x.payload)[-1] in ponctuation
+
+    # Clear the console to reprint the updated transcription.
+    os.system('cls' if os.name=='nt' else 'clear')
+    print(SENTENCE)
+    # Flush stdout.
+    print('', end='', flush=True)
+    if is_ponct :
+        SENTENCE = ""
 
 def callback_google_asr(update_msg):
     # print("lalala")
@@ -185,7 +218,7 @@ def callback_google_asr(update_msg):
 
 
 
-
+SENTENCE = ""
 
 def main_llama_cpp_python_chat_7b():
 
@@ -230,19 +263,21 @@ def main_llama_cpp_python_chat_7b():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
+    printing = True
+
     # creating modules
     mic = MicrophoneModule()
-    asr = WhisperASRModule()
-    llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
-    llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt)
+    asr = WhisperASRModule(printing=printing)
+    # llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
+    # llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt, printing=printing)
     tts = SpeechBrainTTSModule("en")
     speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
-    cback = debug.CallbackModule(callback=callback2)
+    cback = debug.CallbackModule(callback=callback_ponct)
 
     # creating network
     mic.subscribe(asr)
-    # asr.subscribe(cback)
+    asr.subscribe(cback)
     asr.subscribe(llama_mem_icr)
     llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)

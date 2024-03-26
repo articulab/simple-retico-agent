@@ -8,6 +8,7 @@ provided by huggingface. In addition, the ASR module provides end-of-utterance d
 finished.
 """
 
+import datetime
 import threading
 import retico_core
 from retico_core.audio import AudioIU
@@ -18,6 +19,7 @@ import pydub
 import webrtcvad
 import numpy as np
 import time
+from faster_whisper import WhisperModel
 
 transformers.logging.set_verbosity_error()
 
@@ -25,7 +27,8 @@ transformers.logging.set_verbosity_error()
 class WhisperASR:
     def __init__(
         self,
-        whisper_model="openai/whisper-base",
+        # whisper_model="openai/whisper-base",
+        whisper_model="base.en",
         framerate=16_000,
         sample_width=2,
         silence_dur=1,
@@ -33,25 +36,29 @@ class WhisperASR:
         silence_threshold=0.75,
         language=None,
         task="transcribe",
+        printing=False,
     ):
-        self.processor = WhisperProcessor.from_pretrained(whisper_model)
-        self.model = WhisperForConditionalGeneration.from_pretrained(
-            whisper_model
-        )
+        # self.processor = WhisperProcessor.from_pretrained(whisper_model)
+        # self.model = WhisperForConditionalGeneration.from_pretrained(
+        #     whisper_model
+        # )
 
-        if language is None:
-            self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
-                language="english", task="transcribe"
-            )
-            print("Defaulting to english.")
+        # if language is None:
+        #     self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
+        #         language="english", task="transcribe"
+        #     )
+        #     print("Defaulting to english.")
 
-        else:
-            self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
-                language=language, task=task
-            )
-            print("Input Language: ", language)
-            print("Task: ", task)
-        self.model.config.forced_decoder_ids = self.forced_decoder_ids
+        # else:
+        #     self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(
+        #         language=language, task=task
+        #     )
+        #     print("Input Language: ", language)
+        #     print("Task: ", task)
+        # self.model.config.forced_decoder_ids = self.forced_decoder_ids
+
+        self.model = WhisperModel(whisper_model, device="cuda", compute_type="int8")
+        self.printing=printing
 
         self.audio_buffer = []
         self.framerate = framerate
@@ -86,12 +93,12 @@ class WhisperASR:
             if len(self.audio_buffer) == 0:
                 return None
             frame_length = len(self.audio_buffer[0]) / 2
-            print("frame length = " + str(frame_length))
-            print("silencedur = " + str(self.silence_dur))
+            # print("frame length = " + str(frame_length))
+            # print("silencedur = " + str(self.silence_dur))
             self._n_sil_frames = int(
                 self.silence_dur / (frame_length / 16_000)
             )
-            print("n_sil_dur = " + str(self._n_sil_frames))
+            # print("n_sil_dur = " + str(self._n_sil_frames))
         return self._n_sil_frames
 
     def recognize_silence(self):
@@ -115,6 +122,9 @@ class WhisperASR:
             self.audio_buffer.append(audio)
 
     def recognize(self):
+        start_date = datetime.datetime.now()
+        start_time = time.time()
+
         silence = self.recognize_silence()
 
         if not self.vad_state and not silence:
@@ -124,23 +134,41 @@ class WhisperASR:
         if not self.vad_state:
             return None, False
 
-        full_audio = b""
-        for a in self.audio_buffer:
-            full_audio += a
-        npa = (
-            np.frombuffer(full_audio, dtype=np.int16).astype(np.double)
-            / 32768.0
-        )  # normalize between -1 and 1
-        if len(npa) < 10:
-            return None, False
-        input_features = self.processor(
-            npa, sampling_rate=16000, return_tensors="pt"
-        ).input_features
+        # full_audio = b""
+        # for a in self.audio_buffer:
+        #     full_audio += a
+        # npa = (
+        #     np.frombuffer(full_audio, dtype=np.int16).astype(np.double)
+        #     / 32768.0
+        # )  # normalize between -1 and 1
+        # if len(npa) < 10:
+        #     return None, False
+        # input_features = self.processor(
+        #     npa, sampling_rate=16000, return_tensors="pt"
+        # ).input_features
+        # predicted_ids = self.model.generate(input_features)
+        # transcription = self.processor.batch_decode(
+        #     predicted_ids, skip_special_tokens=True
+        # )[0]
 
-        predicted_ids = self.model.generate(input_features)
-        transcription = self.processor.batch_decode(
-            predicted_ids, skip_special_tokens=True
-        )[0]
+        # faster whisper    
+        
+        full_audio = b''.join(self.audio_buffer)
+        audio_np = np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
+        segments, info = self.model.transcribe(audio_np) # the segments can be streamed
+        segments = list(segments)
+        transcription = ''.join([s.text for s in segments])
+
+        end_date = datetime.datetime.now()
+        end_time = time.time()
+
+        if self.printing:
+            # print("ASR")
+            # print("start_date ", start_date.strftime('%H:%M:%S.%MSMS'))
+            # print("end_date : ", end_date.strftime('%H:%M:%S.%MSMS'))
+            # print("execution time = " + str(round(end_time - start_time, 3)) + "s")
+            print("ASR : before process ", start_date.strftime('%T.%f')[:-3])
+            print("ASR : after process ", datetime.datetime.now().strftime('%T.%f')[:-3])
 
         if silence:
             self.vad_state = False
@@ -176,6 +204,7 @@ class WhisperASRModule(retico_core.AbstractModule):
         silence_dur=1,
         language=None,
         task="transcribe",
+        printing=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -184,6 +213,7 @@ class WhisperASRModule(retico_core.AbstractModule):
             silence_dur=silence_dur,
             language=language,
             task=task,
+            printing=printing,
         )
         self.framerate = framerate
         self.silence_dur = silence_dur
@@ -227,11 +257,13 @@ class WhisperASRModule(retico_core.AbstractModule):
                 output_iu.set_asr_results([prediction], token, 0.0, 0.99, eou)
                 self.current_output.append(output_iu)
                 um.add_iu(output_iu, retico_core.UpdateType.ADD)
+                # print("ADD datetime  : ", datetime.datetime.now())
 
             if end_of_utterance:
                 for iu in self.current_output:
                     self.commit(iu)
                     um.add_iu(iu, retico_core.UpdateType.COMMIT)
+                    # print("COMMIT datetime  : ", datetime.datetime.now())
                 self.current_output = []
 
             self.latest_input_iu = None
@@ -240,6 +272,7 @@ class WhisperASRModule(retico_core.AbstractModule):
     def prepare_run(self):
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
+        print("ASR started")
 
     def shutdown(self):
         self._asr_thread_active = False

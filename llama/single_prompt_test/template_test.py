@@ -355,9 +355,9 @@ MODEL_LOADING_METHOD = "local_file"
 
 # MODEL_GENERATION_METHOD = "stream"
 # MODEL_GENERATION_METHOD = "chat_completion"
-# MODEL_GENERATION_METHOD = "model_call"
+MODEL_GENERATION_METHOD = "model_call"
 # MODEL_GENERATION_METHOD = "generate_function"
-MODEL_GENERATION_METHOD = "special"
+# MODEL_GENERATION_METHOD = "special"
 
 # PROMPT_TEMPLATE = "mistral"
 # PROMPT_TEMPLATE = "llama"
@@ -650,16 +650,100 @@ def set_prompts():
         # [INST] Child : okay, I think I get it now ! [/INST]"
         # long_prompts.append(my_prompt)
 
-        # 1 INST + SYS
-        # Do not Work :
-        # - generate mutiple turn for both child and teacher
-        my_prompt = "[INST] <<SYS>>\
-        This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-        The teacher is teaching mathemathics to the child student. \
-        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-        You play the role of a teacher. Here is the beginning of the conversation : \
-        <</SYS>> \
+        # # 1 INST + SYS
+        # # Do not Work :
+        # # - generate mutiple turn for both child and teacher
+        # my_prompt = "[INST] <<SYS>>\
+        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        # The teacher is teaching mathemathics to the child student. \
+        # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        # You play the role of a teacher. Here is the beginning of the conversation : \
+        # <</SYS>> \
+        # \n\n\
+        # Child : Hello ! \n\n\
+        # Teacher : Hi! How are your today ? \n\n\
+        # Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        # Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        # Child : Humm, I know that one plus one equals two ! \n\n\
+        # Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        # Child : I... I am not sure...  \n\n\
+        # Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        # Child : okay, I think I get it now !\
+        # [/INST]"
+        # long_prompts.append(my_prompt)
+
+        # # 1 INST + SYS
+        # my_prompt = "[INST] <<SYS>>\
+        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        # The teacher is teaching mathemathics to the child student. \
+        # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        # You play the role of a teacher. Here is the beginning of the conversation :\
+        # <</SYS>> \
+        # \n\n\
+        # Child : Hello ! \n\n\
+        # Teacher : Hi! How are your today ? \n\n\
+        # Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        # Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        # Child : Humm, I know that one plus one equals two ! \n\n\
+        # Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        # Child : I... I am not sure...  \n\n\
+        # Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        # Child : okay, I think I get it now ! \n\n\
+        # Teacher: Great job understanding addition so far! Now let's try a few sums together. I will say the numbers, and you tell me what number comes after when we add them together. Ready? \n\n\
+        # Child: Yes! \n\n\
+        # Teacher: Alright, let's start with three and one. \n\n\
+        # Child: Four! \n\n\
+        # Teacher: That's correct! Keep up the good work. Next, let's try five and two. \n\n\
+        # Child: Seven!\
+        # [/INST]"
+        # long_prompts.append(my_prompt)
+
+        # # 1 INST + SYS
+        # my_prompt = "[INST] <<SYS>>\
+        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        # The teacher is teaching mathemathics to the child student. \
+        # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        # You play the role of a teacher. Here is the beginning of the conversation : \
+        # <</SYS>> \
+        # \n\n\
+        # Child : Hello ! \n\n\
+        # Teacher : Hi! How are your today ? \n\n\
+        # Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        # Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        # Child : Humm, I know that one plus one equals two ! \n\n\
+        # Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        # Child : I... I am not sure...  \n\n\
+        # Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        # Child : okay, I think I get it now ! \n\n\
+        # Teacher : Great attitude! I'm glad you're excited about math today. Let's start with something simple: can you count to ten with me? \n\n\
+        # Child: Sure thing! One, two, three, four, five, six, seven, eight, nine, ten! \n\n\
+        # Teacher: Excellent job! Now, let's try something a little more challenging. Can you identify these numbers: 4, 7, and 9? \n\n\
+        # Child: Yes! Four, seven, and nine! \n\n\
+        # Teacher: That's correct. Now let's practice adding some numbers together. What do you get when you add 2 and 3? \n\n\
+        # Child: Five! \n\n\
+        # Teacher: That's right! Good job. Let's try another one: what do you get when you add 5 and 7? \n\n\
+        # Child: Twelve! \n\n\
+        # Teacher: Not quite. Try again. \n\n\
+        # Child: Uh... eleven? \n\n\
+        # Teacher: No, we get twelve. Keep trying! Remember that five and seven make twelve when you put them together. \n\n\
+        # Child: Oh, I see! I got it now! \n\n\
+        # Teacher: Great job! Keep up the good work! Now let's practice subtraction: what's five take away two? \n\n\
+        # Child: Three! \
+        # [/INST]"
+        # long_prompts.append(my_prompt)
+
+        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        # The teacher is teaching mathemathics to the child student. \
+        # As the student is a child, the teacher needs to stay gentle all the time.\
+        # You play the role of a teacher. Here is the beginning of the conversation :
+
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
         \n\n\
+        The following is the conversation between you and your child student:\
         Child : Hello ! \n\n\
         Teacher : Hi! How are your today ? \n\n\
         Child : I am fine, and I can't wait to learn mathematics ! \n\n\
@@ -668,18 +752,20 @@ def set_prompts():
         Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
         Child : I... I am not sure...  \n\n\
         Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
-        Child : okay, I think I get it now !\
+        Child : okay, I think I get it now !\n\n\
+        [INST]\
+        Please only provide the very next Teacher response.\
         [/INST]"
         long_prompts.append(my_prompt)
 
         # 1 INST + SYS
-        my_prompt = "[INST] <<SYS>>\
-        This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-        The teacher is teaching mathemathics to the child student. \
-        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-        You play the role of a teacher. Here is the beginning of the conversation :\
-        <</SYS>> \
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
         \n\n\
+        The following is the conversation between you and your child student:\
         Child : Hello ! \n\n\
         Teacher : Hi! How are your today ? \n\n\
         Child : I am fine, and I can't wait to learn mathematics ! \n\n\
@@ -694,18 +780,20 @@ def set_prompts():
         Teacher: Alright, let's start with three and one. \n\n\
         Child: Four! \n\n\
         Teacher: That's correct! Keep up the good work. Next, let's try five and two. \n\n\
-        Child: Seven!\
+        Child: Seven! \n\n\
+        [INST]\
+        Please only provide the very next Teacher response.\
         [/INST]"
         long_prompts.append(my_prompt)
 
         # 1 INST + SYS
-        my_prompt = "[INST] <<SYS>>\
-        This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-        The teacher is teaching mathemathics to the child student. \
-        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-        You play the role of a teacher. Here is the beginning of the conversation : \
-        <</SYS>> \
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
         \n\n\
+        The following is the conversation between you and your child student:\
         Child : Hello ! \n\n\
         Teacher : Hi! How are your today ? \n\n\
         Child : I am fine, and I can't wait to learn mathematics ! \n\n\
@@ -728,7 +816,99 @@ def set_prompts():
         Teacher: No, we get twelve. Keep trying! Remember that five and seven make twelve when you put them together. \n\n\
         Child: Oh, I see! I got it now! \n\n\
         Teacher: Great job! Keep up the good work! Now let's practice subtraction: what's five take away two? \n\n\
-        Child: Three! \
+        Child: Three! \n\n\
+        [INST]\
+        Please only provide the very next Teacher response.\
+        [/INST]"
+        long_prompts.append(my_prompt)
+
+
+
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
+        \n\n\
+        The following is the conversation between you and your child student:\
+        Child : Hello ! \n\n\
+        Teacher : Hi! How are your today ? \n\n\
+        Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        Child : Humm, I know that one plus one equals two ! \n\n\
+        Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        Child : I... I am not sure...  \n\n\
+        Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        Child : okay, I think I get it now !\n\n\
+        [INST]\
+        Please complete the following Teacher response :\
+        Teacher: \
+        [/INST]"
+        long_prompts.append(my_prompt)
+
+        # 1 INST + SYS
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
+        \n\n\
+        The following is the conversation between you and your child student:\
+        Child : Hello ! \n\n\
+        Teacher : Hi! How are your today ? \n\n\
+        Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        Child : Humm, I know that one plus one equals two ! \n\n\
+        Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        Child : I... I am not sure...  \n\n\
+        Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        Child : okay, I think I get it now ! \n\n\
+        Teacher: Great job understanding addition so far! Now let's try a few sums together. I will say the numbers, and you tell me what number comes after when we add them together. Ready? \n\n\
+        Child: Yes! \n\n\
+        Teacher: Alright, let's start with three and one. \n\n\
+        Child: Four! \n\n\
+        Teacher: That's correct! Keep up the good work. Next, let's try five and two. \n\n\
+        Child: Seven! \n\n\
+        [INST]\
+        Please complete the following Teacher response :\
+        Teacher: \
+        [/INST]"
+        long_prompts.append(my_prompt)
+
+        # 1 INST + SYS
+        my_prompt = "<<SYS>>\
+        You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+        You interact with the student through a spoken dialogue.\
+        As your student is a child, you must stay gentle and supportive all the time.\
+        <</SYS>>\
+        \n\n\
+        The following is the conversation between you and your child student:\
+        Child : Hello ! \n\n\
+        Teacher : Hi! How are your today ? \n\n\
+        Child : I am fine, and I can't wait to learn mathematics ! \n\n\
+        Teacher : Okay, we will start with the simpler operation in mathematics, addition. What do you know about addition ? \n\n\
+        Child : Humm, I know that one plus one equals two ! \n\n\
+        Teacher : That's right ! And this is a good start. So, addition is the operation of adding two numbers together to get a bigger number that is their sum. In our case, we added one to one to get the bigger number two, that is their sum. Is it clear ? \n\n\
+        Child : I... I am not sure...  \n\n\
+        Teacher : Okay I will take another example, when we add one number, let's say two, to another number, let's say one, we get as a result three, a number bigger than both our previous numbers. \n\n\
+        Child : okay, I think I get it now ! \n\n\
+        Teacher : Great attitude! I'm glad you're excited about math today. Let's start with something simple: can you count to ten with me? \n\n\
+        Child: Sure thing! One, two, three, four, five, six, seven, eight, nine, ten! \n\n\
+        Teacher: Excellent job! Now, let's try something a little more challenging. Can you identify these numbers: 4, 7, and 9? \n\n\
+        Child: Yes! Four, seven, and nine! \n\n\
+        Teacher: That's correct. Now let's practice adding some numbers together. What do you get when you add 2 and 3? \n\n\
+        Child: Five! \n\n\
+        Teacher: That's right! Good job. Let's try another one: what do you get when you add 5 and 7? \n\n\
+        Child: Twelve! \n\n\
+        Teacher: Not quite. Try again. \n\n\
+        Child: Uh... eleven? \n\n\
+        Teacher: No, we get twelve. Keep trying! Remember that five and seven make twelve when you put them together. \n\n\
+        Child: Oh, I see! I got it now! \n\n\
+        Teacher: Great job! Keep up the good work! Now let's practice subtraction: what's five take away two? \n\n\
+        Child: Three! \n\n\
+        [INST]\
+        Please complete the following Teacher response :\
+        Teacher: \
         [/INST]"
         long_prompts.append(my_prompt)
 
