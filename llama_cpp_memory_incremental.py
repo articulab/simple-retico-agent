@@ -261,7 +261,7 @@ class LlamaCppMemoryIncremental:
 
         # Define the parameters
         final_prompt = self.prompt + self.end_prompt
-        print("final_prompt = ", final_prompt)
+        # print("final_prompt = ", final_prompt)
         tokens = self.model.tokenize(final_prompt, special=True)
         last_sentence = b""
         last_sentence_nb_tokens = 0
