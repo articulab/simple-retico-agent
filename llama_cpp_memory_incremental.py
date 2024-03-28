@@ -458,7 +458,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
             # COMMIT if ponctuation and not role patterns
-            if is_ponctuation and role_pattern is None: # this works because role patterns end with a ponctuation
+            if is_ponctuation and role_pattern is None and stop_pattern is None: # this works because role patterns end with a ponctuation
                 for iu in self.current_output:
                     self.commit(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
