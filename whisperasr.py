@@ -28,7 +28,8 @@ class WhisperASR:
     def __init__(
         self,
         # whisper_model="openai/whisper-base",
-        whisper_model="base.en",
+        # whisper_model="base.en",
+        whisper_model="distill-large-v3",
         framerate=16_000,
         sample_width=2,
         silence_dur=1,

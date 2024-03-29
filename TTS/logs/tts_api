@@ -1,0 +1,38 @@
+['This model is licensed under Coqui Public Model License.', "There's a lot that goes into a license for generative models, and you can read more of the origin story of CPML here."]
+ðɛɹz ə lɑt ðæt ɡoʊz ɪntu ə laɪsəns fɚ d͡ʒɛnɚɪtɪv mɑdəlz, ænd ju kən ɹid mɔɹ əv ðə ɔɹəd͡ʒən stɔɹi əv si pi ɛm ɛl hɪɹ.
+ [!] Character '͡' not found in the vocabulary. Discarding it.
+ > Processing time: 10.417918682098389
+ > Real-time factor: 0.9565086065134472
+execution_time =  10.448
+ > Text splitted to sentences.
+['You are a mathematics Teacher, you must teach addition to a 8 year old child student.', 'You interact with the student through a spoken dialogue.', 'As your student is a child, you must stay gentle and supportive all the time.']
+ > Processing time: 11.063050746917725
+ > Real-time factor: 0.7437566130345865
+execution_time =  11.11
+ > Text splitted to sentences.
+['Child : Hello !', 'Teacher : Hi!', 'How are your today ?', "Child : I am fine, and I can't wait to learn mathematics !"]
+ > Processing time: 16.77976632118225
+ > Real-time factor: 0.7589804208146018
+execution_time =  16.842
+ > Text splitted to sentences.
+['Yeah !']
+ > Processing time: 0.49771690368652344
+ > Real-time factor: 0.6797979265540041
+short execution_time =  0.513
+ > Text splitted to sentences.
+['Thank you !']
+ > Processing time: 0.6057529449462891
+ > Real-time factor: 0.5858268612309506
+short execution_time =  0.621
+ > Text splitted to sentences.
+['Okay sure.']
+ > Processing time: 0.7839925289154053
+ > Real-time factor: 0.6307295411042282
+short execution_time =  0.8
+ > Text splitted to sentences.
+['No problem']
+ > Processing time: 0.63456130027771
+ > Real-time factor: 0.6002091914517632
+short execution_time =  0.651
+ > Text splitted to sentences.
+['How is that ?']

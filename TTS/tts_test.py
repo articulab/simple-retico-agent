@@ -2,6 +2,7 @@
 python TTS/tts_test.py
 """
 
+import time
 from transformers import VitsModel, AutoTokenizer
 from transformers import AutoProcessor, AutoModel
 import torch
@@ -12,24 +13,53 @@ import soundfile as sf
 from TTS.api import TTS
 
 # text_prompt = "It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent."
-text_prompt = "This model is licensed under Coqui Public Model License. There's a lot that goes into a license for generative models, and you can read more of the origin story of CPML here."
+# text_prompt = "This model is licensed under Coqui Public Model License. There's a lot that goes into a license for generative models, and you can read more of the origin story of CPML here."
 
+text_prompts = [
+    "This model is licensed under Coqui Public Model License. There's a lot that goes into a license for generative models, and you can read more of the origin story of CPML here.",
+    "You are a mathematics Teacher, you must teach addition to a 8 year old child student.\
+    You interact with the student through a spoken dialogue.\
+    As your student is a child, you must stay gentle and supportive all the time.",
+    "Child : Hello ! \n\n\
+    Teacher : Hi! How are your today ? \n\n\
+    Child : I am fine, and I can't wait to learn mathematics !"
+]
+
+short_prompts = [
+    "Yeah !",
+    "Thank you !",
+    "Okay sure.",
+    "No problem",
+    "How is that ?",
+    "What ?",
+    "humm, sure yeah...",
+]
 
 
 #################
-# ## Facebook TTS
-# model = VitsModel.from_pretrained("facebook/mms-tts-eng")
-# tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-eng")
+## Facebook TTS
+model = VitsModel.from_pretrained("facebook/mms-tts-eng")
+tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-eng")
 
-# # inference
+# inference
 # inputs = tokenizer(text_prompt, return_tensors="pt")
 # with torch.no_grad():
 #     output = model(**inputs).waveform
 
 # # save to wav file
 # scipy.io.wavfile.write("TTS/wav_files/facebook_tts.wav", rate=model.config.sampling_rate, data=output.float().numpy().T)
-# # sf.write("wav_files/facebook_tts_2.wav", output.numpy(), samplerate=16000)
-# # sf.write("facebook_tts_2.wav", output.float().numpy(), samplerate=16000)
+# sf.write("wav_files/facebook_tts_2.wav", output.numpy(), samplerate=16000)
+# sf.write("facebook_tts_2.wav", output.float().numpy(), samplerate=16000)
+
+def generate_file(prompt, file):
+    inputs = tokenizer(prompt, return_tensors="pt")
+    with torch.no_grad():
+        output = model(**inputs).waveform
+    # save to wav file
+    scipy.io.wavfile.write(file, rate=model.config.sampling_rate, data=output.float().numpy().T)
+
+file_path_long = "TTS/wav_files/facebook_tts_long"
+file_path_short = "TTS/wav_files/facebook_tts_short"
 
 # # play sound
 # # Audio(output.numpy(), rate=model.config.sampling_rate)
@@ -83,10 +113,39 @@ text_prompt = "This model is licensed under Coqui Public Model License. There's 
 
 # #################
 ## TTS API
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=True)
+# device = "cuda"
+# # tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=True)
+# tts = TTS("tts_models/en/ek1/tacotron2", gpu=True).to(device)
+# # tts = TTS(model_name="tts_models/de/thorsten/tacotron2-DDC").to(device)
 
-# inference & save to wav file
-tts.tts_to_file(text=text_prompt,
-                file_path="TTS/wav_files/tts_api.wav",
-                speaker_wav="TTS/wav_files/facebook_tts.wav",
-                language="en")
+# # print("tts.model_name = ", tts.model_name)
+# # print("tts.vocoder = ", tts.voice_converter)
+
+# # inference & save to wav file
+# # tts.tts_to_file(
+# #     text=text_prompt,
+# #     file_path="TTS/wav_files/tts_api_2.wav",
+# #     # speaker_wav="TTS/wav_files/facebook_tts.wav",
+# #     # language="en"
+# #     )
+
+# def generate_file(prompt, file):
+#     tts.tts_to_file(
+#         text=prompt,
+#         file_path=file,
+#         # speaker_wav="TTS/wav_files/facebook_tts.wav",
+#         # language="en"
+#         )
+# file_path_long = "TTS/wav_files/tts_api_long"
+# file_path_short = "TTS/wav_files/tts_api_short"
+
+
+for i, p in enumerate(text_prompts): 
+    start = time.time()
+    generate_file(p, file_path_long+str(i)+".wav")
+    print("execution_time = ", round(time.time()-start, 3))
+
+for i, p in enumerate(short_prompts): 
+    start = time.time()
+    generate_file(p, file_path_short+str(i)+".wav")
+    print("short execution_time = ", round(time.time()-start, 3))
