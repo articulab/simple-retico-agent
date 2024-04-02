@@ -1,0 +1,20 @@
+LONG PROMPTS
+3.529
+0.892
+0.737
+0.705
+0.98
+mean exec time = 1.3686
+std exec time = 1.0848750342781421
+
+
+SHORT PROMPTS
+0.165
+0.165
+0.143
+0.221
+0.165
+0.154
+0.264
+mean exec time = 0.1824285714285714
+std exec time = 0.0403833669538662
