@@ -3,6 +3,7 @@ import os
 import sys
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
+from CoquiTTSModule import CoquiTTSModule
 from WaveModule import WaveModule
 from whisperasr import WhisperASRModule
 from WozAsrModule import WozAsrModule
@@ -270,17 +271,18 @@ def main_llama_cpp_python_chat_7b():
     asr = WhisperASRModule(printing=printing)
     # llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
     # llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
-    # llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt, printing=printing)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt, printing=printing)
     # tts = SpeechBrainTTSModule("en")
-    # speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+    tts = CoquiTTSModule()
+    speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
     cback = debug.CallbackModule(callback=callback)
 
     # creating network
     mic.subscribe(asr)
     asr.subscribe(cback)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
 
     # running system
     network.run(mic)
