@@ -12,11 +12,11 @@ from TTS.api import TTS
 class CoquiTTS:
     def __init__(
         self,
-        model="tts_models/en/jenny/jenny",
-        device="cuda",
-        is_multilingual=False,
-        speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
-        language="en",
+        model,
+        device,
+        is_multilingual,
+        speaker_wav,
+        language,
     ):
         self.tts = TTS(model, gpu=True).to(device)
         self.language=language
@@ -75,9 +75,13 @@ class CoquiTTSModule(retico_core.AbstractModule):
     LANGUAGE_MAPPING = {
         "en": {
             "jenny": "tts_models/en/jenny/jenny",
+            "vits": "tts_models/en/ljspeech/vits",
+            "vits_neon": "tts_models/en/ljspeech/vits--neon",
+            # "fast_pitch": "tts_models/en/ljspeech/fast_pitch", # bug sometimes
         },
         "multi": {
-            "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2",
+            "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2", # bugs
+            "your_tts": "tts_models/multilingual/multi-dataset/your_tts",
         }
     }
 
@@ -86,7 +90,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
         model="jenny",
         language="en",
         device="cuda",
-        speaker_wav=None,
+        speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         dispatch_on_finish=True,
         frame_duration=0.2,
         **kwargs
@@ -97,9 +101,13 @@ class CoquiTTSModule(retico_core.AbstractModule):
             print("Unknown TTS language. Defaulting to English (en).")
             language = "en"
 
+        if model not in self.LANGUAGE_MAPPING[language].keys():
+            print("Unknown model for the following TTS language : "+language+". Defaulting to "+next(iter(self.LANGUAGE_MAPPING[language])))
+            model = next(iter(self.LANGUAGE_MAPPING[language]))
+
         self.tts = CoquiTTS(
             model=self.LANGUAGE_MAPPING[language][model],
-            language=language,
+            language="en",
             device=device,
             is_multilingual=(language=="multi"),
             speaker_wav=speaker_wav
@@ -107,11 +115,14 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
         self.dispatch_on_finish = dispatch_on_finish
         self.frame_duration = frame_duration
+        # print("\n\ntts_config audio = ", self.tts.tts.synthesizer.tts_config.get("audio"))
+        # print("\nsample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["sample_rate"])
+        # print("\noutput_sample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["output_sample_rate"])
+        # print("AP = ", self.tts.tts.synthesizer.tts_model.ap)
+        # print("sample rate = ", self.tts.tts.synthesizer.tts_model.ap.sample_rate)
         # self.samplerate = 48000  # samplerate of tts
-        self.samplerate = self.tts.tts.synthesizer.tts_model.ap.sample_rate
-        # print("AP = ", self.tts.synthesizer.tts_model.ap)
-        # print("sample rate = ", self.tts.synthesizer.tts_model.ap.sample_rate)
-        # TTS.config.shared_configs.BaseAudioConfig
+        # self.samplerate = self.tts.tts.synthesizer.tts_model.ap.sample_rate
+        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")["sample_rate"]
         self.samplewidth = 2
         self._tts_thread_active = False
         self._latest_text = ""

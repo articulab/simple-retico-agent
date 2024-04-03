@@ -272,8 +272,8 @@ def main_llama_cpp_python_chat_7b():
     # llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
     # llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
     llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt, printing=printing)
-    # tts = SpeechBrainTTSModule("en")
-    tts = CoquiTTSModule()
+    ## tts = SpeechBrainTTSModule("en")
+    tts = CoquiTTSModule(language="multi", model="your_tts")
     speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
     cback = debug.CallbackModule(callback=callback)
 
