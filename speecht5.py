@@ -25,8 +25,7 @@ class SpeechBrainTTS:
     ):
         self.processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
         self.model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
-        
-        
+
         self.tacotron_model = tacotron_model
         self.hifi_model = hifi_model
         self.tmp_dir = tmp_dir.replace("~", os.path.expanduser("~"))

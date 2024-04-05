@@ -59,7 +59,7 @@ class WhisperASR:
         # self.model.config.forced_decoder_ids = self.forced_decoder_ids
 
         self.model = WhisperModel(whisper_model, device="cuda", compute_type="int8")
-        self.printing=printing
+        self.printing = printing
 
         self.audio_buffer = []
         self.framerate = framerate
@@ -94,9 +94,7 @@ class WhisperASR:
             if len(self.audio_buffer) == 0:
                 return None
             frame_length = len(self.audio_buffer[0]) / 2
-            self._n_sil_frames = int(
-                self.silence_dur / (frame_length / 16_000)
-            )
+            self._n_sil_frames = int(self.silence_dur / (frame_length / 16_000))
         return self._n_sil_frames
 
     def recognize_silence(self):
@@ -130,16 +128,21 @@ class WhisperASR:
         # else:
         #     self.audio_buffer.append(audio)
 
-    def recognize_2(self): # Biswesh version of asr processing in movierecommender 2022
+    def recognize_2(self):  # Biswesh version of asr processing in movierecommender 2022
         silence = self.recognize_silence()
-        if silence :
+        if silence:
             if len(self.audio_buffer) > 1:
-                full_audio = b''.join(self.audio_buffer)
-                audio_np = np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
-                print("len npa =" , len(audio_np))
-                segments, info = self.model.transcribe(audio_np) # the segments can be streamed
+                full_audio = b"".join(self.audio_buffer)
+                audio_np = (
+                    np.frombuffer(full_audio, dtype=np.int16).astype(np.float32)
+                    / 32768.0
+                )
+                print("len npa =", len(audio_np))
+                segments, info = self.model.transcribe(
+                    audio_np
+                )  # the segments can be streamed
                 segments = list(segments)
-                transcription = ''.join([s.text for s in segments])
+                transcription = "".join([s.text for s in segments])
                 self.audio_buffer = []
                 return transcription, False
             return None, False
@@ -153,7 +156,7 @@ class WhisperASR:
 
         if not self.vad_state and not silence:
             self.vad_state = True
-            self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames():]
+            self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames() :]
 
         if not self.vad_state:
             return None, False
@@ -175,14 +178,16 @@ class WhisperASR:
         #     predicted_ids, skip_special_tokens=True
         # )[0]
 
-        # faster whisper    
-        
-        full_audio = b''.join(self.audio_buffer)
-        audio_np = np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
-        print("len npa =" , len(audio_np))
-        segments, info = self.model.transcribe(audio_np) # the segments can be streamed
+        # faster whisper
+
+        full_audio = b"".join(self.audio_buffer)
+        audio_np = (
+            np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
+        )
+        print("len npa =", len(audio_np))
+        segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
         segments = list(segments)
-        transcription = ''.join([s.text for s in segments])
+        transcription = "".join([s.text for s in segments])
 
         end_date = datetime.datetime.now()
         end_time = time.time()
@@ -192,8 +197,8 @@ class WhisperASR:
             # print("start_date ", start_date.strftime('%H:%M:%S.%MSMS'))
             # print("end_date : ", end_date.strftime('%H:%M:%S.%MSMS'))
             print("execution time = " + str(round(end_time - start_time, 3)) + "s")
-            print("ASR : before process ", start_date.strftime('%T.%f')[:-3])
-            print("ASR : after process ", end_date.strftime('%T.%f')[:-3])
+            print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
+            print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
 
         if silence:
             self.vad_state = False
@@ -246,7 +251,7 @@ class WhisperASRModule(retico_core.AbstractModule):
         self._asr_thread_active = False
         self.latest_input_iu = None
 
-        self.full_sentences=full_sentences
+        self.full_sentences = full_sentences
         print("full_sentences = ", full_sentences)
         if full_sentences:
             self.add_audio = self.acr.add_audio
@@ -286,9 +291,7 @@ class WhisperASRModule(retico_core.AbstractModule):
             if prediction is None:
                 continue
             end_of_utterance = not vad
-            um, new_tokens = retico_core.text.get_text_increment(
-                self, prediction
-            )
+            um, new_tokens = retico_core.text.get_text_increment(self, prediction)
 
             if len(new_tokens) == 0 and vad:
                 continue

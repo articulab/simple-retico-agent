@@ -34,7 +34,7 @@ class LlamaChat:
         #     self.access_token = f.readline()
 
         # self.access_token = "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"
-        self.model_name = 'mediocredev/open-llama-3b-v2-chat'
+        self.model_name = "mediocredev/open-llama-3b-v2-chat"
         self.chat_history = chat_history
 
         # inference linguistics args
@@ -49,7 +49,7 @@ class LlamaChat:
         self.bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             # bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_compute_dtype=getattr(torch,"float16"),
+            bnb_4bit_compute_dtype=getattr(torch, "float16"),
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
@@ -83,7 +83,7 @@ class LlamaChat:
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             device_map=self.device_map,
-            quantization_config=self.bnb_config
+            quantization_config=self.bnb_config,
         )
 
     def generate(self, prompt):
@@ -99,7 +99,7 @@ class LlamaChat:
 
     def add_user_sentence(self, sentence):
         self.chat_history.append({"role": "user", "content": sentence})
-    
+
     def generate_next_sentence(self):
         # print("chat_history\n")
         # print(chat_history)
@@ -107,7 +107,7 @@ class LlamaChat:
             self.chat_history,
             tokenize=True,
             add_generation_prompt=True,
-            return_tensors="pt"
+            return_tensors="pt",
         ).to(self.model.device)
         output_tokens = self.model.generate(
             input_ids,
@@ -191,10 +191,10 @@ class LlamaChatModule(retico_core.AbstractModule):
 
     def process_full_sentence(self, msg):
         sentence = self.recreate_sentence_from_um(msg)
-        print("user sentence : "+str(sentence))
+        print("user sentence : " + str(sentence))
         self.llama.add_user_sentence(sentence)
         agent_sentence = self.llama.generate_next_sentence()
-        print("agent sentence : "+str(agent_sentence))
+        print("agent sentence : " + str(agent_sentence))
         # should trigger modules subscribed to llama :
         payload = agent_sentence
         output_ui = self.create_iu()
@@ -203,7 +203,7 @@ class LlamaChatModule(retico_core.AbstractModule):
         next_um.add_iu(output_ui, update_type=retico_core.UpdateType.ADD)
         next_um.add_iu(output_ui, update_type=retico_core.UpdateType.COMMIT)
         self.append(next_um)
-        
+
         # async def async_generate(sentence):
         #     # result = await self.llama.generate_next_sentence()
         #     result = sentence

@@ -18,9 +18,7 @@ class WozAsrModule(retico_core.AbstractProducingModule):
 
     @staticmethod
     def description():
-        return (
-            "A producing module that produce audio from terminal user input."
-        )
+        return "A producing module that produce audio from terminal user input."
 
     @staticmethod
     def output_iu():
@@ -89,9 +87,7 @@ class WozAsrModule(retico_core.AbstractProducingModule):
         output_iu.set_asr_results(
             predictions, self.sentence, stability, confidence, final
         )
-        um = retico_core.UpdateMessage.from_iu(
-            output_iu, retico_core.UpdateType.ADD
-        )
+        um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
         self.append(um)
         print("after process_update :")
 

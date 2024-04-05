@@ -28,9 +28,7 @@ class WozMicrophoneModule(retico_core.AbstractModule):
         return AudioIU
         # return SpeechIU
 
-    def __init__(
-        self, folder_path="audios/", frame_length=0.02, rate=48000,**kwargs
-    ):
+    def __init__(self, folder_path="audios/", frame_length=0.02, rate=48000, **kwargs):
         """
         Initialize the Wave Module.
 
@@ -46,10 +44,10 @@ class WozMicrophoneModule(retico_core.AbstractModule):
         self.frame_length = frame_length
         self.cpt = 0
         self.tts_over = True
-        self.filename_list = [f for f in glob.glob(folder_path+"*).wav")]
+        self.filename_list = [f for f in glob.glob(folder_path + "*).wav")]
         print("self.filename_list = ", self.filename_list)
-        self.rate=rate
-    
+        self.rate = rate
+
     def get_file(self):
         filename = self.filename_list[self.cpt]
         print("filename = ", filename)
@@ -57,7 +55,7 @@ class WozMicrophoneModule(retico_core.AbstractModule):
         self.r_file = wave.open(filename, "rb")
         self.n_channels = self.r_file.getnchannels()
         self.sample_width = self.r_file.getsampwidth()
-        self.rate = self.r_file.getframerate()*self.n_channels
+        self.rate = self.r_file.getframerate() * self.n_channels
         # print("self.sample_width = ", self.sample_width)
         print("self.rate = ", self.rate)
         # print("self.n_channels = ", self.n_channels)
@@ -67,9 +65,9 @@ class WozMicrophoneModule(retico_core.AbstractModule):
 
     def process_update(self, update_message):
         for iu, ut in update_message:
-            if ut == retico_core.UpdateType.COMMIT: # tts is over
+            if ut == retico_core.UpdateType.COMMIT:  # tts is over
                 self.tts_over = True
-        
+
     def _add_update_message(self):
         # print("run")
         while self._run_thread_active:
@@ -79,7 +77,7 @@ class WozMicrophoneModule(retico_core.AbstractModule):
                 self.tts_over = False
                 sentence_over = False
                 self.get_file()
-                time.sleep(2) # 2 seconds silence before taking turn
+                time.sleep(2)  # 2 seconds silence before taking turn
                 while not sentence_over:
                     time.sleep(
                         self.frame_length * 0.5

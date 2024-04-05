@@ -8,12 +8,7 @@ from llama_cpp import Llama
 class LlamaCpp:
 
     def __init__(
-        self,
-        model_path,
-        chat_history={},
-        context_size = 512,
-        n_gpu_layers = 100,
-        **kwargs
+        self, model_path, chat_history={}, context_size=512, n_gpu_layers=100, **kwargs
     ):
         self.model_path = model_path
         self.chat_history = chat_history
@@ -26,15 +21,19 @@ class LlamaCpp:
         self.model = None
 
     def load_model(self):
-        self.model = Llama(model_path=self.model_path, n_ctx=self.context_size, n_gpu_layers=self.n_gpu_layers)
+        self.model = Llama(
+            model_path=self.model_path,
+            n_ctx=self.context_size,
+            n_gpu_layers=self.n_gpu_layers,
+        )
 
     def generate_next_sentence(
         self,
-        max_tokens = 100,
-        temperature = 0.3,
-        top_p = 0.1,
-        stop = ["Q", "\n"],
-        ):
+        max_tokens=100,
+        temperature=0.3,
+        top_p=0.1,
+        stop=["Q", "\n"],
+    ):
 
         # Define the parameters
         model_output = self.model.create_chat_completion(
@@ -44,8 +43,8 @@ class LlamaCpp:
             top_p=top_p,
             stop=stop,
         )
-        role = model_output["choices"][0]["message"]['role']
-        content = model_output["choices"][0]["message"]['content']
+        role = model_output["choices"][0]["message"]["role"]
+        content = model_output["choices"][0]["message"]["content"]
         assert role == "assistant"
         self.chat_history.append({"role": role, "content": content})
         return content
@@ -96,9 +95,7 @@ class LlamaCppModule(retico_core.AbstractModule):
                 continue
             elif ut == retico_core.UpdateType.REVOKE:
                 continue
-            elif (
-                ut == retico_core.UpdateType.COMMIT
-            ):
+            elif ut == retico_core.UpdateType.COMMIT:
                 msg.append(iu)
                 commit = True
                 pass
@@ -113,10 +110,10 @@ class LlamaCppModule(retico_core.AbstractModule):
 
     def process_full_sentence(self, msg):
         sentence = self.recreate_sentence_from_um(msg)
-        print("user sentence : "+str(sentence))
+        print("user sentence : " + str(sentence))
         self.model_wrapper.add_user_sentence(sentence)
         agent_sentence = self.model_wrapper.generate_next_sentence()
-        print("agent sentence : "+str(agent_sentence))
+        print("agent sentence : " + str(agent_sentence))
         # should trigger modules subscribed to this llama cpp module (for example TTS) :
         payload = agent_sentence
         output_ui = self.create_iu()

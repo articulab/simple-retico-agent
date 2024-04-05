@@ -34,7 +34,7 @@ class Llama:
         #     self.access_token = f.readline()
 
         # self.access_token = "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"
-        self.model_name = 'mediocredev/open-llama-3b-v2-chat'
+        self.model_name = "mediocredev/open-llama-3b-v2-chat"
         self.chat_history = chat_history
 
         # inference linguistics args
@@ -49,7 +49,7 @@ class Llama:
         self.bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             # bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_compute_dtype=getattr(torch,"float16"),
+            bnb_4bit_compute_dtype=getattr(torch, "float16"),
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
@@ -83,7 +83,7 @@ class Llama:
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             device_map=self.device_map,
-            quantization_config=self.bnb_config
+            quantization_config=self.bnb_config,
         )
 
     def generate(self, prompt):
@@ -96,7 +96,7 @@ class Llama:
             max_length=self.max_length,
         )
         return sequences
-    
+
     def generate_next_sentence(self):
         # print("chat_history\n")
         # print(chat_history)
@@ -104,7 +104,7 @@ class Llama:
             self.chat_history,
             tokenize=True,
             add_generation_prompt=True,
-            return_tensors="pt"
+            return_tensors="pt",
         ).to(self.model.device)
         output_tokens = self.model.generate(
             input_ids,

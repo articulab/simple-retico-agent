@@ -16,11 +16,11 @@ class LlamaCppMemoryIncremental:
         model_repo,
         model_name,
         # chat_history={},
-        initial_prompt = None,
-        system_prompt = None,
-        context_size = 2000,
-        short_memory_context_size = 500,
-        n_gpu_layers = 100,
+        initial_prompt=None,
+        system_prompt=None,
+        context_size=2000,
+        short_memory_context_size=500,
+        n_gpu_layers=100,
         **kwargs
     ):
         # Model loading method 1
@@ -37,12 +37,17 @@ class LlamaCppMemoryIncremental:
         self.stop_token_text = []
         self.stop_token_text_patterns = [b"Child:", b"Child :"]
         self.stop_token_patterns = []
-        self.role_token_text_patterns = [b"Teacher:", b"Teacher :", b" Teacher:", b" Teacher :"]
+        self.role_token_text_patterns = [
+            b"Teacher:",
+            b"Teacher :",
+            b" Teacher:",
+            b" Teacher :",
+        ]
         self.role_token_patterns = []
         self.ponctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
         self.utterances = []
         self.size_per_utterance = []
-        self.short_memory_context_size=short_memory_context_size
+        self.short_memory_context_size = short_memory_context_size
 
         # template attributes
         # template 1
@@ -82,19 +87,23 @@ class LlamaCppMemoryIncremental:
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers)
-            
-        elif self.model_repo is not None and self.model_name is not None :
+                n_gpu_layers=self.n_gpu_layers,
+            )
+
+        elif self.model_repo is not None and self.model_name is not None:
 
             self.model = Llama.from_pretrained(
-                repo_id=self.model_repo, 
+                repo_id=self.model_repo,
                 filename=self.model_name,
                 device_map="cuda",
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers)
-        
-        else : 
-            raise NotImplementedError("Please, when creating the module, you must give a model_path or model_repo and model_name")
+                n_gpu_layers=self.n_gpu_layers,
+            )
+
+        else:
+            raise NotImplementedError(
+                "Please, when creating the module, you must give a model_path or model_repo and model_name"
+            )
 
         self.initialize_prompt()
         self.init_stop_criteria()
@@ -105,33 +114,55 @@ class LlamaCppMemoryIncremental:
             self.stop_token_patterns.append(self.model.tokenize(pat, add_bos=False))
         for pat in self.role_token_text_patterns:
             self.role_token_patterns.append(self.model.tokenize(pat, add_bos=False))
-        
+
     def initialize_prompt(self):
         self.nb_tokens_end_prompt = len(self.model.tokenize(self.end_prompt))
         if self.initial_prompt is None:
             if self.system_prompt is None:
                 pass
             else:
-                complete_system_prompt = self.start_prompt + self.sys_pre + self.system_prompt + self.sys_suf
+                complete_system_prompt = (
+                    self.start_prompt + self.sys_pre + self.system_prompt + self.sys_suf
+                )
                 self.prompt = complete_system_prompt
                 self.utterances = [complete_system_prompt]
-                self.size_per_utterance = [len(self.model.tokenize(complete_system_prompt))]
+                self.size_per_utterance = [
+                    len(self.model.tokenize(complete_system_prompt))
+                ]
         else:
-            raise NotImplementedError("for now, only support starting from system prompt")
-    
+            raise NotImplementedError(
+                "for now, only support starting from system prompt"
+            )
+
     def new_user_sentence(self, user_sentence):
-        user_sentence_complete = self.user_pre + self.user_role + b" : " + bytes(user_sentence, 'utf-8') + self.user_suf
-        user_sentence_complete_nb_tokens = len(self.model.tokenize(user_sentence_complete))
+        user_sentence_complete = (
+            self.user_pre
+            + self.user_role
+            + b" : "
+            + bytes(user_sentence, "utf-8")
+            + self.user_suf
+        )
+        user_sentence_complete_nb_tokens = len(
+            self.model.tokenize(user_sentence_complete)
+        )
         self.utterances.append(user_sentence_complete)
         self.size_per_utterance.append(user_sentence_complete_nb_tokens)
         self.prompt += user_sentence_complete
-        print(self.user_role.decode('utf-8') + " : " + user_sentence)
+        print(self.user_role.decode("utf-8") + " : " + user_sentence)
 
     def new_agent_sentence(self, agent_sentence, agent_sentence_nb_tokens):
-        agent_sentence_reduced, nb_token_removed = self.remove_stop_patterns(agent_sentence)
-        agent_sentence_complete = self.agent_pre + agent_sentence_reduced + self.agent_suf
-        nb_token_added = len(self.model.tokenize(self.agent_pre, add_bos=False)) + len(self.model.tokenize(self.agent_suf, add_bos=False))
-        agent_sentence_complete_nb_tokens = agent_sentence_nb_tokens + nb_token_added - nb_token_removed
+        agent_sentence_reduced, nb_token_removed = self.remove_stop_patterns(
+            agent_sentence
+        )
+        agent_sentence_complete = (
+            self.agent_pre + agent_sentence_reduced + self.agent_suf
+        )
+        nb_token_added = len(self.model.tokenize(self.agent_pre, add_bos=False)) + len(
+            self.model.tokenize(self.agent_suf, add_bos=False)
+        )
+        agent_sentence_complete_nb_tokens = (
+            agent_sentence_nb_tokens + nb_token_added - nb_token_removed
+        )
         self.utterances.append(agent_sentence_complete)
         self.size_per_utterance.append(agent_sentence_complete_nb_tokens)
         self.prompt += agent_sentence_complete
@@ -143,21 +174,21 @@ class LlamaCppMemoryIncremental:
         last_chunck_string = sentence
         nb_token_removed = 0
         for i, pat in enumerate(self.stop_token_text_patterns):
-            if pat == last_chunck_string[-len(pat):]:
-                sentence = sentence[:-len(pat)]
+            if pat == last_chunck_string[-len(pat) :]:
+                sentence = sentence[: -len(pat)]
                 nb_token_removed = len(self.stop_token_patterns[i])
                 break
         # while sentence[-1:] == b"\n":
         #     sentence = sentence[:-1]
         #     nb_token_removed += 1
         return sentence, nb_token_removed
-    
+
     def remove_role_patterns(self, sentence):
         first_chunck_string = sentence
         nb_token_removed = 0
         for i, pat in enumerate(self.role_token_text_patterns):
-            if pat == first_chunck_string[:-len(pat)]:
-                sentence = sentence[-len(pat):]
+            if pat == first_chunck_string[: -len(pat)]:
+                sentence = sentence[-len(pat) :]
                 nb_token_removed = len(self.role_token_patterns[i])
                 break
         # while sentence[-1:] == b"\n":
@@ -168,50 +199,53 @@ class LlamaCppMemoryIncremental:
     def prepare_prompt_memory(self):
         # Calculate short term memory
         nb_tokens = sum(self.size_per_utterance)
-        if nb_tokens + self.nb_tokens_end_prompt >= self.short_memory_context_size :
+        if nb_tokens + self.nb_tokens_end_prompt >= self.short_memory_context_size:
             nb_tokens_removed = 0
-            nb_tokens_to_remove = nb_tokens + self.nb_tokens_end_prompt - self.short_memory_context_size
+            nb_tokens_to_remove = (
+                nb_tokens + self.nb_tokens_end_prompt - self.short_memory_context_size
+            )
             while nb_tokens_to_remove >= nb_tokens_removed:
-                self.utterances.pop(1) # pop oldest non system utterance. do not pop the system prompt explaining the scenario
+                self.utterances.pop(
+                    1
+                )  # pop oldest non system utterance. do not pop the system prompt explaining the scenario
                 nb_tokens_removed += self.size_per_utterance.pop(1)
             self.prompt = b"".join(self.utterances)
 
     def is_ponctuation(self, token):
-            # return True if the token corresponds to a ponctuation
-            is_ponctuation = self.model.detokenize([token]) in self.ponctuation_text
-            return is_ponctuation
-        
+        # return True if the token corresponds to a ponctuation
+        is_ponctuation = self.model.detokenize([token]) in self.ponctuation_text
+        return is_ponctuation
+
     def is_stop_pattern(self, sentence):
         # return True, and the stop pattern if last n characters of the sentence is a stop pattern.
         for i, pat in enumerate(self.stop_token_text_patterns):
-            if pat == sentence[-len(pat):]:
+            if pat == sentence[-len(pat) :]:
                 return True, self.stop_token_patterns[i]
         return False, None
-    
+
     def is_role_pattern(self, sentence):
         max_pattern_size = max([len(p) for p in self.role_token_text_patterns])
-        if max_pattern_size < len(sentence) : # We want to only check at the very beginning of the sentence
+        if max_pattern_size < len(
+            sentence
+        ):  # We want to only check at the very beginning of the sentence
             return False, None
         # return True, and the stop pattern if last n characters of the sentence is a stop pattern.
         for i, pat in enumerate(self.role_token_text_patterns):
-            if pat == sentence[-len(pat):]:
+            if pat == sentence[-len(pat) :]:
                 return True, self.role_token_patterns[i]
         return False, None
-    
+
     def process_full_sentence(self, user_sentence, subprocess):
         self.new_user_sentence(user_sentence)
         self.prepare_prompt_memory()
-        agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence(subprocess)
+        agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence(
+            subprocess
+        )
         self.new_agent_sentence(agent_sentence, agent_sentence_nb_tokens)
 
     def generate_next_sentence(
-        self,
-        subprocess,
-        top_k=40,
-        top_p=0.95,
-        temp=1.0,
-        repeat_penalty=1.1
-        ):
+        self, subprocess, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1
+    ):
 
         def stop_criteria(tokens, logits):
             """
@@ -225,9 +259,11 @@ class LlamaCppMemoryIncremental:
                 bool: returns True if it the last generated token corresponds to self.stop_token_ids or self.stop_token_text.
             """
             is_stopping_id = tokens[-1] in self.stop_token_ids
-            is_stopping_text = self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            is_stopping_text = (
+                self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            )
             return is_stopping_id or is_stopping_text
-        
+
         def stop_multiple_utterances_generation(tokens, logits):
             """
             Function used by the LLM to stop generate tokens when it meets certain criteria.\
@@ -244,7 +280,9 @@ class LlamaCppMemoryIncremental:
             """
 
             is_stopping_id = tokens[-1] in self.stop_token_ids
-            is_stopping_text = self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            is_stopping_text = (
+                self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            )
 
             # is_stopping_pattern = False
             # max_pattern_size = max([len(p) for p in self.stop_token_patterns])
@@ -252,7 +290,7 @@ class LlamaCppMemoryIncremental:
             # for i, pat in enumerate(self.stop_token_text_patterns):
             #     if pat == last_chunck_string[-len(pat):]:
             #         return True
-            
+
             max_pattern_size = max([len(p) for p in self.stop_token_patterns])
             last_chunck_string = self.model.detokenize(tokens[-max_pattern_size:])
             is_stopping_pattern, _ = self.is_stop_pattern(last_chunck_string)
@@ -272,8 +310,8 @@ class LlamaCppMemoryIncremental:
             top_k=top_k,
             top_p=top_p,
             temp=temp,
-            repeat_penalty=repeat_penalty
-            ):
+            repeat_penalty=repeat_penalty,
+        ):
             # Update module IUS
             payload = self.model.detokenize([token])
             payload_text = payload.decode("utf-8")
@@ -311,14 +349,23 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
     def output_iu():
         return retico_core.text.TextIU
 
-    def __init__(self, model_path, model_repo, model_name, initial_prompt, system_prompt, printing=False, **kwargs):
+    def __init__(
+        self,
+        model_path,
+        model_repo,
+        model_name,
+        initial_prompt,
+        system_prompt,
+        printing=False,
+        **kwargs
+    ):
         """Initializes the LlamaCpp Module.
 
         Args:
             model_path (str): The path to the desired local model file (.gguf for example).
         """
         super().__init__(**kwargs)
-        self.printing=printing
+        self.printing = printing
         # Model loading method 1
         self.model_path = model_path
         # Model loading method 2
@@ -347,9 +394,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 continue
             elif ut == retico_core.UpdateType.REVOKE:
                 continue
-            elif (
-                ut == retico_core.UpdateType.COMMIT
-            ):
+            elif ut == retico_core.UpdateType.COMMIT:
                 msg.append(iu)
                 commit = True
                 pass
@@ -360,10 +405,10 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         sentence = ""
         for iu in msg:
             sentence += iu.get_text() + " "
-        return sentence        
+        return sentence
 
-    def process_not_incremental(self, msg): 
-        # this function is not incremental as it waits for the end of the generated 
+    def process_not_incremental(self, msg):
+        # this function is not incremental as it waits for the end of the generated
         # sentence to append the next update message
         next_um = retico_core.abstract.UpdateMessage()
 
@@ -374,8 +419,10 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 self.latest_input_iu = output_iu
             self.current_output.append(output_iu)
             next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-        
-        self.model_wrapper.process_full_sentence(self.recreate_sentence_from_um(msg), subprocess)
+
+        self.model_wrapper.process_full_sentence(
+            self.recreate_sentence_from_um(msg), subprocess
+        )
         # COMMIT all current output IUs because it is the end of sentence
         for iu in self.current_output:
             self.commit(iu)
@@ -383,9 +430,8 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         self.current_output = []
         self.latest_input_iu = None
         self.append(next_um)
-    
 
-    # def process_incremental(self, msg):        
+    # def process_incremental(self, msg):
 
     #     def subprocess(payload):
     #         next_um = retico_core.abstract.UpdateMessage()
@@ -410,20 +456,25 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
     #     self.append(next_um)
     #     print("COMMIT")
 
-    def process_incremental(self, msg):  
+    def process_incremental(self, msg):
         if self.printing:
-            print("LLM : process sentence ", datetime.datetime.now().strftime('%T.%f')[:-3])
+            print(
+                "LLM : process sentence ",
+                datetime.datetime.now().strftime("%T.%f")[:-3],
+            )
 
-        def subprocess(payload, is_ponctuation=None, stop_pattern=None, role_pattern=None):
+        def subprocess(
+            payload, is_ponctuation=None, stop_pattern=None, role_pattern=None
+        ):
             """
             This function will be called by the LLM wrapper at each token generation.
-            It handles the communication with the subscribed module (TTS for example), 
+            It handles the communication with the subscribed module (TTS for example),
             by updating and publishing new UpdateMessage containing the new IUS.
             IUs are :
                 - ADDED in every situation (the generated words are sent to the subscribed modules)
                 - COMMITED if the last token generated is a ponctuation (The TTS can start generating the voice corresponding to the clause)
                 - REVOKED if the last tokens generated corresponds to a stop pattern (so that the subscribed module delete the stop pattern)
-                
+
 
             Args:
                 payload (string): the text corresponding to the last generated token
@@ -443,32 +494,47 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
 
             # REVOKE if stop patterns
             if stop_pattern is not None:
-                for id, token in enumerate(stop_pattern): # take all IUs corresponding to stop pattern
-                    iu = self.current_output.pop(-1) # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
+                for id, token in enumerate(
+                    stop_pattern
+                ):  # take all IUs corresponding to stop pattern
+                    iu = self.current_output.pop(
+                        -1
+                    )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
                 # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
-            
+
             # REVOKE if role patterns
             if role_pattern is not None:
-                for id, token in enumerate(role_pattern): # take all IUs corresponding to stop pattern
-                    iu = self.current_output.pop(-1) # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
+                for id, token in enumerate(
+                    role_pattern
+                ):  # take all IUs corresponding to stop pattern
+                    iu = self.current_output.pop(
+                        -1
+                    )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
                 # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
             # COMMIT if ponctuation and not role patterns
-            if is_ponctuation and role_pattern is None and stop_pattern is None: # this works because role patterns end with a ponctuation
+            if (
+                is_ponctuation and role_pattern is None and stop_pattern is None
+            ):  # this works because role patterns end with a ponctuation
                 for iu in self.current_output:
                     self.commit(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
                 if self.printing:
-                    print("LLM : send sentence after ponct ", datetime.datetime.now().strftime('%T.%f')[:-3])
+                    print(
+                        "LLM : send sentence after ponct ",
+                        datetime.datetime.now().strftime("%T.%f")[:-3],
+                    )
                 # print("COMMIT :\n"+"".join([iu.payload for iu in self.current_output]))
                 self.current_output = []
             self.append(next_um)
 
-        self.model_wrapper.process_full_sentence(self.recreate_sentence_from_um(msg), subprocess)
+        self.model_wrapper.process_full_sentence(
+            self.recreate_sentence_from_um(msg), subprocess
+        )
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None

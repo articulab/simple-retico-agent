@@ -14,9 +14,9 @@ class LlamaCppMemory:
         model_name,
         # chat_history={},
         initial_prompt,
-        context_size = 512,
-        short_memory_context_size = 300,
-        n_gpu_layers = 100,
+        context_size=512,
+        short_memory_context_size=300,
+        n_gpu_layers=100,
         **kwargs
     ):
         # Model loading method 1
@@ -27,12 +27,12 @@ class LlamaCppMemory:
 
         # self.chat_history = chat_history
         self.initial_prompt = initial_prompt
-        self.stop_token_ids = [2,13]
+        self.stop_token_ids = [2, 13]
         self.stop_token_text = [b"\n", b"        "]
         self.my_prompt = initial_prompt
         self.utterances = []
         self.size_per_utterance = []
-        self.short_memory_context_size=short_memory_context_size
+        self.short_memory_context_size = short_memory_context_size
 
         # llamap-cpp-python args
         self.context_size = context_size
@@ -47,27 +47,31 @@ class LlamaCppMemory:
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers) 
-            
-        elif self.model_repo is not None and self.model_name is not None :
+                n_gpu_layers=self.n_gpu_layers,
+            )
+
+        elif self.model_repo is not None and self.model_name is not None:
 
             self.model = Llama.from_pretrained(
-                repo_id=self.model_repo, 
+                repo_id=self.model_repo,
                 filename=self.model_name,
                 device_map="cuda",
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers)
-            
-        else : 
-            raise NotImplementedError("Please, when creating the module, you must give a model_path or model_repo and model_name")
-    
+                n_gpu_layers=self.n_gpu_layers,
+            )
+
+        else:
+            raise NotImplementedError(
+                "Please, when creating the module, you must give a model_path or model_repo and model_name"
+            )
+
     def generate_next_sentence(
         self,
-        max_tokens = 100,
-        temperature = 0.3,
-        top_p = 0.1,
-        stop = ["Q", "\n"],
-        ):
+        max_tokens=100,
+        temperature=0.3,
+        top_p=0.1,
+        stop=["Q", "\n"],
+    ):
 
         # Define the parameters
         model_output = self.model.create_chat_completion(
@@ -77,12 +81,12 @@ class LlamaCppMemory:
             top_p=top_p,
             stop=stop,
         )
-        role = model_output["choices"][0]["message"]['role']
-        content = model_output["choices"][0]["message"]['content']
+        role = model_output["choices"][0]["message"]["role"]
+        content = model_output["choices"][0]["message"]["content"]
         assert role == "assistant"
         self.chat_history.append({"role": role, "content": content})
         return content
-    
+
     # def stop_criteria(tokens, logits):
     #     # OLD
     #     # is_eos = tokens[-1] in my_model.token_eos()
@@ -101,7 +105,7 @@ class LlamaCppMemory:
     #     #     print(my_model.detokenize([tokens[-1]]))
     #     #     print(my_model.detokenize(tokens))
     #     return is_stopping_id or is_stopping_text
-    
+
     def generate_next_sentence(
         self,
         # max_tokens = 100,
@@ -110,12 +114,14 @@ class LlamaCppMemory:
         top_k=40,
         top_p=0.95,
         temp=1.0,
-        repeat_penalty=1.1
-        ):
+        repeat_penalty=1.1,
+    ):
 
         def stop_criteria(tokens, logits):
             is_stopping_id = tokens[-1] in self.stop_token_ids
-            is_stopping_text = self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            is_stopping_text = (
+                self.model.detokenize([tokens[-1]]) in self.stop_token_text
+            )
             return is_stopping_id or is_stopping_text
 
         # Define the parameters
@@ -128,12 +134,11 @@ class LlamaCppMemory:
             top_k=top_k,
             top_p=top_p,
             temp=temp,
-            repeat_penalty=repeat_penalty
-            ):        
+            repeat_penalty=repeat_penalty,
+        ):
             last_sentence += self.model.detokenize([token])
             last_sentence_nb_tokens += 1
         return last_sentence, last_sentence_nb_tokens
-    
 
     # def add_user_sentence(self, sentence):
     #     self.chat_history.append({"role": "user", "content": sentence})
@@ -171,11 +176,7 @@ class LlamaCppMemoryModule(retico_core.AbstractModule):
         self.model_repo = model_repo
         self.model_name = model_name
         self.model_wrapper = LlamaCppMemory(
-            self.model_path,
-            self.model_repo,
-            self.model_name,
-            initial_prompt,
-            **kwargs
+            self.model_path, self.model_repo, self.model_name, initial_prompt, **kwargs
         )
 
     def setup(self):
@@ -191,9 +192,7 @@ class LlamaCppMemoryModule(retico_core.AbstractModule):
                 continue
             elif ut == retico_core.UpdateType.REVOKE:
                 continue
-            elif (
-                ut == retico_core.UpdateType.COMMIT
-            ):
+            elif ut == retico_core.UpdateType.COMMIT:
                 msg.append(iu)
                 commit = True
                 pass
@@ -208,38 +207,49 @@ class LlamaCppMemoryModule(retico_core.AbstractModule):
 
     def process_full_sentence(self, msg):
         user_sentence = self.recreate_sentence_from_um(msg)
-        print("user sentence : "+str(user_sentence))
+        print("user sentence : " + str(user_sentence))
         # self.model_wrapper.add_user_sentence(sentence)
-        user_sentence_complete =  b"[INST]Child : " + bytes(user_sentence, 'utf-8') + b"[/INST]"
-        
+        user_sentence_complete = (
+            b"[INST]Child : " + bytes(user_sentence, "utf-8") + b"[/INST]"
+        )
+
         # Add user sentence to short term memory
         # append last sentence from user as the last utterance
-        user_sentence_complete_nb_tokens = len(self.model_wrapper.model.tokenize(user_sentence_complete))
+        user_sentence_complete_nb_tokens = len(
+            self.model_wrapper.model.tokenize(user_sentence_complete)
+        )
         self.utterances.append(user_sentence_complete)
         self.size_per_utterance.append(user_sentence_complete_nb_tokens)
         self.my_prompt += user_sentence_complete
 
         # Calculate short term memory
         nb_tokens = sum(self.size_per_utterance)
-        print("num token : "+str(nb_tokens))
-        if nb_tokens >= self.model_wrapper.short_memory_context_size :
-            print("nb QA = "+str(len(self.utterances)))
-            print("size_per_utterance = "+str(self.size_per_utterance))
-            while sum(self.size_per_utterance) >= self.model_wrapper.short_memory_context_size:
-                self.utterances.pop(1) # do not pop the system prompt explaining the scenario
+        print("num token : " + str(nb_tokens))
+        if nb_tokens >= self.model_wrapper.short_memory_context_size:
+            print("nb QA = " + str(len(self.utterances)))
+            print("size_per_utterance = " + str(self.size_per_utterance))
+            while (
+                sum(self.size_per_utterance)
+                >= self.model_wrapper.short_memory_context_size
+            ):
+                self.utterances.pop(
+                    1
+                )  # do not pop the system prompt explaining the scenario
                 res = self.size_per_utterance.pop(1)
-                print("POP "+str(res))
+                print("POP " + str(res))
             self.my_prompt = b"".join(self.utterances)
-            print("my prompt = \n"+self.my_prompt.decode("utf-8"))
+            print("my prompt = \n" + self.my_prompt.decode("utf-8"))
 
         # Agent sentence
-        agent_sentence, agent_sentence_mn_tokens = self.model_wrapper.generate_next_sentence()
+        agent_sentence, agent_sentence_mn_tokens = (
+            self.model_wrapper.generate_next_sentence()
+        )
         # Add model sentence to short term memory
         # add the last sentence from model to the last utterance which contains only the sentence from user
         self.utterances[-1] += agent_sentence
         self.size_per_utterance[-1] += agent_sentence_mn_tokens
         self.my_prompt += agent_sentence + b"\n"
-        print("agent sentence : "+str(agent_sentence))
+        print("agent sentence : " + str(agent_sentence))
 
         # should trigger modules subscribed to this llama cpp module (for example TTS) :
         payload = agent_sentence

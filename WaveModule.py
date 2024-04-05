@@ -25,9 +25,7 @@ class WaveModule(retico_core.AbstractProducingModule):
         return AudioIU
         # return SpeechIU
 
-    def __init__(
-        self, file_name="audios/test.wav", frame_length=0.02, **kwargs
-    ):
+    def __init__(self, file_name="audios/test.wav", frame_length=0.02, **kwargs):
         """
         Initialize the Wave Module.
 
@@ -49,18 +47,12 @@ class WaveModule(retico_core.AbstractProducingModule):
         self.r_file.close()
 
     def process_update(self, _):
-        time.sleep(
-            self.frame_length * 0.5
-        )  # Why is it not == to self.frame_length ??
+        time.sleep(self.frame_length * 0.5)  # Why is it not == to self.frame_length ??
         sample = self.r_file.readframes(self.chunk_size)
         output_iu = self.create_iu()
-        output_iu.set_audio(
-            sample, self.chunk_size, self.rate, self.sample_width
-        )
+        output_iu.set_audio(sample, self.chunk_size, self.rate, self.sample_width)
         output_iu.dispatch = True
-        return retico_core.UpdateMessage.from_iu(
-            output_iu, retico_core.UpdateType.ADD
-        )
+        return retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
 
     def setup(self):
         """Set up the wave file"""
