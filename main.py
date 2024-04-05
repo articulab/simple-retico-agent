@@ -3,6 +3,9 @@ import os
 import sys
 
 from WozMicrophone import WozMicrophoneModule
+from WozMicrophone_2 import WozMicrophoneModule_2
+from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
+from WozMicrophone_one_file import WozMicrophoneModule_one_file
 
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
@@ -291,7 +294,7 @@ def main_llama_cpp_python_chat_7b():
     speaker = audio.SpeakerModule(
         rate=tts.samplerate
     )  # Why does the speaker module have to copy the tts rate ?
-    cback = debug.CallbackModule(callback=callback)
+    cback = debug.CallbackModule(callback=callback2)
 
     # creating network
     mic.subscribe(asr)
@@ -326,13 +329,56 @@ def main_woz():
         You play the role of a teacher. Here is the beginning of the conversation :"
 
     printing = True
+    # rate = 96000
     rate = 16000
+    # rate = 32000
+
+    # assert chunk_size = frame_rate * frame_length * nb_channels  <= 960
 
     # creating modules
-    mic = WozMicrophoneModule(folder_path="audios/8k/", rate=rate * 2)
+    # mic = WozMicrophoneModule(folder_path="audios/8k/", rate=rate * 2)
+    # mic = WozMicrophoneModule_2(folder_path="audios/stereo/48k/", rate=rate * 2)
+    # mic = WozMicrophoneModule_one_file(
+    #     file="audios/stereo/48k/Recording (5).wav", frame_length=0.02
+    # )
+
+    # mic = WozMicrophoneModule_multiple_file(
+    #     folder_path="audios/stereo/48k/", frame_length=0.015
+    # )
+    # UM ASR LEN =  5760
+    # self.framerate =  96000
+    # IF =  960
+
+    # mic = WozMicrophoneModule_multiple_file(
+    #     folder_path="audios/stereo/8k/", frame_length=0.015
+    # )
+    # UM ASR LEN =  960
+    # self.framerate =  16000
+
+    # mic = WozMicrophoneModule_multiple_file(
+    #     folder_path="audios/stereo/16k/", frame_length=0.015
+    # )
+    # UM ASR LEN =  1920
+    # self.framerate =  32000
+    # IF =  960
+
+    mic = WozMicrophoneModule_multiple_file(
+        folder_path="audios/mono/44k/", frame_length=0.02
+    )
+    # UM ASR LEN =  1764
+    # self.framerate =  44100
+    # IF =  640
+
+    # mic = MicrophoneModule(frame_length=0.02)
+    # UM ASR LEN =  1764
+    # self.framerate =  44100
+    # IF =  640
+
+    audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
     speaker = audio.SpeakerModule(rate=rate)
 
     asr = WhisperASRModule(printing=printing, full_sentences=True)
+    cback = debug.CallbackModule(callback=callback)
     llama_mem_icr = LlamaCppMemoryIncrementalModule(
         model_path, None, None, None, system_prompt, printing=printing
     )
@@ -342,17 +388,25 @@ def main_woz():
     # creating network
     # mic.subscribe(speaker)
 
-    tts.subscribe(mic)
+    # tts.subscribe(mic)
     mic.subscribe(asr)
+
+    # mic.subscribe(audio_dispatcher)
+    # audio_dispatcher.subscribe(asr)
+
+    asr.subscribe(cback)
     asr.subscribe(llama_mem_icr)
     llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)
 
     # running system
-    network.run(mic)
-    print("woz Running")
-    input()
-    network.stop(mic)
+    try:
+        network.run(mic)
+        print("woz Running")
+        input()
+        network.stop(mic)
+    except:
+        network.stop(mic)
 
 
 def main_llama_chat_3b():

@@ -28,8 +28,8 @@ class WhisperASR:
     def __init__(
         self,
         # whisper_model="openai/whisper-base",
-        # whisper_model="base.en",
-        whisper_model="distil-large-v2",
+        whisper_model="base.en",
+        # whisper_model="distil-large-v2",
         framerate=16_000,
         sample_width=2,
         silence_dur=1,
@@ -71,12 +71,14 @@ class WhisperASR:
         self.sample_width = sample_width
 
     def _resample_audio(self, audio):
+        # print("self.framerate = ", self.framerate)
         if self.framerate != 16_000:
             # resample if framerate is not 16 kHz
             s = pydub.AudioSegment(
                 audio, sample_width=2, channels=1, frame_rate=self.framerate
             )
             s = s.set_frame_rate(16_000)
+            # print("IF = ", len(s._data))
             return s._data
         # maybe it is stereo and webrtcvad only accepts 10, 20 or 30ms mono (20ms stereo is too big)
         # if len(audio) / (sample_width * frame_rate) > 0,03 (if the audio length in more than 30ms)
@@ -111,7 +113,7 @@ class WhisperASR:
 
     def add_audio(self, audio):
         audio = self._resample_audio(audio)
-        if type(audio) is tuple:  # or is tuple
+        if isinstance(audio, tuple):  # or is tuple
             self.audio_buffer.append(audio[0])
             self.audio_buffer.append(audio[1])
         else:
@@ -153,6 +155,7 @@ class WhisperASR:
         start_time = time.time()
 
         silence = self.recognize_silence()
+        # print("silence = ", silence)
 
         if not self.vad_state and not silence:
             self.vad_state = True
@@ -274,6 +277,8 @@ class WhisperASRModule(retico_core.AbstractModule):
             # self.acr.add_audio(iu.raw_audio)
             # self.acr.add_audio_2(iu.raw_audio)
             self.add_audio(iu.raw_audio)
+            # print("UM ASR LEN = ", len(iu.raw_audio))
+            print("process update ", datetime.datetime.now().strftime("%T.%f")[:-3])
             if not self.latest_input_iu:
                 self.latest_input_iu = iu
 
@@ -282,7 +287,7 @@ class WhisperASRModule(retico_core.AbstractModule):
             if not self.full_sentences:
                 time.sleep(0.5)
             else:
-                time.sleep(0.01)
+                time.sleep(0.001)
             if not self.framerate:
                 continue
             prediction, vad = self.recognize()
