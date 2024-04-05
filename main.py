@@ -2,8 +2,6 @@ from asyncio import Queue
 import os
 import sys
 
-from WozMicrophone import WozMicrophoneModule
-from WozMicrophone_2 import WozMicrophoneModule_2
 from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from WozMicrophone_one_file import WozMicrophoneModule_one_file
 
