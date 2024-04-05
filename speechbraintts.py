@@ -1,3 +1,4 @@
+import datetime
 from email.mime import audio
 import os
 import threading
@@ -112,7 +113,12 @@ class SpeechBrainTTSModule(retico_core.AbstractModule):
     }
 
     def __init__(
-        self, language="en", dispatch_on_finish=True, frame_duration=0.2, **kwargs
+        self,
+        language="en",
+        dispatch_on_finish=True,
+        frame_duration=0.2,
+        printing=False,
+        **kwargs
     ):
         super().__init__(**kwargs)
 
@@ -120,6 +126,7 @@ class SpeechBrainTTSModule(retico_core.AbstractModule):
             print("Unknown TTS language. Defaulting to English (en).")
             language = "en"
 
+        self.printing = printing
         self.dispatch_on_finish = dispatch_on_finish
         self.language = language
         self.tts = SpeechBrainTTS(
@@ -159,6 +166,8 @@ class SpeechBrainTTSModule(retico_core.AbstractModule):
             len(current_text) - len(self._latest_text) > 15
             and not self.dispatch_on_finish
         ):
+            start_time = time.time()
+            start_date = datetime.datetime.now()
             self._latest_text = current_text
             chunk_size = int(self.samplerate * self.frame_duration)
             chunk_size_bytes = chunk_size * self.samplewidth
@@ -175,6 +184,15 @@ class SpeechBrainTTSModule(retico_core.AbstractModule):
                 self.audio_buffer.extend(new_buffer)
             else:
                 self.audio_buffer = new_buffer
+
+            end_time = time.time()
+            end_date = datetime.datetime.now()
+            if self.printing:
+                print(
+                    "TTS execution time = " + str(round(end_time - start_time, 3)) + "s"
+                )
+                print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
+                print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
         if final:
             self.clear_after_finish = True
             self.current_input = []
@@ -199,9 +217,19 @@ class SpeechBrainTTSModule(retico_core.AbstractModule):
                     self.audio_pointer = 0
                     self.audio_buffer = []
                     self.clear_after_finish = False
+
+                    # send commit whenfinished turn
+                    iu = self.create_iu(self.latest_input_iu)
+                    # iu.set_audio(b"", 1, self.samplerate, 0)
+                    um = retico_core.UpdateMessage.from_iu(
+                        iu, retico_core.UpdateType.COMMIT
+                    )
+                    self.append(um)
             else:
                 raw_audio = self.audio_buffer[self.audio_pointer]
                 self.audio_pointer += 1
+                # if self.printing:
+                #     print("TTS : send data ", datetime.datetime.now().strftime('%T.%f')[:-3])
             iu = self.create_iu(self.latest_input_iu)
             iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
             um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)

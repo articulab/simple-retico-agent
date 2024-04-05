@@ -1,3 +1,4 @@
+import datetime
 from email.mime import audio
 import os
 import threading
@@ -6,7 +7,7 @@ from hashlib import blake2b
 
 import retico_core
 import numpy as np
-from TTS.api import TTS
+from TTS.api import TTS, load_config
 
 
 class CoquiTTS:
@@ -19,9 +20,9 @@ class CoquiTTS:
         language,
     ):
         self.tts = TTS(model, gpu=True).to(device)
-        self.language=language
-        self.speaker_wav=speaker_wav
-        self.is_multilingual=is_multilingual
+        self.language = language
+        self.speaker_wav = speaker_wav
+        self.is_multilingual = is_multilingual
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
@@ -35,17 +36,17 @@ class CoquiTTS:
         """
 
         if self.is_multilingual:
-        # if "multilingual" in file or "vctk" in file:
+            # if "multilingual" in file or "vctk" in file:
             waveforms = self.tts.tts(
                 text=text,
                 language=self.language,
                 speaker_wav=self.speaker_wav,
-                )
+            )
         else:
             waveforms = self.tts.tts(
                 text=text,
-                )
-            
+            )
+
         # waveform = waveforms.squeeze(1).detach().numpy()[0]
         waveform = np.array(waveforms)
 
@@ -80,9 +81,9 @@ class CoquiTTSModule(retico_core.AbstractModule):
             # "fast_pitch": "tts_models/en/ljspeech/fast_pitch", # bug sometimes
         },
         "multi": {
-            "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2", # bugs
+            "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2",  # bugs
             "your_tts": "tts_models/multilingual/multi-dataset/your_tts",
-        }
+        },
     }
 
     def __init__(
@@ -93,24 +94,32 @@ class CoquiTTSModule(retico_core.AbstractModule):
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         dispatch_on_finish=True,
         frame_duration=0.2,
+        printing=False,
         **kwargs
     ):
         super().__init__(**kwargs)
 
-        if language not in self.LANGUAGE_MAPPING.keys():
+        self.printing = printing
+
+        if language not in self.LANGUAGE_MAPPING:
             print("Unknown TTS language. Defaulting to English (en).")
             language = "en"
 
         if model not in self.LANGUAGE_MAPPING[language].keys():
-            print("Unknown model for the following TTS language : "+language+". Defaulting to "+next(iter(self.LANGUAGE_MAPPING[language])))
+            print(
+                "Unknown model for the following TTS language : "
+                + language
+                + ". Defaulting to "
+                + next(iter(self.LANGUAGE_MAPPING[language]))
+            )
             model = next(iter(self.LANGUAGE_MAPPING[language]))
 
         self.tts = CoquiTTS(
             model=self.LANGUAGE_MAPPING[language][model],
             language="en",
             device=device,
-            is_multilingual=(language=="multi"),
-            speaker_wav=speaker_wav
+            is_multilingual=(language == "multi"),
+            speaker_wav=speaker_wav,
         )
 
         self.dispatch_on_finish = dispatch_on_finish
@@ -122,7 +131,9 @@ class CoquiTTSModule(retico_core.AbstractModule):
         # print("sample rate = ", self.tts.tts.synthesizer.tts_model.ap.sample_rate)
         # self.samplerate = 48000  # samplerate of tts
         # self.samplerate = self.tts.tts.synthesizer.tts_model.ap.sample_rate
-        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")["sample_rate"]
+        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
+            "sample_rate"
+        ]
         self.samplewidth = 2
         self._tts_thread_active = False
         self._latest_text = ""
@@ -154,6 +165,9 @@ class CoquiTTSModule(retico_core.AbstractModule):
             len(current_text) - len(self._latest_text) > 15
             and not self.dispatch_on_finish
         ):
+            start_time = time.time()
+            start_date = datetime.datetime.now()
+
             self._latest_text = current_text
             chunk_size = int(self.samplerate * self.frame_duration)
             chunk_size_bytes = chunk_size * self.samplewidth
@@ -170,6 +184,15 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 self.audio_buffer.extend(new_buffer)
             else:
                 self.audio_buffer = new_buffer
+
+            end_time = time.time()
+            end_date = datetime.datetime.now()
+            if self.printing:
+                print(
+                    "TTS execution time = " + str(round(end_time - start_time, 3)) + "s"
+                )
+                print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
+                print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
         if final:
             self.clear_after_finish = True
             self.current_input = []
@@ -194,6 +217,14 @@ class CoquiTTSModule(retico_core.AbstractModule):
                     self.audio_pointer = 0
                     self.audio_buffer = []
                     self.clear_after_finish = False
+
+                    # send commit when finished turn
+                    iu = self.create_iu(self.latest_input_iu)
+                    # iu.set_audio(b"", 1, self.samplerate, 0)
+                    um = retico_core.UpdateMessage.from_iu(
+                        iu, retico_core.UpdateType.COMMIT
+                    )
+                    self.append(um)
             else:
                 raw_audio = self.audio_buffer[self.audio_pointer]
                 self.audio_pointer += 1

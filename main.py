@@ -1,6 +1,9 @@
 from asyncio import Queue
 import os
 import sys
+
+from WozMicrophone import WozMicrophoneModule
+
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
 from CoquiTTSModule import CoquiTTSModule
@@ -19,7 +22,6 @@ from retico_core.audio import (
     SpeakerModule,
     MicrophoneModule,
 )
-
 
 
 def callback(update_msg):
@@ -42,6 +44,7 @@ def callback(update_msg):
         msg = []
         print("")
 
+
 def callback2(update_msg):
     # print("lalala")
     # print(update_msg)
@@ -49,6 +52,7 @@ def callback2(update_msg):
         # print(x)
         # print(ut)
         print(str(x.payload) + " " + str(ut))
+
 
 def callback_ponct(update_msg):
     global SENTENCE
@@ -60,6 +64,7 @@ def callback_ponct(update_msg):
             if str(x.payload)[-1] in ponctuation:
                 print(SENTENCE)
                 SENTENCE = ""
+
 
 def callback_stream_ponct(update_msg):
     global SENTENCE
@@ -73,12 +78,13 @@ def callback_stream_ponct(update_msg):
             is_ponct = str(x.payload)[-1] in ponctuation
 
     # Clear the console to reprint the updated transcription.
-    os.system('cls' if os.name=='nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
     print(SENTENCE)
     # Flush stdout.
-    print('', end='', flush=True)
-    if is_ponct :
+    print("", end="", flush=True)
+    if is_ponct:
         SENTENCE = ""
+
 
 def callback_google_asr(update_msg):
     # print("lalala")
@@ -189,12 +195,12 @@ def callback_google_asr(update_msg):
 # # model_name = "meta-llama/Llama-2-7b-hf"
 # model_name = 'mediocredev/open-llama-3b-v2-chat'
 # # chat_history = [
-# #     {"role": "user", "content": "Hello"}, 
+# #     {"role": "user", "content": "Hello"},
 # #     {"role": "assistant", "content": "Hello! I am your math teacher and I will teach you addition today."},
 # #     {"role": "user", "content": "I am your 8 years old child student and I can't wait to learn about mathematics !"},
 # # ]
 # chat_history = [
-#     {"role": "user", "content": "Hello"}, 
+#     {"role": "user", "content": "Hello"},
 #     {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
 # ]
 # # llama = LlamaModule(model_name)
@@ -218,8 +224,8 @@ def callback_google_asr(update_msg):
 # network.stop(mic)
 
 
-
 SENTENCE = ""
+
 
 def main_llama_cpp_python_chat_7b():
 
@@ -233,13 +239,19 @@ def main_llama_cpp_python_chat_7b():
     # LLM info
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
     chat_history = [
-        {"role": "system", "content": "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+        {
+            "role": "system",
+            "content": "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
             The teacher is teaching mathemathics to the child student. \
             As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-            You play the role of a teacher. Here is the beginning of the conversation :"},
-        {"role": "user", "content": "Hello !"}, 
+            You play the role of a teacher. Here is the beginning of the conversation :",
+        },
+        {"role": "user", "content": "Hello !"},
         {"role": "assistant", "content": "Hi! How are your today ?"},
-        {"role": "user", "content": "I am fine, and I can't wait to learn mathematics !"},
+        {
+            "role": "user",
+            "content": "I am fine, and I can't wait to learn mathematics !",
+        },
     ]
 
     initial_prompt = b"<<SYS>>This is a spoken dialog scenario between a teacher and a 8 years old child student.\
@@ -258,23 +270,27 @@ def main_llama_cpp_python_chat_7b():
         Teacher: That's the spirit! Let's continue practicing these simple addition problems together. If you ever feel confused or have any doubts, please don't hesitate to ask questions.\
         [INST]Child : yeah ! let's do another exercice.[/INST]\
         Teacher: "
-    
+
     system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
-    printing = False
+    printing = True
 
     # creating modules
     mic = MicrophoneModule()
-    asr = WhisperASRModule(printing=printing)
+    asr = WhisperASRModule(printing=printing, full_sentences=True)
     # llama_cpp = LlamaCppModule(model_path, chat_history=chat_history)
     # llama_mem = LlamaCppMemoryModule(model_path, None, None, initial_prompt)
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(model_path, None, None, None, system_prompt, printing=printing)
-    ## tts = SpeechBrainTTSModule("en")
-    tts = CoquiTTSModule(language="multi", model="your_tts")
-    speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(
+        model_path, None, None, None, system_prompt, printing=printing
+    )
+    # tts = SpeechBrainTTSModule("en", printing=printing)
+    tts = CoquiTTSModule(language="en", model="vits_neon", printing=printing)
+    speaker = audio.SpeakerModule(
+        rate=tts.samplerate
+    )  # Why does the speaker module have to copy the tts rate ?
     cback = debug.CallbackModule(callback=callback)
 
     # creating network
@@ -291,14 +307,64 @@ def main_llama_cpp_python_chat_7b():
     network.stop(mic)
 
 
+def main_woz():
+    """
+    The `main_woz` function sets up a spoken dialog scenario between a teacher and an 8-year-old student
+    for teaching mathematics using various modules for audio input, speech recognition, memory
+    processing, text-to-speech, and audio output.
+
+    It uses a WozMicrophoneModule which plays previously recorded wav files as if it was audio captured by a microphone in real time.
+    It is used to test the latency of the system with fixed audio inputs.
+    """
+
+    # LLM info
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+
+    printing = True
+    rate = 16000
+
+    # creating modules
+    mic = WozMicrophoneModule(folder_path="audios/8k/", rate=rate * 2)
+    speaker = audio.SpeakerModule(rate=rate)
+
+    asr = WhisperASRModule(printing=printing, full_sentences=True)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(
+        model_path, None, None, None, system_prompt, printing=printing
+    )
+    # tts = SpeechBrainTTSModule("en", printing=printing)
+    tts = CoquiTTSModule(language="en", model="vits_neon", printing=printing)
+
+    # creating network
+    # mic.subscribe(speaker)
+
+    tts.subscribe(mic)
+    mic.subscribe(asr)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
+
+    # running system
+    network.run(mic)
+    print("woz Running")
+    input()
+    network.stop(mic)
+
 
 def main_llama_chat_3b():
 
     # LLM info
-    model_name = 'mediocredev/open-llama-3b-v2-chat'
+    model_name = "mediocredev/open-llama-3b-v2-chat"
     chat_history = [
-        {"role": "user", "content": "Hello"}, 
-        {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
+        {"role": "user", "content": "Hello"},
+        {
+            "role": "assistant",
+            "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together.",
+        },
     ]
 
     # creating modules
@@ -306,7 +372,9 @@ def main_llama_chat_3b():
     asr = WhisperASRModule()
     llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
     tts = SpeechBrainTTSModule("en")
-    speaker = audio.SpeakerModule(rate=tts.samplerate) # Why does the speaker module have to copy the tts rate ?
+    speaker = audio.SpeakerModule(
+        rate=tts.samplerate
+    )  # Why does the speaker module have to copy the tts rate ?
 
     # creating network
     mic.subscribe(asr)
@@ -315,14 +383,18 @@ def main_llama_chat_3b():
     tts.subscribe(speaker)
 
     # running system
-    network.run(mic)
-    print("Running")
-    input()
-    network.stop(mic)
+    try:
+        network.run(mic)
+        print("Running")
+        input()
+        network.stop(mic)
+    except:
+        network.stop(mic)
 
 
 msg = []
 
 if __name__ == "__main__":
     # main_llama_chat_3b()
-    main_llama_cpp_python_chat_7b()
+    # main_llama_cpp_python_chat_7b()
+    main_woz()

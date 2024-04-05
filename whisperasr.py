@@ -144,7 +144,6 @@ class WhisperASR:
                 return transcription, False
             return None, False
         return None, True
-            
 
     def recognize(self):
         start_date = datetime.datetime.now()
@@ -230,6 +229,7 @@ class WhisperASRModule(retico_core.AbstractModule):
         silence_dur=1,
         language=None,
         task="transcribe",
+        full_sentences=True,
         printing=False,
         **kwargs,
     ):
@@ -246,6 +246,15 @@ class WhisperASRModule(retico_core.AbstractModule):
         self._asr_thread_active = False
         self.latest_input_iu = None
 
+        self.full_sentences=full_sentences
+        print("full_sentences = ", full_sentences)
+        if full_sentences:
+            self.add_audio = self.acr.add_audio
+            self.recognize = self.acr.recognize
+        else:
+            self.add_audio = self.acr.add_audio_2
+            self.recognize = self.acr.recognize_2
+
     def process_update(self, update_message):
         for iu, ut in update_message:
             # Audio IUs are only added and never updated.
@@ -258,17 +267,22 @@ class WhisperASRModule(retico_core.AbstractModule):
             # because webrtcvad takes max 960 (30ms for mono audio)
             # if it's not the case because it's stereo, cut the IU into two IUs ?
             # self.acr.add_audio(iu.raw_audio)
-            self.acr.add_audio_2(iu.raw_audio)
+            # self.acr.add_audio_2(iu.raw_audio)
+            self.add_audio(iu.raw_audio)
             if not self.latest_input_iu:
                 self.latest_input_iu = iu
 
     def _asr_thread(self):
         while self._asr_thread_active:
-            time.sleep(0.5)
+            if not self.full_sentences:
+                time.sleep(0.5)
+            else:
+                time.sleep(0.01)
             if not self.framerate:
                 continue
+            prediction, vad = self.recognize()
             # prediction, vad = self.acr.recognize()
-            prediction, vad = self.acr.recognize_2()
+            # prediction, vad = self.acr.recognize_2()
             if prediction is None:
                 continue
             end_of_utterance = not vad
