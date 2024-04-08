@@ -8,6 +8,7 @@ provided by huggingface. In addition, the ASR module provides end-of-utterance d
 finished.
 """
 
+import csv
 import datetime
 import os
 import threading
@@ -43,6 +44,7 @@ class WhisperASR_2:
         language=None,
         task="transcribe",
         printing=False,
+        log_file="logs/test/16k/Recording (1)/asr.csv",
     ):
         # self.processor = WhisperProcessor.from_pretrained(whisper_model)
         # self.model = WhisperForConditionalGeneration.from_pretrained(
@@ -78,6 +80,11 @@ class WhisperASR_2:
         self.sample_width = sample_width
 
         self.cpt_npa = 0
+
+        # latency logs params
+        self.first_time = True
+        self.first_time_stop = False
+        self.log_file = log_file
 
     def _resample_audio(self, audio):
         if self.input_framerate != self.target_framerate:
@@ -180,6 +187,15 @@ class WhisperASR_2:
             print("self.get_n_sil_frames() = ", self.get_n_sil_frames())
             self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames() :]
 
+            if self.first_time:
+                self.first_time_stop = True
+                self.first_time = False
+                with open(self.log_file, "a", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    csv_writer.writerow(
+                        ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                    )
+
         print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         if not self.vad_state:
@@ -247,6 +263,15 @@ class WhisperASR_2:
             self.audio_buffer = []
             self.cpt_npa = 0
             print("SILENCE, emptying buffer cpt npa = ", self.cpt_npa)
+
+            if self.first_time_stop:
+                self.first_time = True
+                self.first_time_stop = False
+                with open(self.log_file, "a", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    csv_writer.writerow(
+                        ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                    )
 
         return transcription, self.vad_state
 

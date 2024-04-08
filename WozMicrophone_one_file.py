@@ -1,3 +1,4 @@
+import datetime
 import glob
 import queue
 import threading
@@ -5,7 +6,7 @@ import time
 import wave
 import pyaudio
 import retico_core
-
+import csv
 from retico_core.audio import AudioIU
 
 # from audio import AudioIU, SpeechIU
@@ -34,6 +35,7 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         self,
         # file="audios/test/normal_mic.wav",
         file="audios/mono/16k/Recording (1).wav",
+        log_file="logs/test/16k/Recording (1)/wozmic.csv",
         frame_length=0.02,
         **kwargs
     ):
@@ -42,8 +44,24 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         self.file = file
         self.frame_length = frame_length
 
+        # latency logs params
+        self.first_time = True
+        self.first_time_stop = True
+        self.log_file = log_file
+
     def _add_update_message(self):
         while self._run_thread_active:
+            if self.first_time:
+                self.first_time = False
+                with open(self.log_file, "a", newline="") as f:
+                    csv_writer = csv.writer(f)
+                    csv_writer.writerow(
+                        ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                    )
+                    # f.write(
+                    #     "Start," + str(datetime.datetime.now().strftime("%T.%f")[:-3])
+                    # )
+
             # time.sleep(0.001)
             time.sleep(0.02)
             if self.read_cpt < self.max_cpt:
@@ -69,6 +87,17 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
                 self.append(um)
 
             else:  # stop cond
+                if self.first_time_stop:
+                    self.first_time_stop = False
+                    with open(self.log_file, "a", newline="") as f:
+                        csv_writer = csv.writer(f)
+                        csv_writer.writerow(
+                            ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                        )
+                        # f.write(
+                        #     "Stop,"
+                        #     + str(datetime.datetime.now().strftime("%T.%f")[:-3])
+                        # )
                 # print("stop sending")
                 # self._run_thread_active = False
                 time.sleep(0.02)

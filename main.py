@@ -1,4 +1,6 @@
 from asyncio import Queue
+import csv
+import datetime
 import os
 import sys
 
@@ -12,12 +14,14 @@ from CoquiTTSModule import CoquiTTSModule
 from WaveModule import WaveModule
 from whisperasr import WhisperASRModule
 from WozAsrModule import WozAsrModule
-from speechbraintts import SpeechBrainTTSModule
+
+# from speechbraintts import SpeechBrainTTSModule
 from llama import LlamaModule
 from llama_cpp_chat import LlamaCppModule
 from llama_cpp_memory import LlamaCppMemoryModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from llama_chat import LlamaChatModule
+
 from retico_core import *
 from retico_core.audio import (
     # AudioDispatcherModule,
@@ -229,6 +233,35 @@ def callback_google_asr(update_msg):
 SENTENCE = ""
 
 
+def merge_logs():
+    wozmic_file = "logs/test/16k/Recording (1)/wozmic.csv"
+    asr_file = "logs/test/16k/Recording (1)/asr.csv"
+    files = [wozmic_file, asr_file]
+
+    res_file = "logs/test/16k/Recording (1)/res.csv"
+
+    date_format = "%H:%M:%S.%f"
+
+    with open(res_file, "w") as w:
+        writer = csv.writer(w)
+        print("start")
+        writer.writerow(["Module", "Start", "Stop", "Duration"])
+        print("for")
+        for fn in files:
+            with open(fn, "r") as f:
+                l = [fn, 0, 0, 0]
+                for row in csv.reader(f):  # TODO : is there only 1 start and 1 stop ?
+                    if row[0] == "Start":
+                        l[1] = row[1]
+                    elif row[0] == "Stop":
+                        l[2] = row[1]
+                l[3] = datetime.datetime.strptime(
+                    l[2], date_format
+                ) - datetime.datetime.strptime(l[1], date_format)
+                print("write")
+                writer.writerow(l)
+
+
 def main_llama_cpp_python_chat_7b():
 
     # Usable model
@@ -414,6 +447,7 @@ def main_woz():
         print("woz Running")
         input()
         network.stop(mic)
+        merge_logs()
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
         network.stop(mic)
@@ -461,4 +495,5 @@ msg = []
 if __name__ == "__main__":
     # main_llama_chat_3b()
     # main_llama_cpp_python_chat_7b()
-    main_woz()
+    # main_woz()
+    merge_logs()
