@@ -31,7 +31,11 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         # return SpeechIU
 
     def __init__(
-        self, file="audios/stereo/48k\Recording (1).wav", frame_length=0.02, **kwargs
+        self,
+        # file="audios/test/normal_mic.wav",
+        file="audios/mono/16k/Recording (1).wav",
+        frame_length=0.02,
+        **kwargs
     ):
         super().__init__(**kwargs)
         self._run_thread_active = False
@@ -40,9 +44,16 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
 
     def _add_update_message(self):
         while self._run_thread_active:
-            try:
-                time.sleep(0.001)
-                sample = self.wf.readframes(self.chunk_size)
+            # time.sleep(0.001)
+            time.sleep(0.02)
+            if self.read_cpt < self.max_cpt:
+                sample = self.audio_data[
+                    (self.chunk_size * self.sample_width)
+                    * self.read_cpt : (self.chunk_size * self.sample_width)
+                    * (self.read_cpt + 1)
+                ]
+                self.read_cpt += 1
+                # sample = self.wf.readframes(self.chunk_size)
                 if sample == b"":  # stop cond = file fully read
                     self._run_thread_active == False
 
@@ -56,8 +67,27 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
                     output_iu, retico_core.UpdateType.ADD
                 )
                 self.append(um)
-            except queue.Empty:
-                pass
+
+            else:  # stop cond
+                # print("stop sending")
+                # self._run_thread_active = False
+                time.sleep(0.02)
+                silence_audio_chunk = b"\x00" * int(
+                    self.rate * self.n_channels * self.sample_width * 0.02
+                )
+                output_iu = self.create_iu()
+
+                output_iu.set_audio(
+                    silence_audio_chunk,
+                    self.chunk_size,
+                    self.rate,
+                    self.sample_width,
+                )
+                # output_iu.dispatch = True
+                um = retico_core.UpdateMessage.from_iu(
+                    output_iu, retico_core.UpdateType.ADD
+                )
+                self.append(um)
 
     def prepare_run(self):
         self.wf = wave.open(self.file, "rb")
@@ -65,6 +95,12 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         self.sample_width = self.wf.getsampwidth()
         self.rate = self.wf.getframerate() * self.n_channels
         self.chunk_size = round(self.rate * self.frame_length)
+        self.audio_data = self.wf.readframes(1000000)
+        print("len audio data = ", len(self.audio_data))
+        self.read_cpt = 0
+        self.max_cpt = int(len(self.audio_data) / (self.chunk_size * self.sample_width))
+        print("max_cpt = ", self.max_cpt)
+        self.wf.close()
         print("self.sample_width  = ", self.sample_width)
         print("self.wf.getframerate()  = ", self.wf.getframerate())
         print("rate = ", self.rate)

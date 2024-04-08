@@ -4,6 +4,7 @@ import sys
 
 from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from WozMicrophone_one_file import WozMicrophoneModule_one_file
+from whisperasr_2 import WhisperASRModule_2
 
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
@@ -360,28 +361,38 @@ def main_woz():
     # self.framerate =  32000
     # IF =  960
 
-    mic = WozMicrophoneModule_multiple_file(
-        folder_path="audios/mono/44k/", frame_length=0.02
-    )
+    # mic = WozMicrophoneModule_multiple_file(
+    #     folder_path="audios/mono/44k/", frame_length=0.02
+    # )
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
 
-    # mic = MicrophoneModule(frame_length=0.02)
+    # mic = MicrophoneModule(rate=16000, frame_length=0.02)
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
+
+    mic = WozMicrophoneModule_one_file(frame_length=0.02)
+    # UM ASR LEN =  1764
+    # self.framerate =  44100
+    # IF =  640
+
+    # print("MIC RATE =", mic.rate)
 
     audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
-    speaker = audio.SpeakerModule(rate=rate)
+    speaker = audio.SpeakerModule(rate=int(rate / 2))
 
-    asr = WhisperASRModule(printing=printing, full_sentences=True)
-    cback = debug.CallbackModule(callback=callback)
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(
-        model_path, None, None, None, system_prompt, printing=printing
+    # asr = WhisperASRModule(printing=printing, full_sentences=True)
+    asr = WhisperASRModule_2(
+        printing=printing, full_sentences=True, input_framerate=16000
     )
-    # tts = SpeechBrainTTSModule("en", printing=printing)
-    tts = CoquiTTSModule(language="en", model="vits_neon", printing=printing)
+    cback = debug.CallbackModule(callback=callback)
+    # llama_mem_icr = LlamaCppMemoryIncrementalModule(
+    #     model_path, None, None, None, system_prompt, printing=printing
+    # )
+    # # tts = SpeechBrainTTSModule("en", printing=printing)
+    # tts = CoquiTTSModule(language="en", model="vits_neon", printing=printing)
 
     # creating network
     # mic.subscribe(speaker)
@@ -392,10 +403,10 @@ def main_woz():
     # mic.subscribe(audio_dispatcher)
     # audio_dispatcher.subscribe(asr)
 
-    asr.subscribe(cback)
-    asr.subscribe(llama_mem_icr)
-    llama_mem_icr.subscribe(tts)
-    tts.subscribe(speaker)
+    # asr.subscribe(cback)
+    # asr.subscribe(llama_mem_icr)
+    # llama_mem_icr.subscribe(tts)
+    # tts.subscribe(speaker)
 
     # running system
     try:
@@ -403,7 +414,8 @@ def main_woz():
         print("woz Running")
         input()
         network.stop(mic)
-    except:
+    except Exception as err:
+        print(f"Unexpected {err=}, {type(err)=}")
         network.stop(mic)
 
 

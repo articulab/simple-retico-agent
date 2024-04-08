@@ -55,7 +55,9 @@ class WozMicrophoneModule_multiple_file(retico_core.AbstractModule):
                 # time.sleep(self.frame_length)
                 time.sleep(0.001)
                 # time.sleep(0.5)
+                start = time.time()
                 sample = self.wf.readframes(self.chunk_size)
+                print("exec time fpr wf read frame : ", time.time() - start)
                 # print(len(sample))
                 # print(self.chunk_size)
                 if len(sample) != self.chunk_size * self.n_channels * self.sample_width:
@@ -80,6 +82,23 @@ class WozMicrophoneModule_multiple_file(retico_core.AbstractModule):
                 self.append(um)
             else:
                 # if the model's answer was spoken, pick a new audio file to read
+                print("WOZ MIC SLEEP")
+                one_second_silence_audio = b"\x00" * int(
+                    self.rate * self.n_channels * self.sample_width
+                )
+                output_iu = self.create_iu()
+
+                output_iu.set_audio(
+                    one_second_silence_audio,
+                    self.chunk_size,
+                    self.rate,
+                    self.sample_width,
+                )
+                # output_iu.dispatch = True
+                um = retico_core.UpdateMessage.from_iu(
+                    output_iu, retico_core.UpdateType.ADD
+                )
+                self.append(um)
                 time.sleep(1)
                 if self.tts_over:
                     self.reading_file = True
@@ -94,7 +113,7 @@ class WozMicrophoneModule_multiple_file(retico_core.AbstractModule):
                     print("self.wf.getframerate()  = ", self.wf.getframerate())
                     print("rate = ", self.rate)
                     print("chunk_size = ", self.chunk_size)
-                    print("cpt = ", self.cpt)
+                    print("cpt files read = ", self.cpt)
 
     def prepare_run(self):
         self.wf = wave.open(self.filename_list[self.cpt], "rb")
@@ -108,7 +127,7 @@ class WozMicrophoneModule_multiple_file(retico_core.AbstractModule):
         print("self.wf.getframerate()  = ", self.wf.getframerate())
         print("rate = ", self.rate)
         print("chunk_size = ", self.chunk_size)
-        print("cpt = ", self.cpt)
+        print("cpt files read = ", self.cpt)
         self._run_thread_active = True
         threading.Thread(target=self._add_update_message).start()
         print("woz mic started")

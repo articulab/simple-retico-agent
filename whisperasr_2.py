@@ -9,7 +9,9 @@ finished.
 """
 
 import datetime
+import os
 import threading
+import wave
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
@@ -22,16 +24,18 @@ import time
 from faster_whisper import WhisperModel
 
 transformers.logging.set_verbosity_error()
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class WhisperASR:
+class WhisperASR_2:
     def __init__(
         self,
         # whisper_model="openai/whisper-base",
         # whisper_model="base.en",
         whisper_model="distil-large-v2",
-        framerate=16_000,
-        input_framerate=96000,
+        target_framerate=16000,
+        input_framerate=44100,
+        channels=1,
         sample_width=2,
         silence_dur=1,
         vad_agressiveness=3,
@@ -63,8 +67,9 @@ class WhisperASR:
         self.printing = printing
 
         self.audio_buffer = []
-        self.framerate = framerate
+        self.target_framerate = target_framerate
         self.input_framerate = input_framerate
+        self.channels = channels
         self.vad = webrtcvad.Vad(vad_agressiveness)
         self.silence_dur = silence_dur
         self.vad_state = False
@@ -72,31 +77,37 @@ class WhisperASR:
         self.silence_threshold = silence_threshold
         self.sample_width = sample_width
 
+        self.cpt_npa = 0
+
     def _resample_audio(self, audio):
-        if self.framerate != 16_000:
-            # resample if framerate is not 16 kHz
+        if self.input_framerate != self.target_framerate:
             s = pydub.AudioSegment(
-                audio, sample_width=2, channels=1, frame_rate=self.framerate
+                audio,
+                sample_width=self.sample_width,
+                channels=self.channels,
+                frame_rate=self.input_framerate,
             )
-            s = s.set_frame_rate(16_000)
+            s = s.set_frame_rate(self.target_framerate)
             return s._data
         # maybe it is stereo and webrtcvad only accepts 10, 20 or 30ms mono (20ms stereo is too big)
         # if len(audio) / (sample_width * frame_rate) > 0,03 (if the audio length in more than 30ms)
         # but if stereo it's 10ms max
-        if self.get_audio_length(audio) > 0.03:
-            half = int(len(audio) / 2)
-            audio = audio[:half], audio[half:]
+        # if self.get_audio_length(audio) > 0.03:
+        #     half = int(len(audio) / 2)
+        #     audio = audio[:half], audio[half:]
         return audio
 
-    def get_audio_length(self, audio):
-        return len(audio) / (self.framerate * self.sample_width)
+    # def get_audio_length(self, audio):
+    #     return len(audio) / (self.framerate * self.sample_width)
 
     def get_n_sil_frames(self):
         if not self._n_sil_frames:
             if len(self.audio_buffer) == 0:
                 return None
-            frame_length = len(self.audio_buffer[0]) / 2
-            self._n_sil_frames = int(self.silence_dur / (frame_length / 16_000))
+            frame_length = len(self.audio_buffer[0]) / 2  # why divided by 2 ?
+            self._n_sil_frames = int(
+                self.silence_dur / (frame_length / self.target_framerate)
+            )
         return self._n_sil_frames
 
     def recognize_silence(self):
@@ -105,7 +116,7 @@ class WhisperASR:
             return True
         silence_counter = 0
         for a in self.audio_buffer[-n_sil_frames:]:
-            if not self.vad.is_speech(a, 16_000):
+            if not self.vad.is_speech(a, self.target_framerate):
                 silence_counter += 1
         if silence_counter >= int(self.silence_threshold * n_sil_frames):
             return True
@@ -113,11 +124,13 @@ class WhisperASR:
 
     def add_audio(self, audio):
         audio = self._resample_audio(audio)
-        if isinstance(audio, tuple):  # or is tuple
-            self.audio_buffer.append(audio[0])
-            self.audio_buffer.append(audio[1])
-        else:
-            self.audio_buffer.append(audio)
+        self.audio_buffer.append(audio)
+
+        # if isinstance(audio, tuple):  # or is tuple
+        #     self.audio_buffer.append(audio[0])
+        #     self.audio_buffer.append(audio[1])
+        # else:
+        #     self.audio_buffer.append(audio)
 
     def add_audio_2(self, audio):
         audio = self._resample_audio(audio)
@@ -151,17 +164,28 @@ class WhisperASR:
         return None, True
 
     def recognize(self):
+        if len(self.audio_buffer) == 0:
+            return None, None
         start_date = datetime.datetime.now()
         start_time = time.time()
 
+        print("ASR start ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
         silence = self.recognize_silence()
 
-        if not self.vad_state and not silence:
+        print("ASR recog silence ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
+        if not self.vad_state and not silence:  # someone starts talking
             self.vad_state = True
+            print("self.get_n_sil_frames() = ", self.get_n_sil_frames())
             self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames() :]
+
+        print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         if not self.vad_state:
             return None, False
+
+        print("ASR if 2 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         # full_audio = b""
         # for a in self.audio_buffer:
@@ -183,13 +207,29 @@ class WhisperASR:
         # faster whisper
 
         full_audio = b"".join(self.audio_buffer)
+
+        print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
         audio_np = (
             np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
         )
+
+        print("ASR npa ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
         print("len npa =", len(audio_np))
+        self.cpt_npa += len(audio_np)
+        print("cpt npa = ", self.cpt_npa)
         segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
+
+        print("ASR transcribe ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
         segments = list(segments)
+
+        print("ASR segments ", datetime.datetime.now().strftime("%T.%f")[:-3])
+
         transcription = "".join([s.text for s in segments])
+
+        print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         end_date = datetime.datetime.now()
         end_time = time.time()
@@ -205,6 +245,8 @@ class WhisperASR:
         if silence:
             self.vad_state = False
             self.audio_buffer = []
+            self.cpt_npa = 0
+            print("SILENCE, emptying buffer cpt npa = ", self.cpt_npa)
 
         return transcription, self.vad_state
 
@@ -213,7 +255,7 @@ class WhisperASR:
         self.audio_buffer = []
 
 
-class WhisperASRModule(retico_core.AbstractModule):
+class WhisperASRModule_2(retico_core.AbstractModule):
     @staticmethod
     def name():
         return "Whipser ASR Module"
@@ -232,7 +274,8 @@ class WhisperASRModule(retico_core.AbstractModule):
 
     def __init__(
         self,
-        framerate=None,
+        target_framerate=16000,
+        input_framerate=48000,
         silence_dur=1,
         language=None,
         task="transcribe",
@@ -242,13 +285,16 @@ class WhisperASRModule(retico_core.AbstractModule):
     ):
         super().__init__(**kwargs)
 
-        self.acr = WhisperASR(
+        self.acr = WhisperASR_2(
             silence_dur=silence_dur,
             language=language,
             task=task,
             printing=printing,
+            target_framerate=target_framerate,
+            input_framerate=input_framerate,
         )
-        self.framerate = framerate
+        self.target_framerate = target_framerate
+        self.input_framerate = input_framerate
         self.silence_dur = silence_dur
         self._asr_thread_active = False
         self.latest_input_iu = None
@@ -267,9 +313,12 @@ class WhisperASRModule(retico_core.AbstractModule):
             # Audio IUs are only added and never updated.
             if ut != retico_core.UpdateType.ADD:
                 continue
-            if self.framerate is None:
-                self.framerate = iu.rate
-                self.acr.framerate = self.framerate
+            # print("IU rate = ", iu.rate)
+            if self.input_framerate != iu.rate:
+                raise Exception("input framerate differs from iu framerate")
+                # self.input_framerate = iu.rate
+                # self.acr.input_framerate = self.input_framerate
+                # self.acr.input_framerate = self.input_framerate
             # Here we should check if the IU raw audio length is more than 960,
             # because webrtcvad takes max 960 (30ms for mono audio)
             # if it's not the case because it's stereo, cut the IU into two IUs ?
@@ -285,17 +334,19 @@ class WhisperASRModule(retico_core.AbstractModule):
                 time.sleep(0.5)
             else:
                 time.sleep(0.01)
-            if not self.framerate:
-                continue
+            # if not self.framerate:
+            #     continue
             prediction, vad = self.recognize()
             # prediction, vad = self.acr.recognize()
             # prediction, vad = self.acr.recognize_2()
             if prediction is None:
                 continue
             end_of_utterance = not vad
+            print("EOS = ", end_of_utterance)
             um, new_tokens = retico_core.text.get_text_increment(self, prediction)
 
             if len(new_tokens) == 0 and vad:
+                print("Nothing new ASR, continue")
                 continue
 
             for i, token in enumerate(new_tokens):
@@ -307,6 +358,8 @@ class WhisperASRModule(retico_core.AbstractModule):
                 # print("ADD datetime  : ", datetime.datetime.now())
 
             if end_of_utterance:
+                print("EOS, commiting current output : ", len(self.current_output))
+                print("current output = ", self.current_output)
                 for iu in self.current_output:
                     self.commit(iu)
                     um.add_iu(iu, retico_core.UpdateType.COMMIT)
