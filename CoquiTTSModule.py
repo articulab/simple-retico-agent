@@ -218,7 +218,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
                     self.audio_buffer = []
                     self.clear_after_finish = False
 
-                    # send commit when finished turn
+                    # for WOZ : send commit when finished turn
                     iu = self.create_iu(self.latest_input_iu)
                     # iu.set_audio(b"", 1, self.samplerate, 0)
                     um = retico_core.UpdateMessage.from_iu(
