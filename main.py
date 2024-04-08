@@ -242,24 +242,32 @@ def merge_logs():
 
     date_format = "%H:%M:%S.%f"
 
-    with open(res_file, "w") as w:
+    with open(res_file, "w", newline="") as w:
         writer = csv.writer(w)
-        print("start")
         writer.writerow(["Module", "Start", "Stop", "Duration"])
-        print("for")
+        first_start = None
+        last_stop = None
         for fn in files:
             with open(fn, "r") as f:
                 l = [fn, 0, 0, 0]
                 for row in csv.reader(f):  # TODO : is there only 1 start and 1 stop ?
                     if row[0] == "Start":
                         l[1] = row[1]
+                        if first_start is None or first_start > l[1]:
+                            first_start = l[1]
                     elif row[0] == "Stop":
                         l[2] = row[1]
+                        if last_stop is None or last_stop < l[1]:
+                            last_stop = l[1]
                 l[3] = datetime.datetime.strptime(
                     l[2], date_format
                 ) - datetime.datetime.strptime(l[1], date_format)
-                print("write")
                 writer.writerow(l)
+
+        total_duration = datetime.datetime.strptime(
+            last_stop, date_format
+        ) - datetime.datetime.strptime(first_start, date_format)
+        writer.writerow(["Total", first_start, last_stop, total_duration])
 
 
 def main_llama_cpp_python_chat_7b():
@@ -495,5 +503,4 @@ msg = []
 if __name__ == "__main__":
     # main_llama_chat_3b()
     # main_llama_cpp_python_chat_7b()
-    # main_woz()
-    merge_logs()
+    main_woz()
