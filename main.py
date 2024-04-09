@@ -4,6 +4,9 @@ import datetime
 import os
 import sys
 
+import keyboard
+
+from MicrophoneModule_PTT import MicrophoneModule_PTT
 from SpeakerModule_2 import SpeakerModule_2
 from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from WozMicrophone_one_file import WozMicrophoneModule_one_file
@@ -333,7 +336,7 @@ def main_woz():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
-    printing = True
+    printing = False
     # rate = 96000
     rate = 16000
     # rate = 32000
@@ -377,7 +380,7 @@ def main_woz():
     # self.framerate =  44100
     # IF =  640
 
-    mic = MicrophoneModule(rate=16000, frame_length=0.02)
+    # mic = MicrophoneModule(rate=16000, frame_length=0.02)
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
@@ -386,6 +389,8 @@ def main_woz():
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
+
+    mic = MicrophoneModule_PTT(rate=16000, frame_length=0.02)
 
     # print("MIC RATE =", mic.rate)
 
@@ -430,11 +435,98 @@ def main_woz():
     llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)
 
-    # running system
+    # # running system
+    # try:
+    #     network.run(mic)
+    #     print("woz Running")
+    #     input()
+    #     network.stop(mic)
+    #     merge_logs(log_folder)
+    # except Exception as err:
+    #     print(f"Unexpected {err=}, {type(err)=}")
+    #     network.stop(mic)
+
+    # running system Push To Talk
     try:
         network.run(mic)
         print("woz Running")
-        input()
+        quit_key = False
+        while not quit_key:
+            if keyboard.is_pressed("q"):
+                quit_key = True
+            time.sleep(1)
+        # input()
+        network.stop(mic)
+        merge_logs(log_folder)
+    except Exception as err:
+        print(f"Unexpected {err=}, {type(err)=}")
+        network.stop(mic)
+
+
+def main_demo():
+    """
+    The `main_woz` function sets up a spoken dialog scenario between a teacher and an 8-year-old student
+    for teaching mathematics using various modules for audio input, speech recognition, memory
+    processing, text-to-speech, and audio output.
+
+    It uses a WozMicrophoneModule which plays previously recorded wav files as if it was audio captured by a microphone in real time.
+    It is used to test the latency of the system with fixed audio inputs.
+    """
+
+    # LLM info
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+
+    printing = False
+    rate = 16000
+
+    # create log folder
+    log_folder = create_new_log_folder("logs/test/16k/Recording (1)/demo")
+
+    # Instantiate Modules
+    mic = MicrophoneModule_PTT(rate=rate, frame_length=0.02)
+    # asr = WhisperASRModule(printing=printing, full_sentences=True)
+    asr = WhisperASRModule_2(
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+    cback = debug.CallbackModule(callback=callback)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        log_folder=log_folder,
+    )
+    tts = CoquiTTSModule(
+        language="en", model="vits_neon", printing=printing, log_folder=log_folder
+    )
+    speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
+
+    # Create network
+    mic.subscribe(asr)
+    # asr.subscribe(cback)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
+
+    # running system Push To Talk
+    try:
+        network.run(mic)
+        print("Running")
+        quit_key = False
+        while not quit_key:
+            if keyboard.is_pressed("q"):
+                quit_key = True
+            time.sleep(1)
         network.stop(mic)
         merge_logs(log_folder)
     except Exception as err:
@@ -485,4 +577,5 @@ if __name__ == "__main__":
     # main_llama_chat_3b()
     # main_llama_cpp_python_chat_7b()
     # main_woz()
-    merge_logs("logs/test/16k/Recording (1)/demo_1")
+    main_demo()
+    # merge_logs("logs/test/16k/Recording (1)/demo_4")

@@ -540,6 +540,10 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                         "LLM : send sentence after ponct ",
                         datetime.datetime.now().strftime("%T.%f")[:-3],
                     )
+                write_logs(
+                    self.log_file,
+                    [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                )
                 # print("COMMIT :\n"+"".join([iu.payload for iu in self.current_output]))
                 self.current_output = []
             self.append(next_um)
@@ -550,8 +554,3 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None
-
-        write_logs(
-            self.log_file,
-            [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
-        )

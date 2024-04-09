@@ -65,6 +65,8 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
             # time.sleep(0.001)
             time.sleep(0.02)
             if self.read_cpt < self.max_cpt:
+                # sample = self.audio_buff.pop()
+
                 sample = self.audio_data[
                     (self.chunk_size * self.sample_width)
                     * self.read_cpt : (self.chunk_size * self.sample_width)
@@ -128,6 +130,16 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         self.read_cpt = 0
         self.max_cpt = int(len(self.audio_data) / (self.chunk_size * self.sample_width))
         print("max_cpt = ", self.max_cpt)
+
+        # self.audio_buff = [
+        #     self.audio_data[
+        #         (self.chunk_size * self.sample_width)
+        #         * cpt : (self.chunk_size * self.sample_width)
+        #         * (cpt + 1)
+        #     ]
+        #     for cpt in range(self.max_cpt - 1)
+        # ]
+
         self.wf.close()
         print("self.sample_width  = ", self.sample_width)
         print("self.wf.getframerate()  = ", self.wf.getframerate())

@@ -1,0 +1,7 @@
+Module,Start,Stop,Duration
+logs/test/16k/Recording (1)/demo_2/wozmic.csv,14:10:31.358,14:10:41.592,0:00:10.234000
+logs/test/16k/Recording (1)/demo_2/asr.csv,14:10:33.531,14:12:18.954,0:01:45.423000
+logs/test/16k/Recording (1)/demo_2/llm.csv,14:12:19.113,14:12:32.525,0:00:13.412000
+logs/test/16k/Recording (1)/demo_2/tts.csv,14:12:20.333,14:16:19.712,0:03:59.379000
+logs/test/16k/Recording (1)/demo_2/speaker.csv,14:10:31.641,14:17:17.794,0:06:46.153000
+Total,14:10:31.358,14:17:17.794,0:06:46.436000

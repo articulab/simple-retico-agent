@@ -58,12 +58,20 @@ class SpeakerModule_2(retico_core.AbstractConsumingModule):
         self.time = None
         # logs
         self.log_file = manage_log_folder(log_folder, log_file)
+        self.first_time = True
 
     def process_update(self, update_message):
-        write_logs(
-            self.log_file,
-            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
-        )
+        if self.first_time:
+            write_logs(
+                self.log_file,
+                [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            )
+            self.first_time = False
+        else:
+            write_logs(
+                self.log_file,
+                [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            )
         # silence = chr(0) * self.chunk * self.channels * 2
         # cpt_total = 0
         # cpt = 0

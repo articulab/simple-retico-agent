@@ -122,15 +122,23 @@ class WhisperASR_2:
         return self._n_sil_frames
 
     def recognize_silence(self):
+        # print("len audio buff = ", len(self.audio_buffer))
+        # print("recog silence")
         n_sil_frames = self.get_n_sil_frames()
         if not n_sil_frames or len(self.audio_buffer) < n_sil_frames:
+            # print("recog silence 1")
             return True
         silence_counter = 0
         for a in self.audio_buffer[-n_sil_frames:]:
             if not self.vad.is_speech(a, self.target_framerate):
                 silence_counter += 1
+        # print("silence cpt = ", silence_counter)
+        # print("silence threshold = ", int(self.silence_threshold * n_sil_frames))
+        # if there is more than 75% of silence in the last 1 second, it is considered as a EOS
         if silence_counter >= int(self.silence_threshold * n_sil_frames):
+            # print("recog silence 2")
             return True
+        # print("recog silencen 3")
         return False
 
     def add_audio(self, audio):
@@ -188,7 +196,7 @@ class WhisperASR_2:
 
         if not self.vad_state and not silence:  # someone starts talking
             self.vad_state = True
-            print("self.get_n_sil_frames() = ", self.get_n_sil_frames())
+            # print("self.get_n_sil_frames() = ", self.get_n_sil_frames())
             self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames() :]
 
             if self.first_time:
@@ -235,9 +243,9 @@ class WhisperASR_2:
 
         # print("ASR npa ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
-        print("len npa =", len(audio_np))
+        # print("len npa =", len(audio_np))
         self.cpt_npa += len(audio_np)
-        print("cpt npa = ", self.cpt_npa)
+        # print("cpt npa = ", self.cpt_npa)
         segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
 
         # print("ASR transcribe ", datetime.datetime.now().strftime("%T.%f")[:-3])
@@ -265,7 +273,7 @@ class WhisperASR_2:
             self.vad_state = False
             self.audio_buffer = []
             self.cpt_npa = 0
-            print("SILENCE, emptying buffer cpt npa = ", self.cpt_npa)
+            # print("SILENCE, emptying buffer cpt npa = ", self.cpt_npa)
 
             if self.first_time_stop:
                 self.first_time = True
@@ -373,11 +381,11 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             if prediction is None:
                 continue
             end_of_utterance = not vad
-            print("EOS = ", end_of_utterance)
+            # print("EOS = ", end_of_utterance)
             um, new_tokens = retico_core.text.get_text_increment(self, prediction)
 
             if len(new_tokens) == 0 and vad:
-                print("Nothing new ASR, continue")
+                # print("Nothing new ASR, continue")
                 continue
 
             for i, token in enumerate(new_tokens):
@@ -389,8 +397,8 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 # print("ADD datetime  : ", datetime.datetime.now())
 
             if end_of_utterance:
-                print("EOS, commiting current output : ", len(self.current_output))
-                print("current output = ", self.current_output)
+                # print("EOS, commiting current output : ", len(self.current_output))
+                # print("current output = ", self.current_output)
                 for iu in self.current_output:
                     self.commit(iu)
                     um.add_iu(iu, retico_core.UpdateType.COMMIT)

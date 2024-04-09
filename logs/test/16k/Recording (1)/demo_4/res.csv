@@ -1,0 +1,6 @@
+Module,Start,Stop,Duration
+logs/test/16k/Recording (1)/demo_4/asr.csv,14:55:37.095,14:55:39.196,0:00:02.101000
+logs/test/16k/Recording (1)/demo_4/llm.csv,14:55:39.198,14:55:39.999,0:00:00.801000
+logs/test/16k/Recording (1)/demo_4/tts.csv,14:55:39.442,14:55:41.188,0:00:01.746000
+logs/test/16k/Recording (1)/demo_4/speaker.csv,14:55:40.137,14:55:50.755,0:00:10.618000
+Total,14:55:37.095,14:55:50.755,0:00:13.660000

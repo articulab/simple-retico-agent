@@ -214,6 +214,8 @@ class CoquiTTSModule(retico_core.AbstractModule):
     def _tts_thread(self):
         t1 = time.time()
         while self._tts_thread_active:
+            # this sleep time calculation is complicated and useless
+            # if we don't send silence when there is no audio outputed by the tts model
             t2 = t1
             t1 = time.time()
             if t1 - t2 < self.frame_duration:
@@ -222,11 +224,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
             if self.audio_pointer >= len(self.audio_buffer):
-                raw_audio = (
-                    b"\x00"
-                    * self.samplewidth
-                    * int(self.samplerate * self.frame_duration)
-                )
                 if self.clear_after_finish:
                     self.audio_pointer = 0
                     self.audio_buffer = []
@@ -234,7 +231,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
                     # for WOZ : send commit when finished turn
                     iu = self.create_iu(self.latest_input_iu)
-                    # iu.set_audio(b"", 1, self.samplerate, 0)
                     um = retico_core.UpdateMessage.from_iu(
                         iu, retico_core.UpdateType.COMMIT
                     )
@@ -242,10 +238,12 @@ class CoquiTTSModule(retico_core.AbstractModule):
             else:
                 raw_audio = self.audio_buffer[self.audio_pointer]
                 self.audio_pointer += 1
-            iu = self.create_iu(self.latest_input_iu)
-            iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
-            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-            self.append(um)
+
+                # Only send data to speaker when there is actual data and do not send silence ?
+                iu = self.create_iu(self.latest_input_iu)
+                iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
+                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                self.append(um)
 
     def prepare_run(self):
         self.audio_pointer = 0

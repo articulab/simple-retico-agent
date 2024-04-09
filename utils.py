@@ -55,19 +55,21 @@ def merge_logs(log_folder):
             # print(fn)
             if os.path.isfile(fn):
                 with open(fn, "r") as f:
-                    l = [fn, 0, 0, 0]
+                    l = [fn, None, None, 0]
                     for row in csv.reader(
                         f
                     ):  # TODO : is there only 1 start and 1 stop ?
                         if row[0] == "Start":
-                            l[1] = row[1]
-                            if first_start is None or first_start > l[1]:
-                                first_start = l[1]
+                            if l[1] is None or l[1] > row[1]:
+                                l[1] = row[1]
+                            if first_start is None or first_start > row[1]:
+                                first_start = row[1]
                         elif row[0] == "Stop":
-                            l[2] = row[1]
-                            if last_stop is None or last_stop < l[1]:
-                                last_stop = l[1]
-                    if l[1] != 0 and l[2] != 0:
+                            if l[2] is None or l[2] < row[1]:
+                                l[2] = row[1]
+                            if last_stop is None or last_stop < row[1]:
+                                last_stop = row[1]
+                    if l[1] is not None and l[2] is not None:
                         l[3] = datetime.datetime.strptime(
                             l[2], date_format
                         ) - datetime.datetime.strptime(l[1], date_format)
