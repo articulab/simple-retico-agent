@@ -1,3 +1,4 @@
+import csv
 import datetime
 from email.mime import audio
 import os
@@ -8,6 +9,7 @@ from hashlib import blake2b
 import retico_core
 import numpy as np
 from TTS.api import TTS, load_config
+from utils import *
 
 
 class CoquiTTS:
@@ -95,9 +97,14 @@ class CoquiTTSModule(retico_core.AbstractModule):
         dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
+        log_file="tts.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
         super().__init__(**kwargs)
+
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
 
         self.printing = printing
 
@@ -193,6 +200,13 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 )
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
+            write_logs(
+                self.log_file,
+                [
+                    ["Start", start_date.strftime("%T.%f")[:-3]],
+                    ["Stop", end_date.strftime("%T.%f")[:-3]],
+                ],
+            )
         if final:
             self.clear_after_finish = True
             self.current_input = []

@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import datetime
 import threading
 import time
@@ -6,6 +7,8 @@ import retico_core
 import torch
 from llama_cpp import Llama
 import re
+
+from utils import *
 
 
 class LlamaCppMemoryIncremental:
@@ -357,6 +360,8 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         initial_prompt,
         system_prompt,
         printing=False,
+        log_file="llm.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
         """Initializes the LlamaCpp Module.
@@ -366,6 +371,8 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         """
         super().__init__(**kwargs)
         self.printing = printing
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
         # Model loading method 1
         self.model_path = model_path
         # Model loading method 2
@@ -463,6 +470,11 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 datetime.datetime.now().strftime("%T.%f")[:-3],
             )
 
+        write_logs(
+            self.log_file,
+            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        )
+
         def subprocess(
             payload, is_ponctuation=None, stop_pattern=None, role_pattern=None
         ):
@@ -538,3 +550,8 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None
+
+        write_logs(
+            self.log_file,
+            [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        )

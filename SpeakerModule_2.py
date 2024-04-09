@@ -1,14 +1,18 @@
 # import time
 # import wave
+import csv
+import datetime
 import pyaudio
 import retico_core
 import platform
 from retico_core.audio import AudioIU
 
+from utils import *
+
 CHANNELS = 1
 
 
-class SpeakerModule2(retico_core.AbstractConsumingModule):
+class SpeakerModule_2(retico_core.AbstractConsumingModule):
     """A module that consumes AudioIUs of arbitrary size and outputs them to the
     speakers of the machine. When a new IU is incoming, the module blocks as
     long as the current IU is being played."""
@@ -35,6 +39,8 @@ class SpeakerModule2(retico_core.AbstractConsumingModule):
         sample_width=2,
         use_speaker="both",
         device_index=None,
+        log_file="speaker.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -50,22 +56,28 @@ class SpeakerModule2(retico_core.AbstractConsumingModule):
 
         self.stream = None
         self.time = None
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
 
     def process_update(self, update_message):
+        write_logs(
+            self.log_file,
+            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        )
         # silence = chr(0) * self.chunk * self.channels * 2
-        cpt_total = 0
-        cpt = 0
+        # cpt_total = 0
+        # cpt = 0
         for iu, ut in update_message:
-            cpt_total += 1
+            # cpt_total += 1
             if ut == retico_core.UpdateType.ADD:
-                cpt += 1
+                # cpt += 1
                 self.stream.write(bytes(iu.raw_audio))
         # print("\n\n" + str(cpt_total))
         # print(cpt)
-        free = self.stream.get_write_available()
+        # free = self.stream.get_write_available()
         # tofill = free - CHUNK
         # self.stream.write(SILENCE * tofill)  # Fill it with silence
-        print(free)
+        # print(free)
         return None
 
     def setup(self):

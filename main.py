@@ -4,8 +4,10 @@ import datetime
 import os
 import sys
 
+from SpeakerModule_2 import SpeakerModule_2
 from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from WozMicrophone_one_file import WozMicrophoneModule_one_file
+from utils import *
 from whisperasr_2 import WhisperASRModule_2
 
 prefix = "/home/mlechape/retico_system_test/"
@@ -233,43 +235,6 @@ def callback_google_asr(update_msg):
 SENTENCE = ""
 
 
-def merge_logs():
-    wozmic_file = "logs/test/16k/Recording (1)/wozmic.csv"
-    asr_file = "logs/test/16k/Recording (1)/asr.csv"
-    files = [wozmic_file, asr_file]
-
-    res_file = "logs/test/16k/Recording (1)/res.csv"
-
-    date_format = "%H:%M:%S.%f"
-
-    with open(res_file, "w", newline="") as w:
-        writer = csv.writer(w)
-        writer.writerow(["Module", "Start", "Stop", "Duration"])
-        first_start = None
-        last_stop = None
-        for fn in files:
-            with open(fn, "r") as f:
-                l = [fn, 0, 0, 0]
-                for row in csv.reader(f):  # TODO : is there only 1 start and 1 stop ?
-                    if row[0] == "Start":
-                        l[1] = row[1]
-                        if first_start is None or first_start > l[1]:
-                            first_start = l[1]
-                    elif row[0] == "Stop":
-                        l[2] = row[1]
-                        if last_stop is None or last_stop < l[1]:
-                            last_stop = l[1]
-                l[3] = datetime.datetime.strptime(
-                    l[2], date_format
-                ) - datetime.datetime.strptime(l[1], date_format)
-                writer.writerow(l)
-
-        total_duration = datetime.datetime.strptime(
-            last_stop, date_format
-        ) - datetime.datetime.strptime(first_start, date_format)
-        writer.writerow(["Total", first_start, last_stop, total_duration])
-
-
 def main_llama_cpp_python_chat_7b():
 
     # Usable model
@@ -373,6 +338,9 @@ def main_woz():
     rate = 16000
     # rate = 32000
 
+    # create log folder
+    log_folder = create_new_log_folder("logs/test/16k/Recording (1)/demo")
+
     # assert chunk_size = frame_rate * frame_length * nb_channels  <= 960
 
     # creating modules
@@ -409,31 +377,44 @@ def main_woz():
     # self.framerate =  44100
     # IF =  640
 
-    # mic = MicrophoneModule(rate=16000, frame_length=0.02)
+    mic = MicrophoneModule(rate=16000, frame_length=0.02)
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
 
-    mic = WozMicrophoneModule_one_file(frame_length=0.02)
+    # mic = WozMicrophoneModule_one_file(frame_length=0.02, log_folder=log_folder)
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
 
     # print("MIC RATE =", mic.rate)
 
-    audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
-    speaker = audio.SpeakerModule(rate=int(rate / 2))
-
     # asr = WhisperASRModule(printing=printing, full_sentences=True)
     asr = WhisperASRModule_2(
-        printing=printing, full_sentences=True, input_framerate=16000
+        printing=printing,
+        full_sentences=True,
+        input_framerate=16000,
+        log_folder=log_folder,
     )
     cback = debug.CallbackModule(callback=callback)
-    # llama_mem_icr = LlamaCppMemoryIncrementalModule(
-    #     model_path, None, None, None, system_prompt, printing=printing
-    # )
-    # # tts = SpeechBrainTTSModule("en", printing=printing)
-    # tts = CoquiTTSModule(language="en", model="vits_neon", printing=printing)
+    llama_mem_icr = LlamaCppMemoryIncrementalModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        log_folder=log_folder,
+    )
+    # tts = SpeechBrainTTSModule("en", printing=printing)
+    tts = CoquiTTSModule(
+        language="en", model="vits_neon", printing=printing, log_folder=log_folder
+    )
+
+    # audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
+    # speaker = audio.SpeakerModule(rate=rate)
+    print("TTS SAMPLERATE = ", tts.samplerate)
+    speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
 
     # creating network
     # mic.subscribe(speaker)
@@ -445,9 +426,9 @@ def main_woz():
     # audio_dispatcher.subscribe(asr)
 
     # asr.subscribe(cback)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
 
     # running system
     try:
@@ -455,7 +436,7 @@ def main_woz():
         print("woz Running")
         input()
         network.stop(mic)
-        merge_logs()
+        merge_logs(log_folder)
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
         network.stop(mic)
@@ -503,4 +484,5 @@ msg = []
 if __name__ == "__main__":
     # main_llama_chat_3b()
     # main_llama_cpp_python_chat_7b()
-    main_woz()
+    # main_woz()
+    merge_logs("logs/test/16k/Recording (1)/demo_1")

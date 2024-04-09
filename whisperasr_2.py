@@ -24,6 +24,8 @@ import numpy as np
 import time
 from faster_whisper import WhisperModel
 
+from utils import *
+
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -44,7 +46,8 @@ class WhisperASR_2:
         language=None,
         task="transcribe",
         printing=False,
-        log_file="logs/test/16k/Recording (1)/asr.csv",
+        log_file="asr.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
     ):
         # self.processor = WhisperProcessor.from_pretrained(whisper_model)
         # self.model = WhisperForConditionalGeneration.from_pretrained(
@@ -84,7 +87,8 @@ class WhisperASR_2:
         # latency logs params
         self.first_time = True
         self.first_time_stop = False
-        self.log_file = log_file
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
 
     def _resample_audio(self, audio):
         if self.input_framerate != self.target_framerate:
@@ -176,11 +180,11 @@ class WhisperASR_2:
         start_date = datetime.datetime.now()
         start_time = time.time()
 
-        print("ASR start ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR start ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         silence = self.recognize_silence()
 
-        print("ASR recog silence ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR recog silence ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         if not self.vad_state and not silence:  # someone starts talking
             self.vad_state = True
@@ -190,18 +194,17 @@ class WhisperASR_2:
             if self.first_time:
                 self.first_time_stop = True
                 self.first_time = False
-                with open(self.log_file, "a", newline="") as f:
-                    csv_writer = csv.writer(f)
-                    csv_writer.writerow(
-                        ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
-                    )
+                write_logs(
+                    self.log_file,
+                    [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                )
 
-        print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         if not self.vad_state:
             return None, False
 
-        print("ASR if 2 ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR if 2 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         # full_audio = b""
         # for a in self.audio_buffer:
@@ -224,28 +227,28 @@ class WhisperASR_2:
 
         full_audio = b"".join(self.audio_buffer)
 
-        print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         audio_np = (
             np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
         )
 
-        print("ASR npa ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR npa ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         print("len npa =", len(audio_np))
         self.cpt_npa += len(audio_np)
         print("cpt npa = ", self.cpt_npa)
         segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
 
-        print("ASR transcribe ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR transcribe ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         segments = list(segments)
 
-        print("ASR segments ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR segments ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         transcription = "".join([s.text for s in segments])
 
-        print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
+        # print("ASR join ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
         end_date = datetime.datetime.now()
         end_time = time.time()
@@ -267,11 +270,10 @@ class WhisperASR_2:
             if self.first_time_stop:
                 self.first_time = True
                 self.first_time_stop = False
-                with open(self.log_file, "a", newline="") as f:
-                    csv_writer = csv.writer(f)
-                    csv_writer.writerow(
-                        ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
-                    )
+                write_logs(
+                    self.log_file,
+                    [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                )
 
         return transcription, self.vad_state
 
@@ -306,6 +308,8 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         task="transcribe",
         full_sentences=True,
         printing=False,
+        log_file="asr.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -317,6 +321,8 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             printing=printing,
             target_framerate=target_framerate,
             input_framerate=input_framerate,
+            log_file=log_file,
+            log_folder=log_folder,
         )
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
