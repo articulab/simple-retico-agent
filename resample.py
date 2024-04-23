@@ -52,10 +52,11 @@ from pydub import AudioSegment as am
 
 src = "./audios/stereo/48k/"
 dest = "./audios/mono/44k/"
-inrate = 48000
+# inrate = 48000
 # outrate = 44100
+inrate = 22050
 outrate = 48000
-inchannel = 2
+inchannel = 1
 outchannel = 1
 # for filepath in [f for f in glob.glob(src + "*.wav")]:
 #     filename = filepath.split("\\")[-1]
@@ -69,8 +70,8 @@ outchannel = 1
 #     sound.export(dest_path, format="wav")
 
 
-filepath = "./audios/test/Recording (12)_cropped.wav"
-dest_path = "./audios/mono/Recording (12)_cropped_mono.wav"
+filepath = "audios/test/tts_output.wav"
+dest_path = "audios/test/tts_output_48k.wav"
 sound = am.from_file(filepath, format="wav", frame_rate=inrate)
 # sound = sound.resample(sample_rate_Hz=outrate, sample_width=2, channels=1)
 sound = sound.set_channels(outchannel)

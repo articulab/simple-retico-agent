@@ -3,7 +3,6 @@ import librosa
 import scipy
 import soundfile as sf
 from scipy import signal
-
 from TTS.api import TTS, load_config
 
 
@@ -29,14 +28,6 @@ def mix_audio(audio_path, noise_path, mixed_path, noise_level=1):
 
     # Save the mixed audio
     sf.write(mixed_path, mixed_signal, sr)
-
-
-def exec_mix(audio_path, noise_path, mixed_path):
-
-    # Call the function
-    mix_audio(
-        audio_path, noise_path, mixed_path, noise_level=0.5
-    )  # Adjust noise_level as needed
 
 
 def exec_cancellation_2(mixed_path, noise_path, denoisy_path):
@@ -201,9 +192,15 @@ def apply_wiener_filter(mixed_path, noise_path, denoisy_path):
     # librosa.output.write_wav(denoisy_path, recovered_signal, sr)
 
 
-import librosa
-import numpy as np
-import soundfile as sf
+def wiener_filter_2(noisy_path, clean_path, output_path):
+    noisy_signal, sr = librosa.load(noisy_path, sr=None)
+    clean_signal, _ = librosa.load(clean_path, sr=None)
+    noisy_stft = np.abs(librosa.stft(noisy_signal))
+    clean_stft = np.abs(librosa.stft(clean_signal))
+    wiener_filter = clean_stft**2 / (clean_stft**2 + noisy_stft**2)
+    enhanced_stft = wiener_filter * noisy_stft
+    enhanced_audio = librosa.istft(enhanced_stft)
+    sf.write(output_path, enhanced_audio, sr)
 
 
 def subtract_audio(mixed_path, single_speaker_path, output_path):
@@ -244,7 +241,7 @@ def tts_saves_wav(output_path):
     tts = TTS(model, gpu=True).to("cuda")
     prompt = "Hello, how are you today ? I am glad to see you so willing to learn mathematics !"
     generated_audio = tts.tts(text=prompt)
-    # # waveform = waveforms.squeeze(1).detach().numpy()[0]
+
     # generated_audio = np.array(generated_audio)
     # # Convert float32 data [-1,1] to int16 data [-32767,32767]
     # generated_audio = (generated_audio * 32767).astype(np.int16).tobytes()
@@ -260,7 +257,7 @@ if __name__ == "__main__":
     noise_path = "audios/test/Recording (12)_cropped.wav"
     mixed_path = "audios/test/mixed_audio_3.wav"
     denoisy_path = "audios/test/denoisy_audio_6.wav"
-    tts_output = "audios/test/tts_output.wav"
+    tts_output = "audios/test/tts_output_48k.wav"
     tts_record = "audios/test/tts_output_SR22k.wav"
 
     # exec_mix(audio_path, noise_path, mixed_path)
@@ -270,9 +267,13 @@ if __name__ == "__main__":
 
     # subtract_audio(tts_output, tts_record, denoisy_path)
 
-    clean_audio(tts_record, "audios/test/clean_tts_output_SR22k.wav")
+    # clean_audio(audio_path, "audios/test/clean_Recording (13)_cropped.wav")
 
-    # Usage
-    # apply_wiener_filter(mixed_path, noise_path, denoisy_path)
+    apply_wiener_filter(
+        "audios/test/tts_output_playback.wav",
+        "audios/test/noise.wav",
+        "audios/test/wiener_2_test_3.wav",
+    )
+    # wiener_filter_2(noise_path, tts_output, "audios/test/wiener_2_test_1.wav")
 
     # tts_saves_wav(tts_output)
