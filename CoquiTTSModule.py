@@ -57,6 +57,15 @@ class CoquiTTS:
 
 
 class CoquiTTSModule(retico_core.AbstractModule):
+    """
+
+    Args:
+        retico_core (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
     @staticmethod
     def name():
         return "Coqui TTS Module"
