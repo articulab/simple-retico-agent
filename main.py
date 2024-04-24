@@ -7,7 +7,7 @@ from WozMicrophone_one_file import WozMicrophoneModule_one_file
 
 prefix = "/home/mlechape/retico_system_test/"
 sys.path.append(prefix + "retico-whisperasr")
-from CoquiTTSModule import CoquiTTSModule
+from coqui_tts import CoquiTTSModule
 from WaveModule import WaveModule
 from whisperasr import WhisperASRModule
 from WozAsrModule import WozAsrModule

@@ -1,3 +1,11 @@
+"""
+coqui-ai TTS Module
+==================
+
+This module provides on-device TTS capabilities by using the coqui-ai TTS library and its available
+models.
+"""
+
 import datetime
 from email.mime import audio
 import os
@@ -11,6 +19,10 @@ from TTS.api import TTS, load_config
 
 
 class CoquiTTS:
+    """Sub-class of CoquiTTSModule, TTS model wrapper.
+    Called with the synthesize function that generates speech (audio data) from a sentence chunk (text data).
+    """
+
     def __init__(
         self,
         model,
@@ -19,17 +31,23 @@ class CoquiTTS:
         speaker_wav,
         language,
     ):
-        self.tts = TTS(model, gpu=True).to(device)
+        self.tts = None
+        self.model = model
+        self.device = device
         self.language = language
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
+
+    def setup(self):
+        """Init chosen TTS model."""
+        self.tts = TTS(self.model, gpu=True).to(self.device)
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
         int16-encoded numpy ndarray.
 
         Args:
-            text (str): The speech to synthesize/
+            text (str): The speech to synthesize
 
         Returns:
             bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
@@ -57,22 +75,30 @@ class CoquiTTS:
 
 
 class CoquiTTSModule(retico_core.AbstractModule):
-    """
+    """A retico module that provides Text-To-Speech (TTS) using a deep learning approach implemented with coqui-ai's TTS library : https://github.com/coqui-ai/TTS.
+    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
+    Has a subclass, CoquiTTS, that handles the aspects related to TTS engineering.
 
-    Args:
-        retico_core (_type_): _description_
+    Definition :
+    When receiving sentence chunks from LLM, add to the current input. Start TTS synthesizing the accumulated current input when receiving a COMMIT IU
+    (which, for now, is send by LLM when a ponctuation is encountered during sentence generation).
+    Incremental : the TTS generation could be considered incremental because it receives sentence chunks from LLM and generates speech chunks in consequence.
+    But it could be even more incremental because the TTS models could yield the generated audio data (TODO: to implement in future versions).
 
-    Returns:
-        _type_: _description_
+    Inputs : TextIU
+
+    Outputs : AudioIU
     """
 
     @staticmethod
     def name():
-        return "Coqui TTS Module"
+        return "coqui-ai TTS Module"
 
     @staticmethod
     def description():
-        return "A module that synthesizes speech using CoquiTTS."
+        return (
+            "A module that synthesizes speech from text using coqui-ai's TTS library."
+        )
 
     @staticmethod
     def input_ius():
@@ -152,9 +178,62 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self.clear_after_finish = False
 
     def current_text(self):
+        """Convert received IUs data accumulated in current_input list into a string.
+
+        Returns:
+            string: sentence chunk to synthesize speech from.
+        """
         return "".join(iu.text for iu in self.current_input)
 
+    def _tts_thread(self):
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
+        it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
+        """
+        t1 = time.time()
+        while self._tts_thread_active:
+            t2 = t1
+            t1 = time.time()
+            if t1 - t2 < self.frame_duration:
+                time.sleep(self.frame_duration)
+            else:
+                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+
+            if self.audio_pointer >= len(self.audio_buffer):
+                raw_audio = (
+                    b"\x00"
+                    * self.samplewidth
+                    * int(self.samplerate * self.frame_duration)
+                )
+                if self.clear_after_finish:
+                    self.audio_pointer = 0
+                    self.audio_buffer = []
+                    self.clear_after_finish = False
+
+                    # for WOZ : send commit when finished turn
+                    iu = self.create_iu(self.latest_input_iu)
+                    # iu.set_audio(b"", 1, self.samplerate, 0)
+                    um = retico_core.UpdateMessage.from_iu(
+                        iu, retico_core.UpdateType.COMMIT
+                    )
+                    self.append(um)
+            else:
+                raw_audio = self.audio_buffer[self.audio_pointer]
+                self.audio_pointer += 1
+            iu = self.create_iu(self.latest_input_iu)
+            iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
+            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+            self.append(um)
+
     def process_update(self, update_message):
+        """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+
+        Args:
+            update_message (UpdateType): UpdateMessage that contains new IUs to process, ADD IUs' data are added to the current_input,
+            COMMIT IUs are launching the speech synthesizing (using the synthesize function) with the accumulated text data in current_input (the sentence chunk).
+
+        Returns:
+            _type_: returns None if update message is None.
+        """
         if not update_message:
             return None
         final = False
@@ -165,11 +244,9 @@ class CoquiTTSModule(retico_core.AbstractModule):
             elif ut == retico_core.UpdateType.REVOKE:
                 self.revoke(iu)
             elif ut == retico_core.UpdateType.COMMIT:
+                # COMMIT IUs' data should be handled and append to the current_input ?
                 final = True
-                # print(iu)
         current_text = self.current_text()
-        # print("current_text = "+current_text)
-        # print(update_message)
         if final or (
             len(current_text) - len(self._latest_text) > 15
             and not self.dispatch_on_finish
@@ -206,43 +283,16 @@ class CoquiTTSModule(retico_core.AbstractModule):
             self.clear_after_finish = True
             self.current_input = []
 
-    def _tts_thread(self):
-        t1 = time.time()
-        while self._tts_thread_active:
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
-
-            if self.audio_pointer >= len(self.audio_buffer):
-                raw_audio = (
-                    b"\x00"
-                    * self.samplewidth
-                    * int(self.samplerate * self.frame_duration)
-                )
-                if self.clear_after_finish:
-                    self.audio_pointer = 0
-                    self.audio_buffer = []
-                    self.clear_after_finish = False
-
-                    # for WOZ : send commit when finished turn
-                    iu = self.create_iu(self.latest_input_iu)
-                    # iu.set_audio(b"", 1, self.samplerate, 0)
-                    um = retico_core.UpdateMessage.from_iu(
-                        iu, retico_core.UpdateType.COMMIT
-                    )
-                    self.append(um)
-            else:
-                raw_audio = self.audio_buffer[self.audio_pointer]
-                self.audio_pointer += 1
-            iu = self.create_iu(self.latest_input_iu)
-            iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
-            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-            self.append(um)
+    def setup(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
+        """
+        self.tts.setup()
 
     def prepare_run(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
+        """
         self.audio_pointer = 0
         self.audio_buffer = []
         self._tts_thread_active = True
@@ -250,4 +300,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
         threading.Thread(target=self._tts_thread).start()
 
     def shutdown(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
+        """
         self._tts_thread_active = False

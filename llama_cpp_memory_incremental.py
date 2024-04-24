@@ -9,7 +9,7 @@ import re
 
 
 class LlamaCppMemoryIncremental:
-    """LlamaCppMemoryIncrementalModule's submodule that handles all the LLM engineering part.
+    """Sub-class of LlamaCppMemoryIncrementalModule, LLM wrapper. Handles all the LLM engineering part.
     Called with the process_full_sentence function that generates a system answer from a constructed prompt when a user full sentence is received from the ASR.
     """
 
@@ -425,6 +425,10 @@ class LlamaCppMemoryIncremental:
 
 class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
     """A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
+    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
+    Has a subclass, LlamaCppMemoryIncremental, that handles the aspects related to LLM engineering.
+
+    Definition :
     - LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
     - Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
     Update the dialogue history do that it doesn't exceed a certain threshold of token size.
@@ -489,39 +493,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             **kwargs
         )
         self.latest_input_iu = None
-
-    def setup(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
-        """
-        self.model_wrapper.setup()
-
-    def process_update(self, update_message):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
-
-        Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are COMMIT,
-            it means that these IUs correspond to a complete sentence. All COMMIT IUs (msg) are processed calling the process_incremental function.
-
-        Returns:
-            _type_: returns None if update message is None.
-        """
-        if not update_message:
-            return None
-        commit = False
-        msg = []
-        for iu, ut in update_message:
-            if ut == retico_core.UpdateType.ADD:
-                continue
-            elif ut == retico_core.UpdateType.REVOKE:
-                continue
-            elif ut == retico_core.UpdateType.COMMIT:
-                msg.append(iu)
-                commit = True
-                pass
-        if commit:
-            self.process_incremental(msg)
 
     def recreate_sentence_from_um(self, msg):
         """recreate the complete user sentence from the strings contained in every COMMIT update message IU (msg).
@@ -675,3 +646,36 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None
+
+    def process_update(self, update_message):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+
+        Args:
+            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are COMMIT,
+            it means that these IUs correspond to a complete sentence. All COMMIT IUs (msg) are processed calling the process_incremental function.
+
+        Returns:
+            _type_: returns None if update message is None.
+        """
+        if not update_message:
+            return None
+        commit = False
+        msg = []
+        for iu, ut in update_message:
+            if ut == retico_core.UpdateType.ADD:
+                continue
+            elif ut == retico_core.UpdateType.REVOKE:
+                continue
+            elif ut == retico_core.UpdateType.COMMIT:
+                msg.append(iu)
+                commit = True
+                pass
+        if commit:
+            self.process_incremental(msg)
+
+    def setup(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """
+        self.model_wrapper.setup()
