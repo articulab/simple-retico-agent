@@ -15,6 +15,8 @@ def mix_audio(audio_path, noise_path, mixed_path, noise_level=1):
     )  # Ensure noise is resampled to match audio
 
     # If noise is shorter than the audio, repeat the noise
+    # print(len(noise))
+    # print(len(audio))
     if len(noise) < len(audio):
         noise = np.tile(noise, int(np.ceil(len(audio) / len(noise))))
     # Trim noise to the length of audio
@@ -24,7 +26,13 @@ def mix_audio(audio_path, noise_path, mixed_path, noise_level=1):
     mixed_signal = audio + noise_level * noise
 
     # Normalize mixed signal to prevent clipping
-    mixed_signal = mixed_signal / np.max(np.abs(mixed_signal))
+    # print("normalize factor = ", np.max(np.abs(mixed_signal)))
+    # mixed_signal = mixed_signal / np.max(np.abs(mixed_signal))
+
+    # print(noise[100000:100080])
+    # print(audio[100000:100080])
+    # print(mixed_signal[100000:100080])
+    # print(mixed_signal[100000:100080])
 
     # Save the mixed audio
     sf.write(mixed_path, mixed_signal, sr)
@@ -214,11 +222,41 @@ def subtract_audio(mixed_path, single_speaker_path, output_path):
 
     # Truncate the longer audio if they are not the same length
     min_length = min(len(mixed_audio), len(single_audio))
+    print(len(mixed_audio))
+    print(len(single_audio))
     mixed_audio = mixed_audio[:min_length]
     single_audio = single_audio[:min_length]
 
+    noise_level = 1.0
+    # noise_level = 1.15
+    # noise_level = sum(np.abs(mixed_audio)) / sum(np.abs(single_audio))
+    # print(noise_level)
     # Subtract the single speaker's audio from the mixed audio
-    result_audio = mixed_audio - single_audio
+    result_audio = mixed_audio - noise_level * single_audio
+
+    print(sum(np.abs(mixed_audio)))
+    print(sum(np.abs(single_audio)))
+    print(sum(np.abs(single_audio * noise_level)))
+    print(sum(np.abs(result_audio)))
+
+    # print(sum(mixed_audio))
+    # print(sum(single_audio))
+    # print(sum(result_audio))
+    # print(np.max(mixed_audio))
+    # print(np.max(single_audio))
+    # print(np.max(result_audio))
+    # print(np.argmax(mixed_audio))
+    # print(np.argmax(single_audio))
+    # print(np.argmax(result_audio))
+    # print(np.min(mixed_audio))
+    # print(np.min(single_audio))
+    # print(np.min(result_audio))
+    # print(np.argmin(mixed_audio))
+    # print(np.argmin(single_audio))
+    # print(np.argmin(result_audio))
+    # print(mixed_audio[100000:100080])
+    # print(single_audio[100000:100080])
+    # print(result_audio[100000:100080])
 
     # Write the resulting audio back to a file
     sf.write(output_path, result_audio, sr)
@@ -250,30 +288,118 @@ def tts_saves_wav(output_path):
     sf.write(output_path, generated_audio, 22050)
 
 
+# import audio_sync
+# def calculate_latency(ref_wav_path, act_wav_path):
+#     LATENCY_THRESHOLD = 10
+#     # This assumes the test audio played by the devices under
+#     # test is audio_sync.DEFAULT_TEST_AUDIO, whose properties
+#     # are given in audio_sync.DEFAULT_TEST_AUDIO_PROPERTIES.
+#     latencies, dropouts = audio_sync.AnalyzeAudios(ref_wav_path, act_wav_path)
+
+#     # Verify there are no dropouts and the latency is below the threshold.
+#     assert [] == [x for x in latencies if x[1] >= LATENCY_THRESHOLD]
+#     assert [] == dropouts
+
+
+# import syncaudio
+# from syncaudio import synchronize
+# from syncaudio import read_audio
+# def calculate_latency_2(wav_a, wav_b):
+#     # self = read_audio(wav_a)
+#     # other = read_audio(wav_b)
+#     audio_a, _ = librosa.load(wav_a, sr=None)
+#     audio_b, _ = librosa.load(wav_b, sr=None)
+
+#     delay = synchronize(
+#         audio_a,
+#         audio_b,
+#         window_size=1024,
+#         overlap=0,
+#         spectral_band=512,
+#         temporal_band=43,
+#         peaks_per_bin=7,
+#     )
+
+#     print(delay, "seconds")
+
+
+from syncstart import file_offset
+
+
+def calculate_latency_3(wav_a, wav_b):
+    # self = read_audio(wav_a)
+    # other = read_audio(wav_b)
+    audio_a, _ = librosa.load(wav_a, sr=None)
+    audio_b, _ = librosa.load(wav_b, sr=None)
+
+    delay = file_offset(in1=audio_a, in2=audio_b)
+
+    print(delay, "seconds")
+
+
 if __name__ == "__main__":
+    folder_path = "audios/test/"
 
     # Paths to your audio and noise files
     audio_path = "audios/test/Recording (13)_cropped.wav"
     noise_path = "audios/test/Recording (12)_cropped.wav"
-    mixed_path = "audios/test/mixed_audio_3.wav"
-    denoisy_path = "audios/test/denoisy_audio_6.wav"
+    mixed_path = "audios/test/mixed_audio_2_synch.wav"
+    denoisy_path = "audios/test/test_substraction_tts_pilot_pilot.wav"
+
     tts_output = "audios/test/tts_output_48k.wav"
+    tts_output_playback = "audios/test/tts_output_playback_48k_sync.wav"
     tts_record = "audios/test/tts_output_SR22k.wav"
 
-    # exec_mix(audio_path, noise_path, mixed_path)
+    mixed_audio_synch = "audios/test/mixed_audio_2_mono_sync.wav"
+    mixed_pilot = "audios/test/mixed_audio_pilot.wav"
+
+    rec_user = folder_path + "rec_marius_cropped.wav"
+    rec_user_mono = folder_path + "rec_marius_cropped_mono.wav"
+
+    # pilot denoisy mix 1
+    mix_1 = folder_path + "mix_rec_marius_cropped_rec_agent_cropped.wav"
+    mix_1_2 = folder_path + "mix_rec_marius_cropped_rec_agent_cropped.wav"
+    rec_agent = folder_path + "rec_agent_cropped.wav"
+    denoisy_mix_1 = folder_path + "denoisy_mix_1.wav"
+
+    # pilot denoisy mix 2
+    mix_2 = folder_path + "mix_rec_marius_cropped_rec_tts_output_48k_sync.wav"
+    rec_tts = folder_path + "rec_tts_output_48k_sync.wav"
+    denoisy_mix_2 = folder_path + "denoisy_mix_2.wav"
+
+    # test denoisy rec
+    rec = folder_path + "rec_overlap_withttsoutput_mono_sync.wav"
+    rec_tts = folder_path + "rec_tts_output_48k_sync.wav"
+    denoisy_test_1 = folder_path + "denoisy_test_1.wav"
+
+    # mix_audio(
+    #     rec_user,
+    #     rec_agent,
+    #     mix_1_2,
+    # )
+    # mix_audio(rec_user_mono, rec_tts, mix_2)
+    # subtract_audio(
+    #     mix_1_2,
+    #     rec_agent,
+    #     denoisy_mix_1,
+    # )
+    # subtract_audio(mix_2, rec_tts, denoisy_mix_2)
+    subtract_audio(rec, rec_tts, denoisy_test_1)
+
     # exec_cancellation(mixed_path, noise_path, denoisy_path)
     # exec_cancellation_2(mixed_path, noise_path, denoisy_path)
     # exec_cancellation_3(mixed_path, noise_path, denoisy_path)
 
-    # subtract_audio(tts_output, tts_record, denoisy_path)
-
     # clean_audio(audio_path, "audios/test/clean_Recording (13)_cropped.wav")
 
-    apply_wiener_filter(
-        "audios/test/tts_output_playback.wav",
-        "audios/test/noise.wav",
-        "audios/test/wiener_2_test_3.wav",
-    )
+    # apply_wiener_filter(
+    #     "audios/test/tts_output_playback.wav",
+    #     "audios/test/noise.wav",
+    #     "audios/test/wiener_2_test_3.wav",
+    # )
     # wiener_filter_2(noise_path, tts_output, "audios/test/wiener_2_test_1.wav")
 
     # tts_saves_wav(tts_output)
+
+    # sync 2 audio tracks :
+    # command = syncstart audios/test/tts_output_padded.wav audios/test/mixed_audio_2_mono.wav

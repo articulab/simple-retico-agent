@@ -70,8 +70,8 @@ outchannel = 1
 #     sound.export(dest_path, format="wav")
 
 
-filepath = "audios/test/tts_output.wav"
-dest_path = "audios/test/tts_output_48k.wav"
+filepath = "audios/test/tts_output_playback.wav"
+dest_path = "audios/test/tts_output_playback_48k.wav"
 sound = am.from_file(filepath, format="wav", frame_rate=inrate)
 # sound = sound.resample(sample_rate_Hz=outrate, sample_width=2, channels=1)
 sound = sound.set_channels(outchannel)
