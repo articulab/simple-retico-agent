@@ -52,18 +52,33 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
         self.first_time_stop = True
         # logs
         self.log_file = manage_log_folder(log_folder, log_file)
+        self.time_logs_buffer = []
+        self.last_chunk_time = time.time()
 
     def _add_update_message(self):
         while self._run_thread_active:
             if self.first_time:
                 self.first_time = False
-                write_logs(
-                    self.log_file,
-                    [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                self.time_logs_buffer.append(
+                    ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                )
+            else:
+                self.time_logs_buffer.append(
+                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
                 )
 
             # time.sleep(0.001)
-            time.sleep(0.02)
+            # time.sleep(self.frame_length)
+
+            # waiting for frame_length time to respect the real data flow as if it was a real mic.
+            # delta_time = time.time() - self.last_chunk_time
+            # waiting_time = self.frame_length - delta_time
+            # print("delta_time = ", delta_time)
+            # print("waiting_time = ", waiting_time)
+            # if waiting_time > 0:
+            #     time.sleep(waiting_time)
+            # self.last_chunk_time = time.time()
+
             if self.read_cpt < self.max_cpt:
                 # sample = self.audio_buff.pop()
 
@@ -75,7 +90,7 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
                 self.read_cpt += 1
                 # sample = self.wf.readframes(self.chunk_size)
                 if sample == b"":  # stop cond = file fully read
-                    self._run_thread_active == False
+                    self._run_thread_active = False
 
                 output_iu = self.create_iu()
 
@@ -86,24 +101,32 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
                 um = retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
                 )
+
+                delta_time = time.time() - self.last_chunk_time
+                waiting_time = self.frame_length - delta_time
+                if waiting_time > 0:
+                    # time.sleep(waiting_time)
+                    time.sleep(0.01)
                 self.append(um)
+                # print("delta_time = ", delta_time)
+                # print("waiting_time = ", waiting_time)
+                # print("delta_time = {0:.7f}".format(delta_time))
+                # print("waiting_time = {0:.7f}".format(waiting_time))
+                self.last_chunk_time = time.time()
+
+                # delta_time = time.time() - self.last_chunk_time
+                # waiting_time = self.frame_length - delta_time
+                # print("delta_time = ", delta_time)
+                # print("waiting_time = ", waiting_time)
+                # self.last_chunk_time = time.time()
+                # if waiting_time > 0:
+                #     time.sleep(waiting_time)
 
             else:  # stop cond
-                if self.first_time_stop:
-                    self.first_time_stop = False
-                    write_logs(
-                        self.log_file,
-                        [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
-                    )
-                    # f.write(
-                    #     "Stop,"
-                    #     + str(datetime.datetime.now().strftime("%T.%f")[:-3])
-                    # )
-                # print("stop sending")
                 # self._run_thread_active = False
-                time.sleep(0.02)
+                # time.sleep(0.02)
                 silence_audio_chunk = b"\x00" * int(
-                    self.rate * self.n_channels * self.sample_width * 0.02
+                    self.rate * self.n_channels * self.sample_width * self.frame_length
                 )
                 output_iu = self.create_iu()
 
@@ -118,6 +141,21 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
                     output_iu, retico_core.UpdateType.ADD
                 )
                 self.append(um)
+
+                print("stop sending")
+                self._run_thread_active = False
+                if self.first_time_stop:
+                    self.time_logs_buffer.append(
+                        ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                    )
+                    self.first_time_stop = False
+                    write_logs(
+                        self.log_file,
+                        self.time_logs_buffer,
+                    )
+                else:
+                    print("this should not happened")
+                    raise NotImplementedError("2nd time entering the stop cond loop")
 
     def prepare_run(self):
         self.wf = wave.open(self.file, "rb")
@@ -152,4 +190,8 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
 
     def shutdown(self):
         # self.p.terminate()
+        write_logs(
+            self.log_file,
+            self.time_logs_buffer,
+        )
         self._run_thread_active = False

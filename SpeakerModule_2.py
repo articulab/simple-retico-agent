@@ -59,19 +59,22 @@ class SpeakerModule_2(retico_core.AbstractConsumingModule):
         # logs
         self.log_file = manage_log_folder(log_folder, log_file)
         self.first_time = True
+        print("speaker rate = ", self.rate)
+
+        self.time_logs_buffer = []
 
     def process_update(self, update_message):
+        # TODO: replace this method by an actual way of knowing what is the starting and ending time where the speaker is active (actually outputs time, and not receive messages).
         if self.first_time:
-            write_logs(
-                self.log_file,
-                [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            self.time_logs_buffer.append(
+                ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
             )
             self.first_time = False
         else:
-            write_logs(
-                self.log_file,
-                [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            self.time_logs_buffer.append(
+                ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
             )
+
         # silence = chr(0) * self.chunk * self.channels * 2
         # cpt_total = 0
         # cpt = 0
@@ -114,6 +117,10 @@ class SpeakerModule_2(retico_core.AbstractConsumingModule):
 
     def shutdown(self):
         """Close the audio stream."""
+        write_logs(
+            self.log_file,
+            self.time_logs_buffer,
+        )
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None

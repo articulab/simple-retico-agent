@@ -148,6 +148,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self.audio_buffer = []
         self.audio_pointer = 0
         self.clear_after_finish = False
+        self.time_logs_buffer = []
 
     def current_text(self):
         return "".join(iu.text for iu in self.current_input)
@@ -200,13 +201,15 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 )
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
-            write_logs(
-                self.log_file,
-                [
-                    ["Start", start_date.strftime("%T.%f")[:-3]],
-                    ["Stop", end_date.strftime("%T.%f")[:-3]],
-                ],
-            )
+            # write_logs(
+            #     self.log_file,
+            #     [
+            #         ["Start", start_date.strftime("%T.%f")[:-3]],
+            #         ["Stop", end_date.strftime("%T.%f")[:-3]],
+            #     ],
+            # )
+            self.time_logs_buffer.append(["Start", start_date.strftime("%T.%f")[:-3]])
+            self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
         if final:
             self.clear_after_finish = True
             self.current_input = []
@@ -254,3 +257,4 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
     def shutdown(self):
         self._tts_thread_active = False
+        write_logs(self.log_file, self.time_logs_buffer)

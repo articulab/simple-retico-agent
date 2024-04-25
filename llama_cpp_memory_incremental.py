@@ -387,6 +387,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             **kwargs
         )
         self.latest_input_iu = None
+        self.time_logs_buffer = []
 
     def setup(self):
         self.model_wrapper.setup()
@@ -470,9 +471,12 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 datetime.datetime.now().strftime("%T.%f")[:-3],
             )
 
-        write_logs(
-            self.log_file,
-            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        # write_logs(
+        #     self.log_file,
+        #     [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        # )
+        self.time_logs_buffer.append(
+            ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
         )
 
         def subprocess(
@@ -540,9 +544,12 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                         "LLM : send sentence after ponct ",
                         datetime.datetime.now().strftime("%T.%f")[:-3],
                     )
-                write_logs(
-                    self.log_file,
-                    [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # write_logs(
+                #     self.log_file,
+                #     [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # )
+                self.time_logs_buffer.append(
+                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
                 )
                 # print("COMMIT :\n"+"".join([iu.payload for iu in self.current_output]))
                 self.current_output = []
@@ -554,3 +561,9 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None
+
+    def shutdown(self):
+        write_logs(
+            self.log_file,
+            self.time_logs_buffer,
+        )

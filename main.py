@@ -10,6 +10,7 @@ from MicrophoneModule_PTT import MicrophoneModule_PTT
 from SpeakerModule_2 import SpeakerModule_2
 from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from WozMicrophone_one_file import WozMicrophoneModule_one_file
+from WozMicrophone_one_file_allinone import WozMicrophoneModule_one_file_allinone
 from utils import *
 from whisperasr_2 import WhisperASRModule_2
 
@@ -336,7 +337,7 @@ def main_woz():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
-    printing = False
+    printing = True
     # rate = 96000
     rate = 16000
     # rate = 32000
@@ -386,11 +387,16 @@ def main_woz():
     # IF =  640
 
     # mic = WozMicrophoneModule_one_file(frame_length=0.02, log_folder=log_folder)
+    mic = WozMicrophoneModule_one_file_allinone(
+        frame_length=0.02, log_folder=log_folder
+    )
     # UM ASR LEN =  1764
     # self.framerate =  44100
     # IF =  640
+    # speaker = SpeakerModule_2(rate=rate, log_folder=log_folder)
+    # mic.subscribe(speaker)
 
-    mic = MicrophoneModule_PTT(rate=16000, frame_length=0.02)
+    # mic = MicrophoneModule_PTT(rate=16000, frame_length=0.02)
 
     # print("MIC RATE =", mic.rate)
 
@@ -402,65 +408,66 @@ def main_woz():
         log_folder=log_folder,
     )
     cback = debug.CallbackModule(callback=callback)
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(
-        model_path,
-        None,
-        None,
-        None,
-        system_prompt,
-        printing=printing,
-        log_folder=log_folder,
-    )
-    # tts = SpeechBrainTTSModule("en", printing=printing)
-    tts = CoquiTTSModule(
-        language="en", model="vits_neon", printing=printing, log_folder=log_folder
-    )
+    # llama_mem_icr = LlamaCppMemoryIncrementalModule(
+    #     model_path,
+    #     None,
+    #     None,
+    #     None,
+    #     system_prompt,
+    #     printing=printing,
+    #     log_folder=log_folder,
+    # )
+    # # tts = SpeechBrainTTSModule("en", printing=printing)
+    # tts = CoquiTTSModule(
+    #     language="en", model="vits_neon", printing=printing, log_folder=log_folder
+    # )
 
     # audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
     # speaker = audio.SpeakerModule(rate=rate)
-    print("TTS SAMPLERATE = ", tts.samplerate)
-    speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
+    # print("TTS SAMPLERATE = ", tts.samplerate)
+    # speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
 
-    # creating network
+    # # creating network
     # mic.subscribe(speaker)
 
     # tts.subscribe(mic)
     mic.subscribe(asr)
+    asr.subscribe(cback)
 
     # mic.subscribe(audio_dispatcher)
     # audio_dispatcher.subscribe(asr)
 
     # asr.subscribe(cback)
-    asr.subscribe(llama_mem_icr)
-    llama_mem_icr.subscribe(tts)
-    tts.subscribe(speaker)
+    # asr.subscribe(llama_mem_icr)
+    # llama_mem_icr.subscribe(tts)
+    # tts.subscribe(speaker)
 
-    # # running system
-    # try:
-    #     network.run(mic)
-    #     print("woz Running")
-    #     input()
-    #     network.stop(mic)
-    #     merge_logs(log_folder)
-    # except Exception as err:
-    #     print(f"Unexpected {err=}, {type(err)=}")
-    #     network.stop(mic)
-
-    # running system Push To Talk
+    # running system
     try:
         network.run(mic)
         print("woz Running")
-        quit_key = False
-        while not quit_key:
-            if keyboard.is_pressed("q"):
-                quit_key = True
-            time.sleep(1)
-        # input()
+        input()
         network.stop(mic)
         merge_logs(log_folder)
     except Exception as err:
         print(f"Unexpected {err=}, {type(err)=}")
         network.stop(mic)
+
+    # running system Push To Talk
+    # try:
+    #     network.run(mic)
+    #     print("woz Running")
+    #     quit_key = False
+    #     while not quit_key:
+    #         if keyboard.is_pressed("q"):
+    #             quit_key = True
+    #         time.sleep(1)
+    #     # input()
+    #     network.stop(mic)
+    #     merge_logs(log_folder)
+    # except Exception as err:
+    #     print(f"Unexpected {err=}, {type(err)=}")
+    #     network.stop(mic)
 
 
 def main_demo():
@@ -576,6 +583,6 @@ msg = []
 if __name__ == "__main__":
     # main_llama_chat_3b()
     # main_llama_cpp_python_chat_7b()
-    # main_woz()
-    main_demo()
+    main_woz()
+    # main_demo()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")

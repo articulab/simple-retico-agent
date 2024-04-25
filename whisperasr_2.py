@@ -89,6 +89,7 @@ class WhisperASR_2:
         self.first_time_stop = False
         # logs
         self.log_file = manage_log_folder(log_folder, log_file)
+        self.time_logs_buffer = []
 
     def _resample_audio(self, audio):
         if self.input_framerate != self.target_framerate:
@@ -202,9 +203,12 @@ class WhisperASR_2:
             if self.first_time:
                 self.first_time_stop = True
                 self.first_time = False
-                write_logs(
-                    self.log_file,
-                    [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # write_logs(
+                #     self.log_file,
+                #     [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # )
+                self.time_logs_buffer.append(
+                    ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
                 )
 
         # print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
@@ -278,9 +282,12 @@ class WhisperASR_2:
             if self.first_time_stop:
                 self.first_time = True
                 self.first_time_stop = False
-                write_logs(
-                    self.log_file,
-                    [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # write_logs(
+                #     self.log_file,
+                #     [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                # )
+                self.time_logs_buffer.append(
+                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
                 )
 
         return transcription, self.vad_state
@@ -348,7 +355,11 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             self.recognize = self.acr.recognize_2
 
     def process_update(self, update_message):
+        print("ASR process")
+        start_time = time.time()
+        cpt = 0
         for iu, ut in update_message:
+            cpt += 1
             # Audio IUs are only added and never updated.
             if ut != retico_core.UpdateType.ADD:
                 continue
@@ -366,6 +377,11 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             self.add_audio(iu.raw_audio)
             if not self.latest_input_iu:
                 self.latest_input_iu = iu
+            if cpt % 100 == 0:
+                print("cpt = ", cpt)
+        end_time = time.time()
+        print("duration ASR process = ", end_time - start_time)
+        print("cpt = ", cpt)
 
     def _asr_thread(self):
         while self._asr_thread_active:
@@ -414,5 +430,9 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         print("ASR started")
 
     def shutdown(self):
+        write_logs(
+            self.acr.log_file,
+            self.acr.time_logs_buffer,
+        )
         self._asr_thread_active = False
         self.acr.reset()
