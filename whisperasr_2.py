@@ -363,7 +363,6 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             # Audio IUs are only added and never updated.
             if ut != retico_core.UpdateType.ADD:
                 continue
-            # print("IU rate = ", iu.rate)
             if self.input_framerate != iu.rate:
                 raise Exception("input framerate differs from iu framerate")
                 # self.input_framerate = iu.rate
@@ -379,6 +378,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 self.latest_input_iu = iu
             if cpt % 100 == 0:
                 print("cpt = ", cpt)
+                print("IU rate = ", iu.rate)
         end_time = time.time()
         print("duration ASR process = ", end_time - start_time)
         print("cpt = ", cpt)
@@ -392,6 +392,8 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             # if not self.framerate:
             #     continue
             prediction, vad = self.recognize()
+            print("prediction = ", prediction)
+            print("vad = ", vad)
             # prediction, vad = self.acr.recognize()
             # prediction, vad = self.acr.recognize_2()
             if prediction is None:
@@ -399,6 +401,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             end_of_utterance = not vad
             # print("EOS = ", end_of_utterance)
             um, new_tokens = retico_core.text.get_text_increment(self, prediction)
+            print("new_tokens = ", new_tokens)
 
             if len(new_tokens) == 0 and vad:
                 # print("Nothing new ASR, continue")
@@ -410,7 +413,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 output_iu.set_asr_results([prediction], token, 0.0, 0.99, eou)
                 self.current_output.append(output_iu)
                 um.add_iu(output_iu, retico_core.UpdateType.ADD)
-                # print("ADD datetime  : ", datetime.datetime.now())
+                print("ADD datetime  : ", datetime.datetime.now())
 
             if end_of_utterance:
                 # print("EOS, commiting current output : ", len(self.current_output))
@@ -418,7 +421,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 for iu in self.current_output:
                     self.commit(iu)
                     um.add_iu(iu, retico_core.UpdateType.COMMIT)
-                    # print("COMMIT datetime  : ", datetime.datetime.now())
+                print("COMMIT datetime  : ", datetime.datetime.now())
                 self.current_output = []
 
             self.latest_input_iu = None
