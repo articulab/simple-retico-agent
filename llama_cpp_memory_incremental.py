@@ -414,55 +414,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             sentence += iu.get_text() + " "
         return sentence
 
-    def process_not_incremental(self, msg):
-        # this function is not incremental as it waits for the end of the generated
-        # sentence to append the next update message
-        next_um = retico_core.abstract.UpdateMessage()
-
-        def subprocess(payload):
-            output_iu = self.create_iu(self.latest_input_iu)
-            output_iu.set_text(payload)
-            if not self.latest_input_iu:
-                self.latest_input_iu = output_iu
-            self.current_output.append(output_iu)
-            next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-
-        self.model_wrapper.process_full_sentence(
-            self.recreate_sentence_from_um(msg), subprocess
-        )
-        # COMMIT all current output IUs because it is the end of sentence
-        for iu in self.current_output:
-            self.commit(iu)
-            next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-        self.current_output = []
-        self.latest_input_iu = None
-        self.append(next_um)
-
-    # def process_incremental(self, msg):
-
-    #     def subprocess(payload):
-    #         next_um = retico_core.abstract.UpdateMessage()
-    #         output_iu = self.create_iu(self.latest_input_iu)
-    #         output_iu.set_text(payload)
-    #         if not self.latest_input_iu:
-    #             self.latest_input_iu = output_iu
-    #         self.current_output.append(output_iu)
-    #         next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-    #         self.append(next_um)
-    #         print("ADD")
-
-    #     self.model_wrapper.process_full_sentence(self.recreate_sentence_from_um(msg), subprocess)
-
-    #     # COMMIT all current output IUs because it is the end of sentence
-    #     next_um = retico_core.abstract.UpdateMessage()
-    #     for iu in self.current_output:
-    #         self.commit(iu)
-    #         next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-    #     self.current_output = []
-    #     self.latest_input_iu = None
-    #     self.append(next_um)
-    #     print("COMMIT")
-
     def process_incremental(self, msg):
         if self.printing:
             print(

@@ -5,3 +5,4 @@ __pycache__/
 Google_API_Key.json
 hf_token.txt
 models
+logs
