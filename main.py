@@ -10,7 +10,7 @@ from retico_core import *
 from MicrophoneModule_PTT import MicrophoneModule_PTT
 from whisperasr_2 import WhisperASRModule_2
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
-from CoquiTTSModule import CoquiTTSModule
+from coqui_tts import CoquiTTSModule
 from SpeakerModule_2 import SpeakerModule_2
 
 
