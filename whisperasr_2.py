@@ -123,10 +123,22 @@ class WhisperASR_2:
         return self._n_sil_frames
 
     def recognize_silence(self):
+        """
+        Return True if :
+            - audio buffer is empty
+            - audio buffer has not enough data to have the silence threshold duration.
+            - If you take the audio at the end of the buffer with a duration corresponding to the silence threshold,
+            there is more than silence_counter frames of silence. EOS silence.
+        Return False if :
+            - the audio buffer is not empty and the audio corresponding to the silence threshold at the end of the buffer doesn't have enough silence (less than silence_counter frames).
+
+        Returns:
+            bool: described above
+        """
         # print("len audio buff = ", len(self.audio_buffer))
         # print("recog silence")
         n_sil_frames = self.get_n_sil_frames()
-        if not n_sil_frames or len(self.audio_buffer) < n_sil_frames:
+        if n_sil_frames is None or len(self.audio_buffer) < n_sil_frames:
             # print("recog silence 1")
             return True
         silence_counter = 0
@@ -163,6 +175,16 @@ class WhisperASR_2:
         # else:
         #     self.audio_buffer.append(audio)
 
+    def add_audio_3(self, audio):
+        # audio = self._resample_audio(audio)
+        self.audio_buffer.append(audio)
+
+        # if isinstance(audio, tuple):  # or is tuple
+        #     self.audio_buffer.append(audio[0])
+        #     self.audio_buffer.append(audio[1])
+        # else:
+        #     self.audio_buffer.append(audio)
+
     def recognize_2(self):  # Biswesh version of asr processing in movierecommender 2022
         silence = self.recognize_silence()
         if silence:
@@ -183,6 +205,77 @@ class WhisperASR_2:
             return None, False
         return None, True
 
+    def recognize_speech(self):
+        """
+        Return False if :
+            - audio buffer is empty
+            - The share of silence in the audio buffer is higher silence_counter.
+        Return True if :
+            - The share of silence in the audio buffer is lower silence_counter.
+
+        Returns:
+            bool: described above
+        """
+        if len(self.audio_buffer) == 0:
+            return False
+        for i, a in enumerate(self.audio_buffer):
+            if self.vad.is_speech(a, self.target_framerate):
+                # delete all silence frames at the beginning
+                self.audio_buffer = self.audio_buffer[i:]
+                return True
+        return False
+
+    def recognize_3(self):
+        transcription = None
+        end_of_utterance = False
+        # When silence :
+        # empty buffer
+        # continue
+        if not self.vad_state:
+            speech = self.recognize_speech()
+            if speech:
+                self.vad_state = True
+                self.time_logs_buffer.append(
+                    ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                )
+                print("START datetime  : ", datetime.datetime.now())
+
+        if self.vad_state:
+            # When speech is detected :
+            # change a speech bool to say that someone spoke for future silence detection
+            # Start ASR computing repeatedly until a silence has occured
+            full_audio = b"".join(self.audio_buffer)
+            print("1")
+            audio_np = (
+                np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
+            )
+            print("2")
+            self.cpt_npa += len(audio_np)
+            print("3")
+            segments, info = self.model.transcribe(
+                audio_np
+            )  # the segments can be streamed
+            print("4")
+            segments = list(segments)
+            print("5")
+            transcription = "".join([s.text for s in segments])
+            print("TRANSCRIPT datetime  : ", datetime.datetime.now())
+
+            # when silence is detected after a speech :
+            # Compute ASR one last time
+            # empty buffer
+            # change back the speech bool
+            silence = self.recognize_silence()
+            if silence:
+                self.vad_state = False
+                self.audio_buffer = []
+                end_of_utterance = True
+                self.time_logs_buffer.append(
+                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                )
+
+        return transcription, end_of_utterance
+
     def recognize(self):
         if len(self.audio_buffer) == 0:
             return None, None
@@ -195,7 +288,10 @@ class WhisperASR_2:
 
         # print("ASR recog silence ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
-        if not self.vad_state and not silence:  # someone starts talking
+        if not self.vad_state and not silence:
+            # first time someone starts talking after a long silence, we empty the buffer of all the old silence
+            # that only works if there is not more than self.get_n_sil_frames() frames in the buffer, that method could delete data.
+
             self.vad_state = True
             # print("self.get_n_sil_frames() = ", self.get_n_sil_frames())
             self.audio_buffer = self.audio_buffer[-self.get_n_sil_frames() :]
@@ -213,6 +309,7 @@ class WhisperASR_2:
 
         # print("ASR if 1 ", datetime.datetime.now().strftime("%T.%f")[:-3])
 
+        # if vad_state if False and nobody is speaking
         if not self.vad_state:
             return None, False
 
@@ -273,6 +370,7 @@ class WhisperASR_2:
             print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
             print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
 
+        # when someone started speaking but stopped (with a long enough silence)
         if silence:
             self.vad_state = False
             self.audio_buffer = []
@@ -373,7 +471,8 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             # if it's not the case because it's stereo, cut the IU into two IUs ?
             # self.acr.add_audio(iu.raw_audio)
             # self.acr.add_audio_2(iu.raw_audio)
-            self.add_audio(iu.raw_audio)
+            self.acr.add_audio_3(iu.raw_audio)
+            # self.add_audio(iu.raw_audio)
             if not self.latest_input_iu:
                 self.latest_input_iu = iu
             if cpt % 100 == 0:
@@ -427,9 +526,43 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             self.latest_input_iu = None
             self.append(um)
 
+    def _asr_thread_2(self):
+        while self._asr_thread_active:
+            time.sleep(0.01)
+            prediction, end_of_utterance = self.acr.recognize_3()
+            print("prediction = ", prediction)
+            print("end_of_utterance = ", end_of_utterance)
+            if prediction is None:
+                continue
+            um, new_tokens = retico_core.text.get_text_increment(self, prediction)
+            print("new_tokens = ", new_tokens)
+
+            if len(new_tokens) == 0:
+                # print("Nothing new ASR, continue")
+                continue
+
+            for i, token in enumerate(new_tokens):
+                output_iu = self.create_iu(self.latest_input_iu)
+                eou = i == len(new_tokens) - 1 and end_of_utterance
+                output_iu.set_asr_results([prediction], token, 0.0, 0.99, eou)
+                self.current_output.append(output_iu)
+                um.add_iu(output_iu, retico_core.UpdateType.ADD)
+                print("ADD datetime  : ", datetime.datetime.now())
+
+            if end_of_utterance:
+                for iu in self.current_output:
+                    self.commit(iu)
+                    um.add_iu(iu, retico_core.UpdateType.COMMIT)
+                print("COMMIT datetime  : ", datetime.datetime.now())
+                self.current_output = []
+
+            self.latest_input_iu = None
+            self.append(um)
+
     def prepare_run(self):
         self._asr_thread_active = True
-        threading.Thread(target=self._asr_thread).start()
+        # threading.Thread(target=self._asr_thread).start()
+        threading.Thread(target=self._asr_thread_2).start()
         print("ASR started")
 
     def shutdown(self):
