@@ -1,4 +1,0 @@
-Module,Start,Stop,Duration
-logs/test/16k/Recording (1)/demo_12/asr.csv,11:30:55.421,11:31:07.452,0:00:12.031000
-logs/test/16k/Recording (1)/demo_12/llm.csv,11:31:07.452,,0
-Total,11:30:55.421,11:31:07.452,0:00:12.031000

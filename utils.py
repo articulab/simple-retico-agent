@@ -35,6 +35,10 @@ def write_logs(log_file, rows):
 
 def merge_logs(log_folder):
     wozmic_file = log_folder + "/wozmic.csv"
+
+    if not os.path.isfile(wozmic_file):
+        return None
+
     asr_file = log_folder + "/asr.csv"
     llm_file = log_folder + "/llm.csv"
     tts_file = log_folder + "/tts.csv"
@@ -42,7 +46,6 @@ def merge_logs(log_folder):
     files = [wozmic_file, asr_file, llm_file, tts_file, speaker_file]
 
     res_file = log_folder + "/res.csv"
-    # res_file = manage_log_folder(log_folder, "res.csv")
 
     date_format = "%H:%M:%S.%f"
 
@@ -52,7 +55,6 @@ def merge_logs(log_folder):
         first_start = None
         last_stop = None
         for fn in files:
-            # print(fn)
             if os.path.isfile(fn):
                 with open(fn, "r") as f:
                     l = [fn, None, None, 0]

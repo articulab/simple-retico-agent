@@ -166,16 +166,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
         self.dispatch_on_finish = dispatch_on_finish
         self.frame_duration = frame_duration
-        # print("\n\ntts_config audio = ", self.tts.tts.synthesizer.tts_config.get("audio"))
-        # print("\nsample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["sample_rate"])
-        # print("\noutput_sample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["output_sample_rate"])
-        # print("AP = ", self.tts.tts.synthesizer.tts_model.ap)
-        # print("sample rate = ", self.tts.tts.synthesizer.tts_model.ap.sample_rate)
-        # self.samplerate = 48000  # samplerate of tts
-        # self.samplerate = self.tts.tts.synthesizer.tts_model.ap.sample_rate
-        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
-            "sample_rate"
-        ]
+        self.samplerate = None
         self.samplewidth = 2
         self._tts_thread_active = False
         self._latest_text = ""
@@ -300,6 +291,10 @@ class CoquiTTSModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
         self.tts.setup()
+        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
+            "sample_rate"
+        ]
+        print("TTS samplerate = ", self.samplerate)
 
     def prepare_run(self):
         """
