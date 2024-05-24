@@ -17,6 +17,8 @@ import retico_core
 import numpy as np
 from TTS.api import TTS, load_config
 
+from utils import *
+
 
 class CoquiTTS:
     """Sub-class of CoquiTTSModule, TTS model wrapper.
@@ -40,7 +42,7 @@ class CoquiTTS:
 
     def setup(self):
         """Init chosen TTS model."""
-        self.tts = TTS(self.model, gpu=True).to(self.device)
+        self.tts = TTS(self.model).to(self.device)
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
@@ -130,9 +132,14 @@ class CoquiTTSModule(retico_core.AbstractModule):
         dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
+        log_file="tts.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
         super().__init__(**kwargs)
+
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
 
         self.printing = printing
 
@@ -159,16 +166,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
         self.dispatch_on_finish = dispatch_on_finish
         self.frame_duration = frame_duration
-        # print("\n\ntts_config audio = ", self.tts.tts.synthesizer.tts_config.get("audio"))
-        # print("\nsample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["sample_rate"])
-        # print("\noutput_sample_rate = ", self.tts.tts.synthesizer.tts_config.get("audio")["output_sample_rate"])
-        # print("AP = ", self.tts.tts.synthesizer.tts_model.ap)
-        # print("sample rate = ", self.tts.tts.synthesizer.tts_model.ap.sample_rate)
-        # self.samplerate = 48000  # samplerate of tts
-        # self.samplerate = self.tts.tts.synthesizer.tts_model.ap.sample_rate
-        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
-            "sample_rate"
-        ]
+        self.samplerate = None
         self.samplewidth = 2
         self._tts_thread_active = False
         self._latest_text = ""
@@ -191,6 +189,8 @@ class CoquiTTSModule(retico_core.AbstractModule):
         """
         t1 = time.time()
         while self._tts_thread_active:
+            # this sleep time calculation is complicated and useless
+            # if we don't send silence when there is no audio outputed by the tts model
             t2 = t1
             t1 = time.time()
             if t1 - t2 < self.frame_duration:
@@ -199,11 +199,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
             if self.audio_pointer >= len(self.audio_buffer):
-                raw_audio = (
-                    b"\x00"
-                    * self.samplewidth
-                    * int(self.samplerate * self.frame_duration)
-                )
                 if self.clear_after_finish:
                     self.audio_pointer = 0
                     self.audio_buffer = []
@@ -211,7 +206,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
                     # for WOZ : send commit when finished turn
                     iu = self.create_iu(self.latest_input_iu)
-                    # iu.set_audio(b"", 1, self.samplerate, 0)
                     um = retico_core.UpdateMessage.from_iu(
                         iu, retico_core.UpdateType.COMMIT
                     )
@@ -219,10 +213,12 @@ class CoquiTTSModule(retico_core.AbstractModule):
             else:
                 raw_audio = self.audio_buffer[self.audio_pointer]
                 self.audio_pointer += 1
-            iu = self.create_iu(self.latest_input_iu)
-            iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
-            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-            self.append(um)
+
+                # Only send data to speaker when there is actual data and do not send silence ?
+                iu = self.create_iu(self.latest_input_iu)
+                iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
+                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                self.append(um)
 
     def process_update(self, update_message):
         """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
@@ -279,6 +275,13 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 )
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
+            write_logs(
+                self.log_file,
+                [
+                    ["Start", start_date.strftime("%T.%f")[:-3]],
+                    ["Stop", end_date.strftime("%T.%f")[:-3]],
+                ],
+            )
         if final:
             self.clear_after_finish = True
             self.current_input = []
@@ -288,6 +291,9 @@ class CoquiTTSModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
         self.tts.setup()
+        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
+            "sample_rate"
+        ]
 
     def prepare_run(self):
         """

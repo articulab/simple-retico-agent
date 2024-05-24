@@ -1,3 +1,38 @@
+"""
+LlamaCppMemoryIncrementalModule
+==================
+
+A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
+The LlamaCppMemoryIncrementalModule class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
+The LlamaCppMemoryIncremental subclass handles the aspects related to the LLM engineering.
+
+Definition :
+- LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
+- Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
+Update the dialogue history do that it doesn't exceed a certain threshold of token size.
+Put the dialogue history in the prompt at each new system sentence generation.
+- Incremental : During a new system sentence generation, send smaller chunks of sentence,
+instead of waiting for the generation end to send the whole sentence.
+
+Inputs : SpeechRecognitionIU
+
+Outputs : TextIU
+
+
+example of the prompt template :
+prompt = "[INST] <<SYS>>\
+This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+The teacher is teaching mathemathics to the child student. \
+As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
+You play the role of a teacher. Here is the beginning of the conversation : \
+<</SYS>>\
+\
+Child : Hello ! \
+Teacher : Hi! How are your today ? \
+Child : I am fine, and I can't wait to learn mathematics ! \
+[/INST]"
+"""
+
 import asyncio
 import datetime
 import threading
@@ -6,6 +41,8 @@ import retico_core
 import torch
 from llama_cpp import Llama
 import re
+
+from utils import *
 
 
 class LlamaCppMemoryIncremental:
@@ -23,7 +60,8 @@ class LlamaCppMemoryIncremental:
         system_prompt=None,
         context_size=2000,
         short_memory_context_size=500,
-        n_gpu_layers=100,
+        n_gpu_layers=-1,
+        device="cuda",
         **kwargs
     ):
         """initialize LlamaCppMemoryIncrementalModule submodule and its attributes related to prompts, template and llama-cpp-python.
@@ -57,19 +95,6 @@ class LlamaCppMemoryIncremental:
         self.size_per_utterance = []
         self.short_memory_context_size = short_memory_context_size
 
-        # template attributes
-        # template 1
-        # prompt = "[INST] <<SYS>>\
-        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-        # The teacher is teaching mathemathics to the child student. \
-        # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
-        # You play the role of a teacher. Here is the beginning of the conversation : \
-        # <</SYS>>\
-        # \
-        # Child : Hello ! \
-        # Teacher : Hi! How are your today ? \
-        # Child : I am fine, and I can't wait to learn mathematics ! \
-        # [/INST]"
         self.start_prompt = b"[INST] "
         self.end_prompt = b" [/INST]"
         self.nb_tokens_end_prompt = 0
@@ -85,6 +110,7 @@ class LlamaCppMemoryIncremental:
         # llamap-cpp-python args
         self.context_size = context_size
         self.n_gpu_layers = n_gpu_layers
+        self.device = device
         # Model loading method 1 (local init)
         self.model_path = model_path
         # Model loading method 2 (hf init)
@@ -101,20 +127,22 @@ class LlamaCppMemoryIncremental:
         """
         if self.model_path is not None:
 
+            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
 
+            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama.from_pretrained(
                 repo_id=self.model_repo,
                 filename=self.model_name,
-                device_map="cuda",
+                device_map=self.device,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
             )
 
         else:
@@ -233,7 +261,7 @@ class LlamaCppMemoryIncremental:
             sentence (string): Agent new generated sentence containing a role token pattern.
 
         Returns:
-            v
+            (bytes, int): the agent new generated sentence without the role token pattern, and the number of token removed while removing the role token pattern from the sentence.
         """
         first_chunck_string = sentence
         nb_token_removed = 0
@@ -408,7 +436,6 @@ class LlamaCppMemoryIncremental:
             # Update module IUS
             payload = self.model.detokenize([token])
             payload_text = payload.decode("utf-8")
-            # TODO : Here we have to remove the "Teacher :" from the agent utterance to not make it spoken by the TTS
 
             # Update model short term memory
             last_sentence += payload
@@ -465,6 +492,9 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         initial_prompt,
         system_prompt,
         printing=False,
+        log_file="llm.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
+        device="cuda",
         **kwargs
     ):
         """Initializes the LlamaCppMemoryIncremental Module.
@@ -479,6 +509,8 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         """
         super().__init__(**kwargs)
         self.printing = printing
+        # logs
+        self.log_file = manage_log_folder(log_folder, log_file)
         # Model loading method 1
         self.model_path = model_path
         # Model loading method 2
@@ -490,6 +522,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             self.model_name,
             initial_prompt,
             system_prompt,
+            device=device,
             **kwargs
         )
         self.latest_input_iu = None
@@ -571,6 +604,11 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 "LLM : process sentence ",
                 datetime.datetime.now().strftime("%T.%f")[:-3],
             )
+
+        write_logs(
+            self.log_file,
+            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        )
 
         def subprocess(
             payload, is_ponctuation=None, stop_pattern=None, role_pattern=None

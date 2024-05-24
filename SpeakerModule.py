@@ -1,33 +1,24 @@
-# import time
-# import wave
+"""
+SpeakerModule_2
+==================
+
+This module outputs the audio signal contained in the AudioIUs by the computer's speakers.
+"""
+
+import datetime
 import pyaudio
 import retico_core
 import platform
-from retico_core.audio import AudioIU
+from retico_core.audio import AudioIU, SpeakerModule
+from utils import *
 
 CHANNELS = 1
 
 
-class SpeakerModule2(retico_core.AbstractConsumingModule):
+class SpeakerModule_2(SpeakerModule):
     """A module that consumes AudioIUs of arbitrary size and outputs them to the
     speakers of the machine. When a new IU is incoming, the module blocks as
     long as the current IU is being played."""
-
-    @staticmethod
-    def name():
-        return "Speaker Module"
-
-    @staticmethod
-    def description():
-        return "A consuming module that plays audio from speakers."
-
-    @staticmethod
-    def input_ius():
-        return [AudioIU]
-
-    @staticmethod
-    def output_iu():
-        return None
 
     def __init__(
         self,
@@ -35,41 +26,45 @@ class SpeakerModule2(retico_core.AbstractConsumingModule):
         sample_width=2,
         use_speaker="both",
         device_index=None,
+        log_file="speaker.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
-        super().__init__(**kwargs)
-        self.rate = rate
-        self.sample_width = sample_width
-        self.use_speaker = use_speaker
-
-        self._p = pyaudio.PyAudio()
-
-        if device_index is None:
-            device_index = self._p.get_default_output_device_info()["index"]
-        self.device_index = device_index
-
-        self.stream = None
-        self.time = None
+        super().__init__(
+            rate=rate,
+            sample_width=sample_width,
+            use_speaker=use_speaker,
+            device_index=device_index,
+            **kwargs
+        )
+        self.log_file = manage_log_folder(log_folder, log_file)
+        self.first_time = True
 
     def process_update(self, update_message):
-        # silence = chr(0) * self.chunk * self.channels * 2
-        cpt_total = 0
-        cpt = 0
+        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L282
+
+        overrides SpeakerModule's process_update to save logs.
+        """
+        if self.first_time:
+            write_logs(
+                self.log_file,
+                [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            )
+            self.first_time = False
+        else:
+            write_logs(
+                self.log_file,
+                [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+            )
         for iu, ut in update_message:
-            cpt_total += 1
             if ut == retico_core.UpdateType.ADD:
-                cpt += 1
                 self.stream.write(bytes(iu.raw_audio))
-        # print("\n\n" + str(cpt_total))
-        # print(cpt)
-        free = self.stream.get_write_available()
-        # tofill = free - CHUNK
-        # self.stream.write(SILENCE * tofill)  # Fill it with silence
-        print(free)
         return None
 
     def setup(self):
-        """Set up the speaker for outputting audio"""
+        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288
+
+        overrides to give correct CHANNEL parameter"""
         p = self._p
 
         if platform.system() == "Darwin":
@@ -91,9 +86,3 @@ class SpeakerModule2(retico_core.AbstractConsumingModule):
             output=True,
             output_device_index=self.device_index,
         )
-
-    def shutdown(self):
-        """Close the audio stream."""
-        self.stream.stop_stream()
-        self.stream.close()
-        self.stream = None
