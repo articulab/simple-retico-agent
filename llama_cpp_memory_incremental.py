@@ -61,7 +61,8 @@ class LlamaCppMemoryIncremental:
         system_prompt=None,
         context_size=2000,
         short_memory_context_size=500,
-        n_gpu_layers=100,
+        n_gpu_layers=-1,
+        device="cuda",
         **kwargs
     ):
         """initialize LlamaCppMemoryIncrementalModule submodule and its attributes related to prompts, template and llama-cpp-python.
@@ -110,6 +111,7 @@ class LlamaCppMemoryIncremental:
         # llamap-cpp-python args
         self.context_size = context_size
         self.n_gpu_layers = n_gpu_layers
+        self.device = device
         # Model loading method 1 (local init)
         self.model_path = model_path
         # Model loading method 2 (hf init)
@@ -126,20 +128,22 @@ class LlamaCppMemoryIncremental:
         """
         if self.model_path is not None:
 
+            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
 
+            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama.from_pretrained(
                 repo_id=self.model_repo,
                 filename=self.model_name,
-                device_map="cuda",
+                device_map=self.device,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
             )
 
         else:
@@ -478,6 +482,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         printing=False,
         log_file="llm.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
+        device="cuda",
         **kwargs
     ):
         """Initializes the LlamaCppMemoryIncremental Module.
@@ -505,6 +510,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             self.model_name,
             initial_prompt,
             system_prompt,
+            device=device,
             **kwargs
         )
         self.latest_input_iu = None

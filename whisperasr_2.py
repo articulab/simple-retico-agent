@@ -48,9 +48,10 @@ class WhisperASR_2:
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
+        device="cuda",
     ):
 
-        self.model = WhisperModel(whisper_model, device="cuda", compute_type="int8")
+        self.model = WhisperModel(whisper_model, device=device, compute_type="int8")
         self.printing = printing
 
         self.audio_buffer = []
@@ -245,6 +246,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
+        device="cuda",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -256,6 +258,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             input_framerate=input_framerate,
             log_file=log_file,
             log_folder=log_folder,
+            device=device,
         )
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate

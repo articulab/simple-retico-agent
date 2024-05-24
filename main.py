@@ -4,6 +4,7 @@ import datetime
 import os
 import sys
 import keyboard
+import torch
 
 from utils import *
 from retico_core import *
@@ -41,6 +42,9 @@ def main_demo():
     """
 
     # parameters definition
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
+    device = "cpu"
     printing = False
     log_folder = create_new_log_folder("logs/run")
     frame_length = 0.02
@@ -56,6 +60,7 @@ def main_demo():
     # create modules
     mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     asr = WhisperASRModule_2(
+        device=device,
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
@@ -69,9 +74,14 @@ def main_demo():
         system_prompt,
         printing=printing,
         log_folder=log_folder,
+        device=device,
     )
     tts = CoquiTTSModule(
-        language="en", model=tts_model, printing=printing, log_folder=log_folder
+        language="en",
+        model=tts_model,
+        printing=printing,
+        log_folder=log_folder,
+        device=device,
     )
 
     speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)

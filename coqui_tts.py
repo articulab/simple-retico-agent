@@ -42,7 +42,7 @@ class CoquiTTS:
 
     def setup(self):
         """Init chosen TTS model."""
-        self.tts = TTS(self.model, gpu=True).to(self.device)
+        self.tts = TTS(self.model).to(self.device)
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
