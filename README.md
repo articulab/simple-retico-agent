@@ -18,10 +18,10 @@ Go to the Getting started branch
 git checkout getting_started
 ```
 
-Create a new conda environment `retico` from the YAML file `retico_2.yml` to get all required packages.
+Create a new conda environment `retico` from the YAML file `retico.yml` to get all required packages.
 
 ```bash
-conda env create -n retico -f env_requirements/retico_2.yml
+conda env create -n retico -f env_requirements/retico.yml
 ```
 
 ## Run the system
