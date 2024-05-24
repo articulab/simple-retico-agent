@@ -7,11 +7,11 @@ import keyboard
 
 from utils import *
 from retico_core import *
-from microphone_module_ptt import MicrophoneModulePTT
+from microphone_ptt import MicrophonePTTModule
 from whisperasr_2 import WhisperASRModule_2
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
-from speaker_module_2 import SpeakerModule_2
+from speaker_2 import SpeakerModule_2
 
 
 def main_demo():
@@ -42,7 +42,7 @@ def main_demo():
 
     # parameters definition
     printing = False
-    log_folder = create_new_log_folder("logs/demo/16k/")
+    log_folder = create_new_log_folder("logs/run")
     frame_length = 0.02
     rate = 16000
     tts_model_samplerate = 22050
@@ -54,7 +54,7 @@ def main_demo():
         You play the role of a teacher. Here is the beginning of the conversation :"
 
     # create modules
-    mic = MicrophoneModulePTT(rate=rate, frame_length=frame_length)
+    mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     asr = WhisperASRModule_2(
         printing=printing,
         full_sentences=True,
@@ -85,6 +85,7 @@ def main_demo():
     # running network with the Push To Talk system
     try:
         network.run(mic)
+        print("Dialog system ready")
         keyboard.wait("q")
         network.stop(mic)
         merge_logs(log_folder)

@@ -294,7 +294,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
             "sample_rate"
         ]
-        print("TTS samplerate = ", self.samplerate)
 
     def prepare_run(self):
         """

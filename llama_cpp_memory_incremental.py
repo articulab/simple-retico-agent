@@ -1,3 +1,38 @@
+"""
+LlamaCppMemoryIncrementalModule
+==================
+
+A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
+The LlamaCppMemoryIncrementalModule class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
+The LlamaCppMemoryIncremental subclass handles the aspects related to the LLM engineering.
+
+Definition :
+- LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
+- Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
+Update the dialogue history do that it doesn't exceed a certain threshold of token size.
+Put the dialogue history in the prompt at each new system sentence generation.
+- Incremental : During a new system sentence generation, send smaller chunks of sentence,
+instead of waiting for the generation end to send the whole sentence.
+
+Inputs : SpeechRecognitionIU
+
+Outputs : TextIU
+
+
+example of the prompt template :
+prompt = "[INST] <<SYS>>\
+This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+The teacher is teaching mathemathics to the child student. \
+As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
+You play the role of a teacher. Here is the beginning of the conversation : \
+<</SYS>>\
+\
+Child : Hello ! \
+Teacher : Hi! How are your today ? \
+Child : I am fine, and I can't wait to learn mathematics ! \
+[/INST]"
+"""
+
 import asyncio
 import csv
 import datetime
@@ -60,19 +95,6 @@ class LlamaCppMemoryIncremental:
         self.size_per_utterance = []
         self.short_memory_context_size = short_memory_context_size
 
-        # template attributes
-        # template 1
-        # prompt = "[INST] <<SYS>>\
-        # This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-        # The teacher is teaching mathemathics to the child student. \
-        # As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
-        # You play the role of a teacher. Here is the beginning of the conversation : \
-        # <</SYS>>\
-        # \
-        # Child : Hello ! \
-        # Teacher : Hi! How are your today ? \
-        # Child : I am fine, and I can't wait to learn mathematics ! \
-        # [/INST]"
         self.start_prompt = b"[INST] "
         self.end_prompt = b" [/INST]"
         self.nb_tokens_end_prompt = 0
@@ -236,7 +258,7 @@ class LlamaCppMemoryIncremental:
             sentence (string): Agent new generated sentence containing a role token pattern.
 
         Returns:
-            v
+            (bytes, int): the agent new generated sentence without the role token pattern, and the number of token removed while removing the role token pattern from the sentence.
         """
         first_chunck_string = sentence
         nb_token_removed = 0
@@ -245,9 +267,6 @@ class LlamaCppMemoryIncremental:
                 sentence = sentence[-len(pat) :]
                 nb_token_removed = len(self.role_token_patterns[i])
                 break
-        # while sentence[-1:] == b"\n":
-        #     sentence = sentence[:-1]
-        #     nb_token_removed += 1
         return sentence, nb_token_removed
 
     def prepare_prompt_memory(self):
@@ -380,28 +399,18 @@ class LlamaCppMemoryIncremental:
                 self.model.detokenize([tokens[-1]]) in self.stop_token_text
             )
 
-            # is_stopping_pattern = False
-            # max_pattern_size = max([len(p) for p in self.stop_token_patterns])
-            # last_chunck_string = self.model.detokenize(tokens[-max_pattern_size:])
-            # for i, pat in enumerate(self.stop_token_text_patterns):
-            #     if pat == last_chunck_string[-len(pat):]:
-            #         return True
-
             max_pattern_size = max([len(p) for p in self.stop_token_patterns])
             last_chunck_string = self.model.detokenize(tokens[-max_pattern_size:])
             is_stopping_pattern, _ = self.is_stop_pattern(last_chunck_string)
 
             return is_stopping_id or is_stopping_text or is_stopping_pattern
 
-        # Define the parameters
         final_prompt = self.prompt + self.end_prompt
-        # print("final_prompt = ", final_prompt)
         tokens = self.model.tokenize(final_prompt, special=True)
         last_sentence = b""
         last_sentence_nb_tokens = 0
         for token in self.model.generate(
             tokens,
-            # stopping_criteria=stop_criteria,
             stopping_criteria=stop_multiple_utterances_generation,
             top_k=top_k,
             top_p=top_p,
@@ -411,7 +420,6 @@ class LlamaCppMemoryIncremental:
             # Update module IUS
             payload = self.model.detokenize([token])
             payload_text = payload.decode("utf-8")
-            # TODO : Here we have to remove the "Teacher :" from the agent utterance to not make it spoken by the TTS
 
             # Update model short term memory
             last_sentence += payload
@@ -572,7 +580,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                     )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
-                # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
             # REVOKE if role patterns
             if role_pattern is not None:
@@ -584,7 +591,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                     )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
-                # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
             # COMMIT if ponctuation and not role patterns
             if (
@@ -602,7 +608,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                     self.log_file,
                     [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
                 )
-                # print("COMMIT :\n"+"".join([iu.payload for iu in self.current_output]))
                 self.current_output = []
             self.append(next_um)
 

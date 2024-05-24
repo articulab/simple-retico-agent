@@ -1,3 +1,11 @@
+"""
+MicrophonePTTModule
+==================
+
+This module provides push-to-talk capabilities to the classic retico MicrophoneModule
+which captures audio signal from the microphone and chunks the audio signal into AudioIUs.
+"""
+
 import queue
 import keyboard
 import pyaudio
@@ -6,7 +14,10 @@ import retico_core
 from retico_core.audio import MicrophoneModule
 
 
-class MicrophoneModulePTT(MicrophoneModule):
+class MicrophonePTTModule(MicrophoneModule):
+    """A modules overrides the MicrophoneModule which captures audio signal from the microphone and chunks the audio signal into AudioIUs.
+    The addition of this module is the introduction of the push-to-talk capacity : the microphone's audio signal is captured only while the M key is pressed.
+    """
 
     def callback(self, in_data, frame_count, time_info, status):
         """The callback function that gets called by pyaudio.
@@ -23,6 +34,11 @@ class MicrophoneModulePTT(MicrophoneModule):
         return (in_data, pyaudio.paContinue)
 
     def process_update(self, _):
+        """overrides MicrophoneModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#202
+
+        Returns:
+            UpdateMessage: list of AudioIUs produced from the microphone's audio signal.
+        """
         if not self.audio_buffer:
             return None
         try:
