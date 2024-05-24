@@ -42,9 +42,9 @@ def main_demo():
     """
 
     # parameters definition
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     # device = "cuda"
-    device = "cpu"
+    # device = "cpu"
     printing = False
     log_folder = create_new_log_folder("logs/run")
     frame_length = 0.02
