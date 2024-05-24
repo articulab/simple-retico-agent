@@ -24,6 +24,9 @@ Create a new conda environment `retico` from the YAML file `retico.yml` to get a
 conda env create -n retico -f env_requirements/retico.yml
 ```
 
+Download the LLM weights of a quantized version of the Mistral-7B-Instruct-v0.2 model (from MistralAI) with [this link](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true), it is from [this Huggingface page](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
+At the root of your `retico_test` folder, create a `models` folder and put your newly downloaded `mistral-7b-instruct-v0.2.Q4_K_S.gguf` LLM weights file in it.
+
 ## Run the system
 
 Activate your new conda environment
