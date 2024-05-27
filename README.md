@@ -18,10 +18,24 @@ Go to the Getting started branch
 git checkout getting_started
 ```
 
-Create a new conda environment `retico` from the YAML file `retico.yml` to get all required packages.
+Create a new conda environment `retico` from the YAML file `retico.yml` to get all required packages. You can also try with `retico_pip_2.yml`.
 
 ```bash
 conda env create -n retico -f env_requirements/retico.yml
+```
+
+If you have an issue with this command line (maybe you are installing with a Mac OS) You can try this instead :
+
+```bash
+conda create -n retico python=3.11.7
+```
+
+```bash
+conda activate retico
+```
+
+```bash
+pip install -r env_requirements/retico_pip.txt
 ```
 
 Download the LLM weights of a quantized version of the Mistral-7B-Instruct-v0.2 model (from MistralAI) with [this link](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true), it is from [this Huggingface page](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
