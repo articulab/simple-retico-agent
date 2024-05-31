@@ -126,18 +126,19 @@ class LlamaCppMemoryIncremental:
         Init the prompt with the initialize_prompt function.
         Calculates the stopping with the init_stop_criteria function.
         """
+        n_gpu_layers = 0 if self.device != "cuda" else self.n_gpu_layers
+
         if self.model_path is not None:
 
-            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
+                device_map=self.device,
                 n_gpu_layers=n_gpu_layers,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
 
-            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama.from_pretrained(
                 repo_id=self.model_repo,
                 filename=self.model_name,
@@ -499,15 +500,10 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         self.printing = printing
         # logs
         self.log_file = manage_log_folder(log_folder, log_file)
-        # Model loading method 1
-        self.model_path = model_path
-        # Model loading method 2
-        self.model_repo = model_repo
-        self.model_name = model_name
         self.model_wrapper = LlamaCppMemoryIncremental(
-            self.model_path,
-            self.model_repo,
-            self.model_name,
+            model_path,
+            model_repo,
+            model_name,
             initial_prompt,
             system_prompt,
             device=device,

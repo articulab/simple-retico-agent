@@ -51,7 +51,10 @@ class WhisperASR_2:
         device="cuda",
     ):
 
-        self.model = WhisperModel(whisper_model, device=device, compute_type="int8")
+        self.device = device
+        self.whisper_model = whisper_model
+        self.model = None
+        # self.model = WhisperModel(whisper_model, device=device, compute_type="int8")
         self.printing = printing
 
         self.audio_buffer = []
@@ -71,6 +74,12 @@ class WhisperASR_2:
         self.first_time = True
         self.first_time_stop = False
         self.log_file = manage_log_folder(log_folder, log_file)
+
+    def setup(self):
+        """Init whisper model."""
+        self.model = WhisperModel(
+            self.whisper_model, device=self.device, compute_type="int8"
+        )
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -260,9 +269,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
             log_folder=log_folder,
             device=device,
         )
-        self.target_framerate = target_framerate
         self.input_framerate = input_framerate
-        self.silence_dur = silence_dur
         self._asr_thread_active = False
         self.latest_input_iu = None
 
@@ -310,6 +317,12 @@ class WhisperASRModule_2(retico_core.AbstractModule):
 
             self.latest_input_iu = None
             self.append(um)
+
+    def setup(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
+        """
+        self.asr.setup()
 
     def prepare_run(self):
         """
