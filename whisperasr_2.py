@@ -16,6 +16,7 @@ import wave
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
+import torch
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 import transformers
 import pydub
@@ -68,7 +69,11 @@ class WhisperASR_2:
         #     print("Task: ", task)
         # self.model.config.forced_decoder_ids = self.forced_decoder_ids
 
-        self.model = WhisperModel(whisper_model, device="cuda", compute_type="int8")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.model = WhisperModel(
+            whisper_model, device=self.device, compute_type="int8"
+        )
         self.printing = printing
 
         self.audio_buffer = []

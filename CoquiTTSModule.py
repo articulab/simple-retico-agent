@@ -9,6 +9,7 @@ from hashlib import blake2b
 import retico_core
 import numpy as np
 from TTS.api import TTS, load_config
+import torch
 from utils import *
 
 
@@ -16,12 +17,12 @@ class CoquiTTS:
     def __init__(
         self,
         model,
-        device,
         is_multilingual,
         speaker_wav,
         language,
     ):
-        self.tts = TTS(model, gpu=True).to(device)
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.tts = TTS(model, gpu=True).to(self.device)
         self.language = language
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
@@ -92,7 +93,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self,
         model="jenny",
         language="en",
-        device="cuda",
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         dispatch_on_finish=True,
         frame_duration=0.2,
@@ -124,7 +124,6 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self.tts = CoquiTTS(
             model=self.LANGUAGE_MAPPING[language][model],
             language="en",
-            device=device,
             is_multilingual=(language == "multi"),
             speaker_wav=speaker_wav,
         )

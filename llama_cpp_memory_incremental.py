@@ -23,7 +23,7 @@ class LlamaCppMemoryIncremental:
         system_prompt=None,
         context_size=2000,
         short_memory_context_size=500,
-        n_gpu_layers=100,
+        n_gpu_layers=-1,
         **kwargs
     ):
         # Model loading method 1
@@ -79,12 +79,15 @@ class LlamaCppMemoryIncremental:
 
         # llamap-cpp-python args
         self.context_size = context_size
-        self.n_gpu_layers = n_gpu_layers
+        # self.n_gpu_layers = n_gpu_layers
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.n_gpu_layers = 0 if self.device != "cuda" else n_gpu_layers
 
         # Model is not loaded for the moment
         self.model = None
 
     def setup(self):
+
         if self.model_path is not None:
 
             self.model = Llama(
