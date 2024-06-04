@@ -284,6 +284,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 self.latest_input_iu = iu
 
     def _asr_thread(self):
+        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the  current one
         while self._asr_thread_active:
             time.sleep(0.01)
             prediction, vad = self.asr.recognize()
