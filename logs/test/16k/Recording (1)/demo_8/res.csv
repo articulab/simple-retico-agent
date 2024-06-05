@@ -1,4 +1,10 @@
 Module,Start,Stop,Duration
+<<<<<<< HEAD
 logs/test/16k/Recording (1)/demo_8/wozmic.csv,10:48:17.408,10:48:28.148,0:00:10.740000
 logs/test/16k/Recording (1)/demo_8/speaker.csv,10:48:17.485,10:48:28.133,0:00:10.648000
 Total,10:48:17.408,10:48:28.148,0:00:10.740000
+=======
+logs/test/16k/Recording (1)/demo_8/asr.csv,12:23:53.291,12:24:14.521,0:00:21.230000
+logs/test/16k/Recording (1)/demo_8/llm.csv,12:24:14.522,,0
+Total,12:23:53.291,12:24:14.521,0:00:21.230000
+>>>>>>> main

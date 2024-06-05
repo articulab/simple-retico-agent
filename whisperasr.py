@@ -26,6 +26,11 @@ transformers.logging.set_verbosity_error()
 
 
 class WhisperASR:
+    """Sub-class of WhisperASRModule, ASR model wrapper.
+    Called with the recognize function that recognize text from speech and predicts if the recognized text corresponds to a full sentence
+    (ie finishes with a silence longer than silence_threshold).
+    """
+
     def __init__(
         self,
         # whisper_model="openai/whisper-base",
@@ -219,6 +224,21 @@ class WhisperASR:
 
 
 class WhisperASRModule(retico_core.AbstractModule):
+    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
+    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
+    Has a subclass, WhisperASR, that handles the aspects related to ASR engineering.
+
+    Definition :
+    When receiving audio chunks from the Microphone Module, add to the audio_buffer (using the add_audio function).
+    The _asr_thread function, used as a thread in the prepare_run function, will call periodically the ASR model to recognize text from the current audio buffer.
+    Alongside the recognized text, the function returns an end-of-sentence prediction, that is True if a silence longer than a fixed threshold (here, 1s) is observed.
+    If an end-of-sentence is predicted, the recognized text is sent to the children modules (typically, the LLM).
+
+    Inputs : AudioIU
+
+    Outputs : SpeechRecognitionIU
+    """
+
     @staticmethod
     def name():
         return "Whipser ASR Module"
@@ -259,7 +279,6 @@ class WhisperASRModule(retico_core.AbstractModule):
         self.latest_input_iu = None
 
         self.full_sentences = full_sentences
-        print("full_sentences = ", full_sentences)
         if full_sentences:
             self.add_audio = self.acr.add_audio
             self.recognize = self.acr.recognize
@@ -267,26 +286,11 @@ class WhisperASRModule(retico_core.AbstractModule):
             self.add_audio = self.acr.add_audio_2
             self.recognize = self.acr.recognize_2
 
-    def process_update(self, update_message):
-        for iu, ut in update_message:
-            # Audio IUs are only added and never updated.
-            if ut != retico_core.UpdateType.ADD:
-                continue
-            if self.framerate is None:
-                self.framerate = iu.rate
-                self.acr.framerate = self.framerate
-            # Here we should check if the IU raw audio length is more than 960,
-            # because webrtcvad takes max 960 (30ms for mono audio)
-            # if it's not the case because it's stereo, cut the IU into two IUs ?
-            # self.acr.add_audio(iu.raw_audio)
-            # self.acr.add_audio_2(iu.raw_audio)
-            self.add_audio(iu.raw_audio)
-            # print("UM ASR LEN = ", len(iu.raw_audio))
-            print("process update ", datetime.datetime.now().strftime("%T.%f")[:-3])
-            if not self.latest_input_iu:
-                self.latest_input_iu = iu
-
     def _asr_thread(self):
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.
+        Calls the WhisperASR sub-class's recognize function, and sends ADD IUs of the recognized sentence chunk to the children modules.
+        If the end-of-sentence is predicted by the WhisperASR sub-class (vad return value of recognize function call), sends COMMIT IUs of the recognized full sentence.
+        """
         while self._asr_thread_active:
             if not self.full_sentences:
                 time.sleep(0.5)
@@ -323,11 +327,41 @@ class WhisperASRModule(retico_core.AbstractModule):
             self.latest_input_iu = None
             self.append(um)
 
+    def process_update(self, update_message):
+        """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+
+        Args:
+            update_message (UpdateType): UpdateMessage that contains new IUs to process, ADD IUs' data are added to the audio buffer.
+        """
+        for iu, ut in update_message:
+            # Audio IUs are only added and never updated.
+            if ut != retico_core.UpdateType.ADD:
+                continue
+            if self.framerate is None:
+                self.framerate = iu.rate
+                self.acr.framerate = self.framerate
+            # Here we should check if the IU raw audio length is more than 960,
+            # because webrtcvad takes max 960 (30ms for mono audio)
+            # if it's not the case because it's stereo, cut the IU into two IUs ?
+            # self.acr.add_audio(iu.raw_audio)
+            # self.acr.add_audio_2(iu.raw_audio)
+            self.add_audio(iu.raw_audio)
+            # print("UM ASR LEN = ", len(iu.raw_audio))
+            print("process update ", datetime.datetime.now().strftime("%T.%f")[:-3])
+            if not self.latest_input_iu:
+                self.latest_input_iu = iu
+
     def prepare_run(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
+        """
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
         print("ASR started")
 
     def shutdown(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
+        """
         self._asr_thread_active = False
         self.acr.reset()

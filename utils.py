@@ -2,6 +2,8 @@ import csv
 import datetime
 import os
 
+import torch
+
 
 # LOGS FUNCTIONS
 def manage_log_folder(log_folder, file_name):
@@ -35,6 +37,8 @@ def write_logs(log_file, rows):
 
 def merge_logs(log_folder):
     wozmic_file = log_folder + "/wozmic.csv"
+    if not os.path.isfile(wozmic_file):
+        return None
     asr_file = log_folder + "/asr.csv"
     llm_file = log_folder + "/llm.csv"
     tts_file = log_folder + "/tts.csv"
@@ -42,8 +46,6 @@ def merge_logs(log_folder):
     files = [wozmic_file, asr_file, llm_file, tts_file, speaker_file]
 
     res_file = log_folder + "/res.csv"
-    # res_file = manage_log_folder(log_folder, "res.csv")
-
     date_format = "%H:%M:%S.%f"
 
     with open(res_file, "w", newline="") as w:
@@ -52,7 +54,6 @@ def merge_logs(log_folder):
         first_start = None
         last_stop = None
         for fn in files:
-            # print(fn)
             if os.path.isfile(fn):
                 with open(fn, "r") as f:
                     l = [fn, None, None, 0]
@@ -79,3 +80,24 @@ def merge_logs(log_folder):
             last_stop, date_format
         ) - datetime.datetime.strptime(first_start, date_format)
         writer.writerow(["Total", first_start, last_stop, total_duration])
+
+def device_definition(device):
+    cuda_available = torch.cuda.is_available()
+    final_device = None
+    if device is None:
+        if cuda_available:
+            final_device = "cuda"
+        else:
+            final_device = "cpu"
+    elif device == "cuda":
+        if cuda_available: 
+            final_device = "cuda"
+        else:
+            print("device defined for instantiation is cuda but cuda is not available. Check you cuda installation if you want the module to run on GPU. The module will run on CPU instead.")
+            # Raise Exception("device defined for instantiation is cuda but cuda is not available. check you cuda installation or change device to "cpu")
+            final_device = "cpu"
+    elif device == "cpu":
+        if cuda_available: 
+            print("cuda is available, you can run the module on GPU by changing the device parameter to cuda.")
+        final_device = "cpu"
+    return final_device
