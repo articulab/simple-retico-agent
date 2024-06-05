@@ -1,43 +1,6 @@
-from asyncio import Queue
-import csv
-import datetime
 import os
-import sys
-
 import keyboard
-<<<<<<< HEAD
-
-from MicrophoneModule_PTT import MicrophoneModule_PTT
-from SpeakerModule_2 import SpeakerModule_2
-from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
-from WozMicrophone_one_file import WozMicrophoneModule_one_file
-from WozMicrophone_one_file_allinone import WozMicrophoneModule_one_file_allinone
-from utils import *
-from whisperasr_2 import WhisperASRModule_2
-
-prefix = "/home/mlechape/retico_system_test/"
-sys.path.append(prefix + "retico-whisperasr")
-from CoquiTTSModule import CoquiTTSModule
-=======
 import torch
-
-from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
-from WozMicrophone_one_file import WozMicrophoneModule_one_file
-from microphone_ptt import MicrophonePTTModule
-from SpeakerModule import SpeakerModule_2
-from coqui_tts import CoquiTTSModule
->>>>>>> main
-from WaveModule import WaveModule
-from whisperasr import WhisperASRModule
-from whisperasr_2 import WhisperASRModule_2
-from WozAsrModule import WozAsrModule
-
-# from speechbraintts import SpeechBrainTTSModule
-from llama import LlamaModule
-from llama_cpp_chat import LlamaCppModule
-from llama_cpp_memory import LlamaCppMemoryModule
-from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
-from llama_chat import LlamaChatModule
 
 from retico_core import *
 from retico_core.audio import (
@@ -45,9 +8,18 @@ from retico_core.audio import (
     SpeakerModule,
     MicrophoneModule,
 )
-
-
 from utils import *
+from microphone_ptt import MicrophonePTTModule
+from WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
+from WozMicrophone_one_file import WozMicrophoneModule_one_file
+from WozMicrophone_one_file_allinone import WozMicrophoneModule_one_file_allinone
+from WaveModule import WaveModule
+from WozAsrModule import WozAsrModule
+from whisperasr import WhisperASRModule
+from whisperasr_2 import WhisperASRModule_2
+from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
+from coqui_tts import CoquiTTSModule
+from SpeakerModule_2 import SpeakerModule_2
 
 
 def callback(update_msg):
@@ -110,144 +82,6 @@ def callback_stream_ponct(update_msg):
     print("", end="", flush=True)
     if is_ponct:
         SENTENCE = ""
-
-
-def callback_google_asr(update_msg):
-    # print("lalala")
-    # print(update_msg)
-    for x, ut in update_msg:
-        print(x)
-        print(ut)
-        print(x.final)
-
-
-# microphone_module = MicrophoneModule()
-# speaker_module = SpeakerModule()
-
-# microphone_module.subscribe(speaker_module)
-
-# This Plays the audio input by the mic into the speakers
-
-# retico_core.network.run(microphone_module)
-# # Wait for an input from the user
-# input()
-# retico_core.network.stop(microphone_module)
-
-
-# I am trying to create a way to use a wav file instead of the microphone as the audio input.
-
-
-# This Plays the audio input by the mic into the speakers
-# r_files = wave.open("test.wav", "rb")
-# a = r_files.readframes(10)
-# p = pyaudio.PyAudio()
-# chunk = 1024
-# stream = p.open(format = p.get_format_from_width(r_files.getsampwidth()),
-#                 channels = r_files.getnchannels(),
-#                 rate = r_files.getframerate(),
-#                 output = True)
-# data = r_files.readframes(chunk)
-# while data != '':
-#     stream.write(data)
-#     data = r_files.readframes(chunk)
-
-
-# r_files = wave.open("test.wav", "rb")
-# chunk = 1024
-# audio_buffer = queue.Queue()
-# sleeping_time = 1
-# data = r_files.readframes(chunk)
-# while data != '':
-#     audio_buffer.put(data)
-#     time.sleep(sleeping_time)
-#     data = r_files.readframes(chunk)
-
-
-# wave_module = WaveModule("test.wav")
-# speaker_module = SpeakerModule(rate=wave_module.rate)
-# wave_module.subscribe(speaker_module)
-
-# microphone_module = MicrophoneModule()
-# speaker_module = SpeakerModule()
-# microphone_module.subscribe(speaker_module)
-
-# retico_core.network.save(wave_module, "wav_to_speaker_net")
-
-# retico_core.network.load_and_execute("wav_to_speaker_net.rtc")
-
-
-# System 1
-
-# m1 = WaveModule(file_name="audios/test2.wav")
-# m2 = GoogleASRModule("en-US", rate=m1.rate)  # en-US or de-DE or ....
-# m3 = debug.CallbackModule(callback=callback)
-# m4 = SpeakerModule(rate=m1.rate)
-
-# # m1.subscribe(m3)
-# m1.subscribe(m2)
-# m2.subscribe(m3)
-# m1.subscribe(m4)
-
-
-# network.run(m1)
-
-# print("Running")
-# input()
-
-# network.stop(m1)
-
-# export GOOGLE_APPLICATION_CREDENTIALS=/home/mlechape/retico_system_test/Google_API_Key.json
-
-# retico_core.network.save(m1, "networks/wav_asr_debug_speaker_net")
-
-# retico_core.network.load_and_execute("networks/wav_asr_debug_speaker_net.rtc")
-
-# # from retico_whisperasr import WhisperASRModule
-
-# # from retico_core.audio import AudioDispatcherModule
-
-# # wav = WaveModule(file_name="audios/test2.wav")
-# mic = MicrophoneModule()
-# # asr = GoogleASRModule("en-US", rate=wav.rate)  # en-US or de-DE or ....
-# asr = WhisperASRModule()
-# # end_turn = EndOfUtteranceModule()
-# # iasr = IncrementalizeASRModule()
-# # cback = debug.CallbackModule(callback=callback)
-# tts = SpeechBrainTTSModule("en")
-# speaker = audio.SpeakerModule(rate=22050)
-# # speaker = SpeakerModule(rate=mic.rate)
-# # woz = WozAsrModule()
-
-# # model_name = "meta-llama/Llama-2-7b-hf"
-# model_name = 'mediocredev/open-llama-3b-v2-chat'
-# # chat_history = [
-# #     {"role": "user", "content": "Hello"},
-# #     {"role": "assistant", "content": "Hello! I am your math teacher and I will teach you addition today."},
-# #     {"role": "user", "content": "I am your 8 years old child student and I can't wait to learn about mathematics !"},
-# # ]
-# chat_history = [
-#     {"role": "user", "content": "Hello"},
-#     {"role": "assistant", "content": "Hello! I am your math teacher, you are a 8 years old student. This is a dialog during which I will teach you how to add two numbers together."},
-# ]
-# # llama = LlamaModule(model_name)
-# llama_chat = LlamaChatModule(model_name, chat_history=chat_history)
-
-# # wav.subscribe(asr)
-# # wav.subscribe(speaker)
-# # # asr.subscribe(cback)
-# # woz.subscribe(llama_chat)
-# mic.subscribe(asr)
-# # asr.subscribe(cback)
-# asr.subscribe(llama_chat)
-# llama_chat.subscribe(tts)
-# tts.subscribe(speaker)
-
-# network.run(mic)
-
-# print("Running")
-# input()
-
-# network.stop(mic)
 
 
 SENTENCE = ""
