@@ -28,7 +28,7 @@ transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class WhisperASR_2:
+class WhisperASR:
     """Sub-class of WhisperASRModule, ASR model wrapper.
     Called with the recognize function that recognize text from speech and predicts if the recognized text corresponds to a full sentence
     (ie finishes with a silence longer than silence_threshold).
@@ -94,6 +94,7 @@ class WhisperASR_2:
             )
             s = s.set_frame_rate(self.target_framerate)
             return s._data
+        return audio
 
     def add_audio(self, audio):
         """Resamples and adds the audio chunk received from the microphone to the audio buffer.
@@ -115,6 +116,8 @@ class WhisperASR_2:
             int: the number of audio chunks corresponding to the duration of self.silence_dur.
         """
         if not self._n_sil_audio_chunks:
+            if len(self.audio_buffer) == 0:
+                return None
             # nb frames in each audio chunk
             nb_frames_chunk = len(self.audio_buffer[0]) / 2
             # duration of 1 audio chunk
@@ -132,18 +135,15 @@ class WhisperASR_2:
             boolean : the user EOS prediction
         """
 
-        _n_sil_audio_chunks = int(self.get_n_sil_audio_chunks())
+        _n_sil_audio_chunks = self.get_n_sil_audio_chunks()
         if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
             return True
-        sum(
+        _n_sil_audio_chunks = int(_n_sil_audio_chunks)
+        silence_counter = sum(
             1
             for a in self.audio_buffer[-_n_sil_audio_chunks:]
             if not self.vad.is_speech(a, self.target_framerate)
         )
-        silence_counter = 0
-        for a in self.audio_buffer[-_n_sil_audio_chunks:]:
-            if not self.vad.is_speech(a, self.target_framerate):
-                silence_counter += 1
         if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
             return True
         return False
@@ -299,7 +299,7 @@ class WhisperASR_2:
         self.audio_buffer = []
 
 
-class WhisperASRModule_2(retico_core.AbstractModule):
+class WhisperASRModule(retico_core.AbstractModule):
     """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
     This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
     Has a subclass, WhisperASR, that handles the aspects related to ASR engineering.
@@ -344,7 +344,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
     ):
         super().__init__(**kwargs)
 
-        self.asr = WhisperASR_2(
+        self.asr = WhisperASR(
             silence_dur=silence_dur,
             printing=printing,
             target_framerate=target_framerate,
@@ -384,10 +384,10 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
             time.sleep(0.01)
-            prediction, end_of_utterance = (
-                self.asr.recognize_3()
-            )  # new way of calculating silences and vad activity
-            # prediction, end_of_utterance = self.asr.recognize() # old way of calculating silences and vad activity
+            # # new way of calculating silences and vad activity
+            # prediction, end_of_utterance = self.asr.recognize_3()
+            # old way of calculating silences and vad activity
+            prediction, end_of_utterance = self.asr.recognize()
             if prediction is None:
                 continue
             um, new_tokens = retico_core.text.get_text_increment(self, prediction)
