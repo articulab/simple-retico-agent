@@ -279,10 +279,10 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 )
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
-                
+
             self.time_logs_buffer.append(["Start", start_date.strftime("%T.%f")[:-3]])
             self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
-            
+
         if final:
             self.clear_after_finish = True
             self.current_input = []

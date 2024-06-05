@@ -33,6 +33,7 @@ class WhisperASR_2:
     Called with the recognize function that recognize text from speech and predicts if the recognized text corresponds to a full sentence
     (ie finishes with a silence longer than silence_threshold).
     """
+
     def __init__(
         self,
         # whisper_model="openai/whisper-base",
@@ -105,7 +106,7 @@ class WhisperASR_2:
 
     def add_audio_3(self, audio):
         self.audio_buffer.append(audio)
-    
+
     def get_n_sil_audio_chunks(self):
         """Returns the number of silent audio chunks needed in the audio buffer to have an EOS
         (ie. to how many audio_chunk correspond self.silence_dur)
@@ -134,7 +135,11 @@ class WhisperASR_2:
         _n_sil_audio_chunks = int(self.get_n_sil_audio_chunks())
         if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
             return True
-        sum(1 for a in self.audio_buffer[-_n_sil_audio_chunks:] if not self.vad.is_speech(a, self.target_framerate))
+        sum(
+            1
+            for a in self.audio_buffer[-_n_sil_audio_chunks:]
+            if not self.vad.is_speech(a, self.target_framerate)
+        )
         silence_counter = 0
         for a in self.audio_buffer[-_n_sil_audio_chunks:]:
             if not self.vad.is_speech(a, self.target_framerate):
@@ -168,7 +173,7 @@ class WhisperASR_2:
         """Recognize if someone is speaking with the self.recognize_speech() function (that calculates if there is speech in the audio_buffer).
         Then, recreate the audio signal received by the microphone by concatenating the audio chunks
         from the audio_buffer and transcribe this concatenation into a list of predicted words.
-        Finally, if a long silence is recognized at the at the end of the audio_buffer (with self.recognize_silence() function), 
+        Finally, if a long silence is recognized at the at the end of the audio_buffer (with self.recognize_silence() function),
         a user EOS is predicted, the audio buffer is emptied and the predicted words will be sent to the subscribed module (the function returns end_of_utterance = True).
 
         Returns:
@@ -179,7 +184,7 @@ class WhisperASR_2:
         start_date = datetime.datetime.now()
         start_time = time.time()
         silence = self.recognize_silence()
-        
+
         # When silence :
         # empty buffer
         # continue
@@ -204,10 +209,10 @@ class WhisperASR_2:
             )  # the segments can be streamed
             segments = list(segments)
             transcription = "".join([s.text for s in segments])
-            
+
             end_date = datetime.datetime.now()
             end_time = time.time()
-            
+
             if self.printing:
                 print("execution time = " + str(round(end_time - start_time, 3)) + "s")
                 print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
@@ -222,9 +227,7 @@ class WhisperASR_2:
                 self.vad_state = False
                 self.audio_buffer = []
                 end_of_utterance = True
-                self.time_logs_buffer.append(
-                    ["Stop", end_date.strftime("%T.%f")[:-3]]
-                )
+                self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
         return transcription, end_of_utterance
 
@@ -269,7 +272,7 @@ class WhisperASR_2:
         segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
         segments = list(segments)
         transcription = "".join([s.text for s in segments])
-        
+
         end_date = datetime.datetime.now()
         end_time = time.time()
 
@@ -286,9 +289,7 @@ class WhisperASR_2:
             if self.first_time_stop:
                 self.first_time = True
                 self.first_time_stop = False
-                self.time_logs_buffer.append(
-                    ["Stop",end_date.strftime("%T.%f")[:-3]]
-                )
+                self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
         return transcription, not self.vad_state
 
@@ -383,7 +384,9 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
             time.sleep(0.01)
-            prediction, end_of_utterance = self.asr.recognize_3() # new way of calculating silences and vad activity
+            prediction, end_of_utterance = (
+                self.asr.recognize_3()
+            )  # new way of calculating silences and vad activity
             # prediction, end_of_utterance = self.asr.recognize() # old way of calculating silences and vad activity
             if prediction is None:
                 continue

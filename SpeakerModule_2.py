@@ -4,6 +4,7 @@ SpeakerModule_2
 
 This module outputs the audio signal contained in the AudioIUs by the computer's speakers.
 """
+
 import datetime
 import pyaudio
 import retico_core
@@ -12,6 +13,7 @@ from retico_core.audio import AudioIU, SpeakerModule
 from utils import *
 
 from utils import *
+
 
 class SpeakerModule_2(SpeakerModule):
     """A module that consumes AudioIUs of arbitrary size and outputs them to the
@@ -36,7 +38,7 @@ class SpeakerModule_2(SpeakerModule):
             device_index=device_index,
             **kwargs
         )
-        self.channels=channels
+        self.channels = channels
         self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
         self.first_time = True
@@ -86,10 +88,10 @@ class SpeakerModule_2(SpeakerModule):
             output=True,
             output_device_index=self.device_index,
         )
-        
+
     def shutdown(self):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
-        
+
         Write logs and close the audio stream."""
         write_logs(
             self.log_file,

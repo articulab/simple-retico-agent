@@ -38,6 +38,7 @@ import retico_core
 from llama_cpp import Llama
 from utils import *
 
+
 class LlamaCppMemoryIncremental:
     """Sub-class of LlamaCppMemoryIncrementalModule, LLM wrapper. Handles all the LLM engineering part.
     Called with the process_full_sentence function that generates a system answer from a constructed prompt when a user full sentence is received from the ASR.
@@ -623,7 +624,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         # reset because it is end of sentence
         self.current_output = []
         self.latest_input_iu = None
-        
+
     def process_update(self, update_message):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
