@@ -28,7 +28,7 @@ transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class WhisperASR_2:
+class WhisperASR:
     """Sub-class of WhisperASRModule, ASR model wrapper.
     Called with the recognize function that recognize text from speech and predicts if the recognized text corresponds to a full sentence
     (ie finishes with a silence longer than silence_threshold).
@@ -299,7 +299,7 @@ class WhisperASR_2:
         self.audio_buffer = []
 
 
-class WhisperASRModule_2(retico_core.AbstractModule):
+class WhisperASRModule(retico_core.AbstractModule):
     """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
     This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
     Has a subclass, WhisperASR, that handles the aspects related to ASR engineering.
