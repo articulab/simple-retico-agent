@@ -22,7 +22,7 @@ Outputs : TextIU
 example of the prompt template :
 prompt = "[INST] <<SYS>>\
 This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-The teacher is teaching mathemathics to the child student. \
+The teacher is teaching mathematics to the child student. \
 As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
 You play the role of a teacher. Here is the beginning of the conversation : \
 <</SYS>>\
@@ -33,15 +33,9 @@ Child : I am fine, and I can't wait to learn mathematics ! \
 [/INST]"
 """
 
-import asyncio
 import datetime
-import threading
-import time
 import retico_core
-import torch
 from llama_cpp import Llama
-import re
-
 from utils import *
 
 
@@ -61,7 +55,7 @@ class LlamaCppMemoryIncremental:
         context_size=2000,
         short_memory_context_size=500,
         n_gpu_layers=-1,
-        device="cuda",
+        device=None,
         **kwargs
     ):
         """initialize LlamaCppMemoryIncrementalModule submodule and its attributes related to prompts, template and llama-cpp-python.
@@ -70,10 +64,11 @@ class LlamaCppMemoryIncremental:
             model_repo (string): HF model instantiation. The path to the desired remote hugging face model (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
             model_name (string): HF model instantiation. The name of the desired remote hugging face model (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
             initial_prompt (string): _description_. Deprecated. Defaults to None.
-            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputed into every prompt). Defaults to None.
+            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt). Defaults to None.
             context_size (int, optional): Max number of tokens that the total prompt can contain. Defaults to 2000.
             short_memory_context_size (int, optional): Max number of tokens that the short term memory (dialogue history) can contain. Has to be lower than context_size. Defaults to 500.
             n_gpu_layers (int, optional): Number of model layers you want to run on GPU. Take the model nb layers if greater. Defaults to 100.
+            device (string, optional): the device the module will run on (cuda for gpu, or cpu)
         """
         # prompts attributes
         self.initial_prompt = initial_prompt
@@ -90,7 +85,7 @@ class LlamaCppMemoryIncremental:
             b" Teacher :",
         ]
         self.role_token_patterns = []
-        self.ponctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
+        self.punctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
         self.utterances = []
         self.size_per_utterance = []
         self.short_memory_context_size = short_memory_context_size
@@ -107,10 +102,10 @@ class LlamaCppMemoryIncremental:
         self.user_role = b"Child"
         self.agent_role = b"Teacher"
 
-        # llamap-cpp-python args
+        # llama-cpp-python args
         self.context_size = context_size
-        self.n_gpu_layers = n_gpu_layers
-        self.device = device
+        self.device = device_definition(device)
+        self.n_gpu_layers = 0 if self.device != "cuda" else n_gpu_layers
         # Model loading method 1 (local init)
         self.model_path = model_path
         # Model loading method 2 (hf init)
@@ -127,11 +122,10 @@ class LlamaCppMemoryIncremental:
         """
         if self.model_path is not None:
 
-            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=n_gpu_layers,
+                n_gpu_layers=self.n_gpu_layers,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
@@ -142,7 +136,7 @@ class LlamaCppMemoryIncremental:
                 filename=self.model_name,
                 device_map=self.device,
                 n_ctx=self.context_size,
-                n_gpu_layers=n_gpu_layers,
+                n_gpu_layers=self.n_gpu_layers,
             )
 
         else:
@@ -292,18 +286,16 @@ class LlamaCppMemoryIncremental:
                 nb_tokens_removed += self.size_per_utterance.pop(1)
             self.prompt = b"".join(self.utterances)
 
-    def is_ponctuation(self, token):
-        """Returns True if the token correspond to a ponctuation.
+    def is_punctuation(self, token):
+        """Returns True if the token correspond to a punctuation.
 
         Args:
             token (list): a LLM token
 
         Returns:
-            bool: True if the token correspond to a ponctuation.
+            bool: True if the token correspond to a punctuation.
         """
-        # return True if the token corresponds to a ponctuation
-        is_ponctuation = self.model.detokenize([token]) in self.ponctuation_text
-        return is_ponctuation
+        return self.model.detokenize([token]) in self.punctuation_text
 
     def is_stop_pattern(self, sentence):
         """Returns True if one of the stopping token patterns matches the end of the sentence.
@@ -314,7 +306,6 @@ class LlamaCppMemoryIncremental:
         Returns:
             bool: True if one of the stopping token patterns matches the end of the sentence.
         """
-        # return True, and the stop pattern if last n characters of the sentence is a stop pattern.
         for i, pat in enumerate(self.stop_token_text_patterns):
             if pat == sentence[-len(pat) :]:
                 return True, self.stop_token_patterns[i]
@@ -330,9 +321,8 @@ class LlamaCppMemoryIncremental:
             bool: True if one of the role token patterns matches the beginning of the sentence.
         """
         max_pattern_size = max([len(p) for p in self.role_token_text_patterns])
-        if max_pattern_size < len(
-            sentence
-        ):  # We want to only check at the very beginning of the sentence
+        # We want to only check at the very beginning of the sentence
+        if max_pattern_size < len(sentence):
             return False, None
         # return True, and the stop pattern if last n characters of the sentence is a stop pattern.
         for i, pat in enumerate(self.role_token_text_patterns):
@@ -352,7 +342,7 @@ class LlamaCppMemoryIncremental:
         self, subprocess, top_k=40, top_p=0.95, temp=1.0, repeat_penalty=1.1
     ):
         """Generates the agent next sentence from the constructed prompt (dialogue scenario, dialogue history, instruct...).
-        At each generated token, check is the end of the sentence corresponds to a stopping pattern, role pattern, or ponctuation.
+        At each generated token, check is the end of the sentence corresponds to a stopping pattern, role pattern, or punctuation.
         Sends the info to the retico Module using the submodule function.
         Stops the generation if a stopping token pattern is encountered (using the stop_multiple_utterances_generation as the stopping criteria).
 
@@ -442,7 +432,7 @@ class LlamaCppMemoryIncremental:
             last_sentence_nb_tokens += 1
 
             # call retico module subprocess to send update message to subscribed modules.
-            is_ponct = self.is_ponctuation(token)
+            is_ponct = self.is_punctuation(token)
             _, stop_pattern = self.is_stop_pattern(last_sentence)
             _, role_pattern = self.is_role_pattern(last_sentence)
             subprocess(payload_text, is_ponct, stop_pattern, role_pattern)
@@ -494,7 +484,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         printing=False,
         log_file="llm.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
-        device="cuda",
+        device=None,
         **kwargs
     ):
         """Initializes the LlamaCppMemoryIncremental Module.
@@ -504,7 +494,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             model_repo (string): HF model instantiation. The path to the desired remote hugging face model (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
             model_name (string): HF model instantiation. The name of the desired remote hugging face model (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
             initial_prompt (string): _description_. Deprecated.
-            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputed into every prompt)
+            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt)
             printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
@@ -526,6 +516,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             **kwargs
         )
         self.latest_input_iu = None
+        self.time_logs_buffer = []
 
     def recreate_sentence_from_um(self, msg):
         """recreate the complete user sentence from the strings contained in every COMMIT update message IU (msg).
@@ -541,56 +532,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             sentence += iu.get_text() + " "
         return sentence
 
-    def process_not_incremental(self, msg):
-        """Deprecated."""
-        # this function is not incremental as it waits for the end of the generated
-        # sentence to append the next update message
-        next_um = retico_core.abstract.UpdateMessage()
-
-        def subprocess(payload):
-            output_iu = self.create_iu(self.latest_input_iu)
-            output_iu.set_text(payload)
-            if not self.latest_input_iu:
-                self.latest_input_iu = output_iu
-            self.current_output.append(output_iu)
-            next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-
-        self.model_wrapper.process_full_sentence(
-            self.recreate_sentence_from_um(msg), subprocess
-        )
-        # COMMIT all current output IUs because it is the end of sentence
-        for iu in self.current_output:
-            self.commit(iu)
-            next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-        self.current_output = []
-        self.latest_input_iu = None
-        self.append(next_um)
-
-    # def process_incremental(self, msg):
-
-    #     def subprocess(payload):
-    #         next_um = retico_core.abstract.UpdateMessage()
-    #         output_iu = self.create_iu(self.latest_input_iu)
-    #         output_iu.set_text(payload)
-    #         if not self.latest_input_iu:
-    #             self.latest_input_iu = output_iu
-    #         self.current_output.append(output_iu)
-    #         next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-    #         self.append(next_um)
-    #         print("ADD")
-
-    #     self.model_wrapper.process_full_sentence(self.recreate_sentence_from_um(msg), subprocess)
-
-    #     # COMMIT all current output IUs because it is the end of sentence
-    #     next_um = retico_core.abstract.UpdateMessage()
-    #     for iu in self.current_output:
-    #         self.commit(iu)
-    #         next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-    #     self.current_output = []
-    #     self.latest_input_iu = None
-    #     self.append(next_um)
-    #     print("COMMIT")
-
     def process_incremental(self, msg):
         """Function that calls the submodule LLamaCppMemoryIncremental to generates a system answer (text) using the chosen LLM.
         Incremental : Use the subprocess function as a callback function for the submodule to call to check if the current chunk
@@ -605,13 +546,12 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                 datetime.datetime.now().strftime("%T.%f")[:-3],
             )
 
-        write_logs(
-            self.log_file,
-            [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+        self.time_logs_buffer.append(
+            ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
         )
 
         def subprocess(
-            payload, is_ponctuation=None, stop_pattern=None, role_pattern=None
+            payload, is_punctuation=None, stop_pattern=None, role_pattern=None
         ):
             """
             This function will be called by the submodule at each token generation.
@@ -619,12 +559,12 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
             by updating and publishing new UpdateMessage containing the new IUS.
             IUs are :
                 - ADDED in every situation (the generated words are sent to the subscribed modules)
-                - COMMITED if the last token generated is a ponctuation (The TTS can start generating the voice corresponding to the clause)
+                - COMMITTED if the last token generated is a punctuation (The TTS can start generating the voice corresponding to the clause)
                 - REVOKED if the last tokens generated corresponds to a stop pattern (so that the subscribed module delete the stop pattern)
 
             Args:
                 payload (string): the text corresponding to the last generated token
-                is_ponctuation (bool, optional): True if the last generated token correspond to a ponctuation. Defaults to None.
+                is_punctuation (bool, optional): True if the last generated token correspond to a punctuation. Defaults to None.
                 stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
             """
             # Construct UM and IU
@@ -648,7 +588,6 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                     )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
-                # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
             # REVOKE if role patterns
             if role_pattern is not None:
@@ -660,21 +599,22 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
                     )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
-                # print("REVOKE :\n".join([iu.payload for iu in self.current_output]))
 
-            # COMMIT if ponctuation and not role patterns
+            # COMMIT if punctuation and not role patterns
             if (
-                is_ponctuation and role_pattern is None and stop_pattern is None
-            ):  # this works because role patterns end with a ponctuation
+                is_punctuation and role_pattern is None and stop_pattern is None
+            ):  # this works because role patterns end with a punctuation
                 for iu in self.current_output:
                     self.commit(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
                 if self.printing:
                     print(
-                        "LLM : send sentence after ponct ",
+                        "LLM : send sentence after punctuation ",
                         datetime.datetime.now().strftime("%T.%f")[:-3],
                     )
-                # print("COMMIT :\n"+"".join([iu.payload for iu in self.current_output]))
+                self.time_logs_buffer.append(
+                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+                )
                 self.current_output = []
             self.append(next_um)
 
@@ -717,3 +657,12 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
         """
         self.model_wrapper.setup()
+
+    def shutdown(self):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
+        """
+        write_logs(
+            self.log_file,
+            self.time_logs_buffer,
+        )

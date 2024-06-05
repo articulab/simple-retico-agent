@@ -49,19 +49,31 @@ def downsampleWav(src, dst, inrate=44100, outrate=16000, inchannels=2, outchanne
 
 from pydub import AudioSegment as am
 
+
 src = "./audios/stereo/48k/"
 dest = "./audios/mono/44k/"
-inrate = 48000
-outrate = 44100
-inchannel = 2
+# inrate = 48000
+# outrate = 44100
+inrate = 22050
+outrate = 48000
+inchannel = 1
 outchannel = 1
-for filepath in [f for f in glob.glob(src + "*.wav")]:
-    filename = filepath.split("\\")[-1]
-    print(filename)
-    dest_path = dest + filename
-    # downsampleWav(filepath, dest+filename, inrate=96000, outrate=16000, inchannels=2, outchannels=2)
-    sound = am.from_file(filepath, format="wav", frame_rate=inrate)
-    # sound = sound.resample(sample_rate_Hz=outrate, sample_width=2, channels=1)
-    sound = sound.set_channels(outchannel)
-    sound = sound.set_frame_rate(outrate)
-    sound.export(dest_path, format="wav")
+# for filepath in [f for f in glob.glob(src + "*.wav")]:
+#     filename = filepath.split("\\")[-1]
+#     print(filename)
+#     dest_path = dest + filename
+#     # downsampleWav(filepath, dest+filename, inrate=96000, outrate=16000, inchannels=2, outchannels=2)
+#     sound = am.from_file(filepath, format="wav", frame_rate=inrate)
+#     # sound = sound.resample(sample_rate_Hz=outrate, sample_width=2, channels=1)
+#     sound = sound.set_channels(outchannel)
+#     sound = sound.set_frame_rate(outrate)
+#     sound.export(dest_path, format="wav")
+
+
+filepath = "audios/test/tts_output_playback.wav"
+dest_path = "audios/test/tts_output_playback_48k.wav"
+sound = am.from_file(filepath, format="wav", frame_rate=inrate)
+# sound = sound.resample(sample_rate_Hz=outrate, sample_width=2, channels=1)
+sound = sound.set_channels(outchannel)
+sound = sound.set_frame_rate(outrate)
+sound.export(dest_path, format="wav")

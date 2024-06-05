@@ -14,6 +14,7 @@ import threading
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
+import torch
 import transformers
 import pydub
 import webrtcvad
@@ -43,34 +44,37 @@ class WhisperASR_2:
         channels=1,
         sample_width=2,
         silence_dur=1,
-        vad_agressiveness=3,
+        vad_aggressiveness=3,
         silence_threshold=0.75,
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
-        device="cuda",
+        device=None,
     ):
+        self.device = device_definition(device)
 
-        self.model = WhisperModel(whisper_model, device=device, compute_type="int8")
+        self.model = WhisperModel(
+            whisper_model, device=self.device, compute_type="int8"
+        )
         self.printing = printing
 
         self.audio_buffer = []
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
         self.channels = channels
-        self.vad = webrtcvad.Vad(vad_agressiveness)
+        self.vad = webrtcvad.Vad(vad_aggressiveness)
         self.silence_dur = silence_dur
         self.vad_state = False
         self._n_sil_audio_chunks = None
         self.silence_threshold = silence_threshold
         self.sample_width = sample_width
 
-        self.cpt_npa = 0
-
         # latency logs params
         self.first_time = True
         self.first_time_stop = False
+        # logs
         self.log_file = manage_log_folder(log_folder, log_file)
+        self.time_logs_buffer = []
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -90,7 +94,6 @@ class WhisperASR_2:
             )
             s = s.set_frame_rate(self.target_framerate)
             return s._data
-        return audio
 
     def add_audio(self, audio):
         """Resamples and adds the audio chunk received from the microphone to the audio buffer.
@@ -99,6 +102,9 @@ class WhisperASR_2:
             audio (bytes): the audio chunk received from the microphone.
         """
         audio = self.resample_audio(audio)
+        self.audio_buffer.append(audio)
+
+    def add_audio_3(self, audio):
         self.audio_buffer.append(audio)
 
     def get_n_sil_audio_chunks(self):
@@ -112,15 +118,15 @@ class WhisperASR_2:
             # nb frames in each audio chunk
             nb_frames_chunk = len(self.audio_buffer[0]) / 2
             # duration of 1 audio chunk
-            dur_chunk = nb_frames_chunk / self.target_framerate
-            self._n_sil_audio_chunks = int(self.silence_dur / dur_chunk)
+            duration_chunk = nb_frames_chunk / self.target_framerate
+            self._n_sil_audio_chunks = int(self.silence_dur / duration_chunk)
         return self._n_sil_audio_chunks
 
     def recognize_silence(self):
         """Function that will calculate if the ASR consider that there is a silence long enough to be a user EOS.
         Example :
         if self.silence_threshold==0.75 (percentage) and self.silence_dur==1 (seconds),
-        It returns True if, accros the frames corresponding to the last 1 second of audio, more than 75% are considered as silence by the vad.
+        It returns True if, across the frames corresponding to the last 1 second of audio, more than 75% are considered as silence by the vad.
 
         Returns:
             boolean : the user EOS prediction
@@ -129,6 +135,11 @@ class WhisperASR_2:
         _n_sil_audio_chunks = int(self.get_n_sil_audio_chunks())
         if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
             return True
+        sum(
+            1
+            for a in self.audio_buffer[-_n_sil_audio_chunks:]
+            if not self.vad.is_speech(a, self.target_framerate)
+        )
         silence_counter = 0
         for a in self.audio_buffer[-_n_sil_audio_chunks:]:
             if not self.vad.is_speech(a, self.target_framerate):
@@ -136,6 +147,89 @@ class WhisperASR_2:
         if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
             return True
         return False
+
+    def recognize_speech(self):
+        """Function recognizing if any speech is contained in the audio_buffer. If it does, empty the silence at the beginning of the buffer.
+        Return False if :
+            - audio buffer is empty
+            - All audio chunk contained in buffer are filled with silence.
+        Return True if :
+            - There is an audio chunk in buffer containing speech.
+
+        Returns:
+            bool: described above.
+        """
+        if len(self.audio_buffer) == 0:
+            return False
+        for i, a in enumerate(self.audio_buffer):
+            if self.vad.is_speech(a, self.target_framerate):
+                # delete all silence frames at the beginning
+                self.audio_buffer = self.audio_buffer[i:]
+                return True
+        # self.audio_buffer = []
+        return False
+
+    def recognize_3(self):
+        """Recognize if someone is speaking with the self.recognize_speech() function (that calculates if there is speech in the audio_buffer).
+        Then, recreate the audio signal received by the microphone by concatenating the audio chunks
+        from the audio_buffer and transcribe this concatenation into a list of predicted words.
+        Finally, if a long silence is recognized at the at the end of the audio_buffer (with self.recognize_silence() function),
+        a user EOS is predicted, the audio buffer is emptied and the predicted words will be sent to the subscribed module (the function returns end_of_utterance = True).
+
+        Returns:
+            (list[string], boolean): the list of words transcribed by the asr and a boolean with the EOS prediction (>700ms silence).
+        """
+        transcription = None
+        end_of_utterance = False
+        start_date = datetime.datetime.now()
+        start_time = time.time()
+        silence = self.recognize_silence()
+
+        # When silence :
+        # empty buffer
+        # continue
+        if not self.vad_state:
+            speech = self.recognize_speech()
+            if speech:
+                self.vad_state = True
+                self.time_logs_buffer.append(
+                    ["Start", start_date.strftime("%T.%f")[:-3]]
+                )
+
+        # When speech is detected :
+        # change a speech bool to say that someone spoke for future silence detection
+        # Start ASR computing repeatedly until a silence has occurred
+        if self.vad_state:
+            full_audio = b"".join(self.audio_buffer)
+            audio_np = (
+                np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
+            )
+            segments, info = self.model.transcribe(
+                audio_np
+            )  # the segments can be streamed
+            segments = list(segments)
+            transcription = "".join([s.text for s in segments])
+
+            end_date = datetime.datetime.now()
+            end_time = time.time()
+
+            if self.printing:
+                print("execution time = " + str(round(end_time - start_time, 3)) + "s")
+                print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
+                print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
+
+            # when silence is detected after a speech :
+            # Compute ASR one last time
+            # empty buffer
+            # change back the speech bool
+            silence = self.recognize_silence()
+            if silence:
+                self.vad_state = False
+                self.audio_buffer = []
+                end_of_utterance = True
+                self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
+
+        return transcription, end_of_utterance
 
     def recognize(self):
         """Recreate the audio signal received by the microphone by concatenating the audio chunks
@@ -153,30 +247,32 @@ class WhisperASR_2:
         start_time = time.time()
         silence = self.recognize_silence()
 
-        if not self.vad_state and not silence:  # someone starts talking
+        if not self.vad_state and not silence:
+            # first time someone starts talking after a long silence, we empty the buffer of all the old silence
+            # that only works if there is not more than self.get_n_sil_frames() frames in the buffer, that method could delete data.
             self.vad_state = True
             self.audio_buffer = self.audio_buffer[-int(self.get_n_sil_audio_chunks()) :]
 
             if self.first_time:
                 self.first_time_stop = True
                 self.first_time = False
-                write_logs(
-                    self.log_file,
-                    [["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]],
+                self.time_logs_buffer.append(
+                    ["Start", start_date.strftime("%T.%f")[:-3]]
                 )
 
+        # if vad_state if False and nobody is speaking
         if not self.vad_state:
-            return None, False
+            return None, True
 
         # faster whisper
         full_audio = b"".join(self.audio_buffer)
         audio_np = (
             np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
         )
-        self.cpt_npa += len(audio_np)
-        segments, info = self.model.transcribe(audio_np)
+        segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
         segments = list(segments)
         transcription = "".join([s.text for s in segments])
+
         end_date = datetime.datetime.now()
         end_time = time.time()
 
@@ -185,20 +281,17 @@ class WhisperASR_2:
             print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
             print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
 
+        # when someone started speaking but stopped (with a long enough silence)
         if silence:
             self.vad_state = False
             self.audio_buffer = []
-            self.cpt_npa = 0
 
             if self.first_time_stop:
                 self.first_time = True
                 self.first_time_stop = False
-                write_logs(
-                    self.log_file,
-                    [["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]],
-                )
+                self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
-        return transcription, self.vad_state
+        return transcription, not self.vad_state
 
     def reset(self):
         """reset the vad state and empty the audio_buffer"""
@@ -246,7 +339,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
-        device="cuda",
+        device=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -284,16 +377,22 @@ class WhisperASRModule_2(retico_core.AbstractModule):
                 self.latest_input_iu = iu
 
     def _asr_thread(self):
-        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the  current one
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.
+        Calls the WhisperASR sub-class's recognize function, and sends ADD IUs of the recognized sentence chunk to the children modules.
+        If the end-of-sentence is predicted by the WhisperASR sub-class (>700ms silence), sends COMMIT IUs of the recognized full sentence.
+        """
+        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
             time.sleep(0.01)
-            prediction, vad = self.asr.recognize()
+            prediction, end_of_utterance = (
+                self.asr.recognize_3()
+            )  # new way of calculating silences and vad activity
+            # prediction, end_of_utterance = self.asr.recognize() # old way of calculating silences and vad activity
             if prediction is None:
                 continue
-            end_of_utterance = not vad
             um, new_tokens = retico_core.text.get_text_increment(self, prediction)
 
-            if len(new_tokens) == 0 and vad:
+            if len(new_tokens) == 0 and not end_of_utterance:
                 continue
 
             for i, token in enumerate(new_tokens):
@@ -318,6 +417,7 @@ class WhisperASRModule_2(retico_core.AbstractModule):
         """
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
+        print("ASR started")
 
     def shutdown(self):
         """

@@ -16,6 +16,8 @@ from hashlib import blake2b
 import retico_core
 import numpy as np
 from TTS.api import TTS, load_config
+import torch
+from utils import *
 
 from utils import *
 
@@ -28,14 +30,15 @@ class CoquiTTS:
     def __init__(
         self,
         model,
-        device,
         is_multilingual,
         speaker_wav,
         language,
+        device=None,
     ):
+
+        self.device = device_definition(device)
         self.tts = None
         self.model = model
-        self.device = device
         self.language = language
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
@@ -127,13 +130,13 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self,
         model="jenny",
         language="en",
-        device="cuda",
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
         log_file="tts.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
+        device=None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -158,10 +161,10 @@ class CoquiTTSModule(retico_core.AbstractModule):
 
         self.tts = CoquiTTS(
             model=self.LANGUAGE_MAPPING[language][model],
-            language="en",
-            device=device,
+            language=language,
             is_multilingual=(language == "multi"),
             speaker_wav=speaker_wav,
+            device=device,
         )
 
         self.dispatch_on_finish = dispatch_on_finish
@@ -174,6 +177,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
         self.audio_buffer = []
         self.audio_pointer = 0
         self.clear_after_finish = False
+        self.time_logs_buffer = []
 
     def current_text(self):
         """Convert received IUs data accumulated in current_input list into a string.
@@ -190,7 +194,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
         t1 = time.time()
         while self._tts_thread_active:
             # this sleep time calculation is complicated and useless
-            # if we don't send silence when there is no audio outputed by the tts model
+            # if we don't send silence when there is no audio outputted by the tts model
             t2 = t1
             t1 = time.time()
             if t1 - t2 < self.frame_duration:
@@ -275,13 +279,10 @@ class CoquiTTSModule(retico_core.AbstractModule):
                 )
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
-            write_logs(
-                self.log_file,
-                [
-                    ["Start", start_date.strftime("%T.%f")[:-3]],
-                    ["Stop", end_date.strftime("%T.%f")[:-3]],
-                ],
-            )
+
+            self.time_logs_buffer.append(["Start", start_date.strftime("%T.%f")[:-3]])
+            self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
+
         if final:
             self.clear_after_finish = True
             self.current_input = []
@@ -310,3 +311,4 @@ class CoquiTTSModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
         self._tts_thread_active = False
+        write_logs(self.log_file, self.time_logs_buffer)
