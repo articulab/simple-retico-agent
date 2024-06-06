@@ -37,6 +37,7 @@ class CoquiTTS:
     ):
 
         self.device = device_definition(device)
+        print("self.device = TTS ", self.device)
         self.tts = None
         self.model = model
         self.language = language

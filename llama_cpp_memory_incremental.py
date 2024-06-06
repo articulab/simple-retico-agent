@@ -105,6 +105,7 @@ class LlamaCppMemoryIncremental:
         # llama-cpp-python args
         self.context_size = context_size
         self.device = device_definition(device)
+        print("self.device LLM = ", self.device)
         self.n_gpu_layers = 0 if self.device != "cuda" else n_gpu_layers
         # Model loading method 1 (local init)
         self.model_path = model_path
