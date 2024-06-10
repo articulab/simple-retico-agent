@@ -3,6 +3,7 @@ VAD Module
 ==================
 
 This module provides Voice Activity Detection (VAD) using a webrtcvad.
+Only send an update message if the vad_state changes.
 """
 
 import retico_core
@@ -53,7 +54,7 @@ class VADStateIU(retico_core.abstract.IncrementalUnit):
         self.vad_state = vad_state
 
 
-class VADModule(retico_core.AbstractModule):
+class VADSendWhenChangesModule(retico_core.AbstractModule):
     """A retico module that provides Voice Activity Detection (VAD) using a webrtcvad.
 
     Inputs : AudioIU
@@ -98,6 +99,7 @@ class VADModule(retico_core.AbstractModule):
         self.printing = printing
         self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
+        self.vad_state = False
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -133,13 +135,18 @@ class VADModule(retico_core.AbstractModule):
                 continue
             if self.input_framerate != iu.rate:
                 raise Exception("input framerate differs from iu framerate")
-            output_iu = self.create_iu(iu)
-            output_iu.set_vad_state(
-                self.vad.is_speech(
-                    self.resample_audio(iu.raw_audio), self.target_framerate
-                )
+            is_speech = self.vad.is_speech(
+                self.resample_audio(iu.raw_audio), self.target_framerate
             )
-            ius.append((output_iu, retico_core.UpdateType.ADD))
+            if is_speech != self.vad_state:
+                if is_speech:
+                    print("Someone starts talking")
+                else:
+                    print("Someone stopped talking")
+                self.vad_state = is_speech
+                output_iu = self.create_iu(iu)
+                output_iu.set_vad_state(self.vad_state)
+                ius.append((output_iu, retico_core.UpdateType.ADD))
         um = retico_core.UpdateMessage()
         um.add_ius(ius)
         return um

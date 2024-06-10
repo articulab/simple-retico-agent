@@ -3,9 +3,11 @@ import torch
 
 from retico_core import *
 from speaker_interruption import SpeakerModule_Interruption
+from speaker_interruption_when_changes import SpeakerModule_InterruptionWhenChanges
 from utils import *
 from microphone_ptt import MicrophonePTTModule
 from vad import VADModule
+from vad_send_when_changes import VADSendWhenChangesModule
 from woz_audio.WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from woz_audio.WozMicrophone_one_file import WozMicrophoneModule_one_file
 from woz_audio.WozMicrophone_one_file_allinone import (
@@ -352,14 +354,25 @@ def main_speaker_interruption():
     )
 
     # speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
-    speaker = SpeakerModule_Interruption(
+    # speaker = SpeakerModule_Interruption(
+    #     printing=printing,
+    #     rate=tts_model_samplerate,
+    #     frame_length=tts_frame_length,
+    #     log_folder=log_folder,
+    # )
+    # vad = VADModule(
+    #     printing=printing,
+    #     input_framerate=rate,
+    #     log_folder=log_folder,
+    # )
+
+    speaker = SpeakerModule_InterruptionWhenChanges(
         printing=printing,
         rate=tts_model_samplerate,
         frame_length=tts_frame_length,
         log_folder=log_folder,
     )
-
-    vad = VADModule(
+    vad = VADSendWhenChangesModule(
         printing=printing,
         input_framerate=rate,
         log_folder=log_folder,
