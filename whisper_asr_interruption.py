@@ -49,9 +49,7 @@ class WhisperASRInterruption:
         log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
     ):
-        print("self.device ASR = ", device)
         self.device = device_definition(device)
-        print("self.device ASR = ", self.device)
 
         self.model = WhisperModel(
             whisper_model, device=self.device, compute_type="int8"
@@ -134,7 +132,7 @@ class WhisperASRInterruption:
 
     def reset(self):
         """reset the vad state and empty the audio_buffer"""
-        self.vad_state = True
+        # self.vad_state = True
         self.audio_buffer = []
 
 
@@ -173,7 +171,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
     def __init__(
         self,
         target_framerate=16000,
-        input_framerate=48000,
+        input_framerate=16000,
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
@@ -204,25 +202,73 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are ADD,
             they are added to the audio_buffer.
         """
+        eos = False
         for iu, ut in update_message:
-            if self.input_framerate != iu.rate:
-                raise Exception("input framerate differs from iu framerate")
-            # ADD corresponds to new audio chunks of user sentence, to generate new transcription hypothesis
-            if ut == retico_core.UpdateType.ADD:
-                self.asr.add_audio(iu.raw_audio)
-                if not self.latest_input_iu:
-                    self.latest_input_iu = iu
-                self.eos = False
-            # COMMIT corresponds to the user's full audio sentence, to generate a final transcription and send it to the LLM.
-            elif ut == retico_core.UpdateType.COMMIT:
-                self.asr.add_audio(iu.raw_audio)
-                # generate the final hypothesis here instead of in _asr_thead ?
-                self.eos = True
+            if iu.vad_state == "interruption":
+                pass
+            elif iu.vad_state == "user_turn":
+                if self.input_framerate != iu.rate:
+                    raise Exception("input framerate differs from iu framerate")
+                # ADD corresponds to new audio chunks of user sentence, to generate new transcription hypothesis
+                if ut == retico_core.UpdateType.ADD:
+                    self.asr.add_audio(iu.raw_audio)
+                    if not self.latest_input_iu:
+                        self.latest_input_iu = iu
+                # COMMIT corresponds to the user's full audio sentence, to generate a final transcription and send it to the LLM.
+                elif ut == retico_core.UpdateType.COMMIT:
+                    # self.asr.add_audio(iu.raw_audio) # already added ? if we add COMMIT IUs to audio_buffer, we'll have double audio chunks
+                    # generate the final hypothesis here instead of in _asr_thead ?
+                    eos = True
+        self.eos = eos
 
     def _asr_thread(self):
         """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.
         Calls the WhisperASR sub-class's recognize function, and sends ADD IUs of the recognized sentence chunk to the children modules.
         If the end-of-sentence is predicted by the WhisperASR sub-class (>700ms silence), sends COMMIT IUs of the recognized full sentence.
+
+        Using the current output to create the final prediction and COMMIT the full final transcription.
+        """
+        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
+        while self._asr_thread_active:
+
+            time.sleep(0.01)
+            prediction = self.asr.recognize()
+
+            if len(prediction) != 0:
+
+                um, new_tokens = retico_core.text.get_text_increment(self, prediction)
+                for i, token in enumerate(new_tokens):
+                    output_iu = self.create_iu(self.latest_input_iu)
+                    output_iu.set_asr_results(
+                        [prediction],
+                        token,
+                        0.0,
+                        0.99,
+                        self.eos and (i == (len(new_tokens) - 1)),
+                    )
+                    self.current_output.append(output_iu)
+                    um.add_iu(output_iu, retico_core.UpdateType.ADD)
+
+                if self.eos:
+                    for iu in self.current_output:
+                        self.commit(iu)
+                        um.add_iu(iu, retico_core.UpdateType.COMMIT)
+
+                    self.current_output = []
+                    self.asr.reset()
+                    self.eos = False
+
+                self.latest_input_iu = None
+                if len(um) != 0:
+                    self.append(um)
+                    # print("WHISPER SEND : ", [(iu.payload, ut) for iu, ut in um])
+
+    def _asr_thread_2(self):
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.
+        Calls the WhisperASR sub-class's recognize function, and sends ADD IUs of the recognized sentence chunk to the children modules.
+        If the end-of-sentence is predicted by the WhisperASR sub-class (>700ms silence), sends COMMIT IUs of the recognized full sentence.
+
+        Having two different behaviors if EOS or not. Not using current output when EOS, directly generate IUs from last prediction.
         """
         # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
@@ -230,17 +276,30 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
             prediction = self.asr.recognize()
 
-            um, new_tokens = retico_core.text.get_text_increment(self, prediction)
-            for i, token in enumerate(new_tokens):
-                output_iu = self.create_iu(self.latest_input_iu)
-                output_iu.set_asr_results([prediction], token, 0.0, 0.99, self.eos)
-                self.current_output.append(output_iu)
-                um.add_iu(output_iu, retico_core.UpdateType.ADD)
+            # if EOS, we'll generate the final prediction and COMMIT all words
             if self.eos:
-                for iu in self.current_output:
-                    self.commit(iu)
-                    um.add_iu(iu, retico_core.UpdateType.COMMIT)
-                self.current_output = []
+                tokens = prediction.strip().split(" ")
+                um = retico_core.UpdateMessage()
+                ius = []
+                for i, token in enumerate(tokens):
+                    # this way will not instantiate good grounded IUs because self.latest_input_iu will be the same for every IU
+                    output_iu = self.create_iu(self.latest_input_iu)
+                    output_iu.set_asr_results(
+                        [prediction], token, 0.0, 0.99, i == (len(tokens) - 1)
+                    )
+                    ius.append((output_iu, retico_core.UpdateType.COMMIT))
+                    self.commit(output_iu)
+                    self.current_output = []
+                um.add_ius(ius)
+
+            # if not EOS, we'll generate a new transcription hypothesis and increment the current output
+            else:
+                um, new_tokens = retico_core.text.get_text_increment(self, prediction)
+                for i, token in enumerate(new_tokens):
+                    output_iu = self.create_iu(self.latest_input_iu)
+                    output_iu.set_asr_results([prediction], token, 0.0, 0.99, False)
+                    self.current_output.append(output_iu)
+                    um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
             self.latest_input_iu = None
             self.append(um)

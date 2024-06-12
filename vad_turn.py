@@ -96,14 +96,20 @@ class AudioVADIU(retico_core.audio.AudioIU):
         )
         self.vad_state = vad_state
 
-    def set_data(self, audio, vad_state):
+    def set_data(
+        self, vad_state=None, audio=None, chunk_size=None, rate=None, sample_width=None
+    ):
+        # sample, self.chunk_size, self.rate, self.sample_width
         """Sets the vad_state"""
         self.payload = audio
         self.raw_audio = audio
         self.vad_state = vad_state
+        self.rate = rate
+        self.nframes = chunk_size
+        self.sample_width = sample_width
 
 
-class VADSendWhenChangesModule(retico_core.AbstractModule):
+class VADTurnModule(retico_core.AbstractModule):
     """A retico module that provides Voice Activity Detection (VAD) using a webrtcvad.
 
     Inputs : AudioIU
@@ -140,6 +146,7 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
         bot_dur=0.4,
         silence_threshold=0.75,
         vad_aggressiveness=3,
+        frame_length=0.2,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -151,6 +158,8 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
         self.input_framerate = input_framerate
         self.channels = channels
         self.sample_width = sample_width
+        self.frame_length = frame_length
+        self.chunk_size = round(self.target_framerate * self.frame_length)
         self.vad = webrtcvad.Vad(vad_aggressiveness)
         self.silence_dur = silence_dur
         self._n_sil_audio_chunks = None
@@ -241,6 +250,7 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
 
         _n_sil_audio_chunks = self.get_n_sil_audio_chunks()
         if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
+            # print("silence 0")
             return True
         _n_sil_audio_chunks = int(_n_sil_audio_chunks)
         silence_counter = sum(
@@ -249,7 +259,35 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
             if not self.vad.is_speech(a, self.target_framerate)
         )
         if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
+            # print("silence 1")
             return True
+        # print("silence 2")
+        return False
+
+    def recognize_silence_2(self):
+        """Function that will calculate if the ASR consider that there is a silence long enough to be a user EOS.
+        Example :
+        if self.silence_threshold==0.75 (percentage) and self.silence_dur==1 (seconds),
+        It returns True if, across the frames corresponding to the last 1 second of audio, more than 75% are considered as silence by the vad.
+
+        Returns:
+            boolean : the user EOS prediction
+        """
+
+        _n_sil_audio_chunks = self.get_n_sil_audio_chunks()
+        if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
+            # print("silence 0")
+            return False
+        _n_sil_audio_chunks = int(_n_sil_audio_chunks)
+        silence_counter = sum(
+            1
+            for a in self.audio_buffer[-_n_sil_audio_chunks:]
+            if not self.vad.is_speech(a, self.target_framerate)
+        )
+        if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
+            # print("silence 1")
+            return True
+        # print("silence 2")
         return False
 
     def recognize_bot(self):
@@ -263,14 +301,14 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
         """
         _n_bot_audio_chunks = self.get_n_bot_audio_chunks()
         if not _n_bot_audio_chunks or len(self.audio_buffer) < _n_bot_audio_chunks:
-            return True
+            return False
         _n_bot_audio_chunks = int(_n_bot_audio_chunks)
-        silence_counter = sum(
+        speech_counter = sum(
             1
             for a in self.audio_buffer[-_n_bot_audio_chunks:]
-            if not self.vad.is_speech(a, self.target_framerate)
+            if self.vad.is_speech(a, self.target_framerate)
         )
-        if silence_counter >= int(self.silence_threshold * _n_bot_audio_chunks):
+        if speech_counter >= int(self.silence_threshold * _n_bot_audio_chunks):
             return True
         return False
 
@@ -282,6 +320,7 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
             update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are ADD,
             they are added to the audio_buffer.
         """
+        lastest_iu = None
         for iu, ut in update_message:
             if ut != retico_core.UpdateType.ADD:
                 continue
@@ -289,65 +328,118 @@ class VADSendWhenChangesModule(retico_core.AbstractModule):
                 raise Exception("input framerate differs from iu framerate")
 
             self.add_audio(iu.raw_audio)
+            lastest_iu = iu
 
         if not self.user_turn:
             # It is not a user turn, The agent could be speaking, or it could have finished speaking.
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
+                print("BOT")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
                 # - Take only the end of the audio_buffer, to remove the useless audio
                 # - Send a INTERRUPTION IU to all modules to make them stop generating new data (if the agent is talking, he gets interrupted by the user)
                 self.user_turn = True
-                self.audio_buffer = self.audio_buffer[
-                    -int(self.get_n_bot_audio_chunks()) :
-                ]
 
-                output_iu = self.create_iu(iu)
-                output_iu.set_data(audio=None, vad_state="interruption")
+                # self.audio_buffer = self.audio_buffer[
+                #     -int(self.get_n_bot_audio_chunks()) :
+                # ]
+                # print("BOT remove from audio buffer")
+
+                output_iu = self.create_iu(lastest_iu)
+                output_iu.set_data(vad_state="interruption")
+                # output_iu.set_data(
+                #     audio=audio,
+                #     chunk_size=self.chunk_size,
+                #     rate=self.rate,
+                #     sample_width=self.sample_width,
+                #     vad_state="interruption",
+                # )
+
                 return retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
                 )
             else:
+                # print("SILENCE")
                 # user wasn't talkin, and stays quiet
                 # No bot has been detected, we'll
                 # - empty the audio buffer to remove useless audio
                 self.audio_buffer = self.audio_buffer[
                     -int(self.get_n_bot_audio_chunks()) :
                 ]
+                # print("remove from audio buffer")
         else:
             # It is user turn, we are listenning for a long enough silence, which would be analyzed as a user EOT.
-            silence = self.recognize_silence()
+            silence = self.recognize_silence_2()
             if not silence:
+                # print("TALKING")
                 # User was talking, and is still talking
                 # no user EOT has been predicted, we'll :
                 # - Send all new IUs containing audio corresponding to parts of user sentence to the whisper module to generate a new transcription hypothesis.
-                new_audio = self.audio_buffer[-self.buffer_pointer :]
-                self.buffer_pointer = len(self.audio_buffer) - 1
+                # print("len(self.audio_buffer) = ", len(self.audio_buffer))
+                # print("self.buffer_pointer = ", self.buffer_pointer)
+                new_audio = self.audio_buffer[self.buffer_pointer :]
+                self.buffer_pointer = len(self.audio_buffer)
+                # print("new_audio = ", len(new_audio))
+                # print("new self.buffer_pointer = ", self.buffer_pointer)
                 ius = []
                 for audio in new_audio:
-                    output_iu = self.create_iu(iu)
-                    output_iu.set_data(audio=audio, vad_state="user_turn")
-                    ius.append((output_iu, retico_core.UpdateType.ADD))
+                    output_iu = self.create_iu(lastest_iu)
+                    output_iu.set_data(
+                        audio=audio,
+                        chunk_size=self.chunk_size,
+                        rate=self.target_framerate,
+                        sample_width=self.sample_width,
+                        vad_state="user_turn",
+                    )
+                    ius.append((retico_core.UpdateType.ADD, output_iu))
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
                 return um
 
             else:
+                print("STOP")
                 # User was talking, but is not talking anymore (a >700ms silence has been observed)
                 # a user EOT has been predicted, we'll :
-                # - Send all IUs containing the audio corresponding to the full user sentence to the whisper module to generate the transcription.
+                # - ADD additional IUs if there is some (sould not happen)
+                # - COMMIT all audio in audio_buffer to generate the transcription from the full user sentence using ASR.
                 # - set the user_turn as False
                 # - empty the audio buffer
                 ius = []
+
+                # Add the last AudioIU if there is additional audio since last update_message (should not happen)
+                if self.buffer_pointer != len(self.audio_buffer) - 1:
+                    for audio in self.audio_buffer[-self.buffer_pointer :]:
+                        output_iu = self.create_iu(lastest_iu)
+                        # output_iu.set_data(audio=audio, vad_state="user_turn")
+                        output_iu.set_data(
+                            audio=audio,
+                            chunk_size=self.chunk_size,
+                            rate=self.target_framerate,
+                            sample_width=self.sample_width,
+                            vad_state="user_turn",
+                        )
+                        # ius.append((output_iu, retico_core.UpdateType.ADD))
+                        ius.append((retico_core.UpdateType.ADD, output_iu))
+
                 for audio in self.audio_buffer:
-                    output_iu = self.create_iu(iu)
-                    output_iu.set_data(audio=audio, vad_state="user_turn")
-                    ius.append((output_iu, retico_core.UpdateType.COMMIT))
+                    output_iu = self.create_iu(lastest_iu)
+                    # output_iu.set_data(audio=audio, vad_state="user_turn")
+                    output_iu.set_data(
+                        audio=audio,
+                        chunk_size=self.chunk_size,
+                        rate=self.target_framerate,
+                        sample_width=self.sample_width,
+                        vad_state="user_turn",
+                    )
+                    ius.append((retico_core.UpdateType.COMMIT, output_iu))
+                    # ius.append((output_iu, retico_core.UpdateType.COMMIT))
+
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
                 self.user_turn = False
                 self.audio_buffer = []
+                # print("reset audio buffer")
                 return um

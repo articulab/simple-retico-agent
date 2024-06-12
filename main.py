@@ -2,12 +2,18 @@ import keyboard
 import torch
 
 from retico_core import *
+from coqui_tts_interruption import CoquiTTSInterruptionModule
+from llama_cpp_memory_incremental_interruption import (
+    LlamaCppMemoryIncrementalInterruptionModule,
+)
 from speaker_interruption import SpeakerModule_Interruption
 from speaker_interruption_when_changes import SpeakerModule_InterruptionWhenChanges
 from utils import *
 from microphone_ptt import MicrophonePTTModule
 from vad import VADModule
 from vad_send_when_changes import VADSendWhenChangesModule
+from vad_turn import VADTurnModule
+from whisper_asr_interruption import WhisperASRInterruptionModule
 from woz_audio.WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
 from woz_audio.WozMicrophone_one_file import WozMicrophoneModule_one_file
 from woz_audio.WozMicrophone_one_file_allinone import (
@@ -326,14 +332,16 @@ def main_speaker_interruption():
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
-    asr = WhisperASRModule(
+
+    asr = WhisperASRInterruptionModule(
         device=device,
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
         log_folder=log_folder,
     )
-    llama_mem_icr = LlamaCppMemoryIncrementalModule(
+
+    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
         model_path,
         None,
         None,
@@ -344,7 +352,7 @@ def main_speaker_interruption():
         device=device,
     )
 
-    tts = CoquiTTSModule(
+    tts = CoquiTTSInterruptionModule(
         language="en",
         model=tts_model,
         printing=printing,
@@ -353,29 +361,35 @@ def main_speaker_interruption():
         device=device,
     )
 
-    # speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
+    speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
+    # speaker = SpeakerModule_InterruptionWhenChanges(
+    #     printing=printing,
+    #     rate=tts_model_samplerate,
+    #     frame_length=tts_frame_length,
+    #     log_folder=log_folder,
+    # )
     # speaker = SpeakerModule_Interruption(
     #     printing=printing,
     #     rate=tts_model_samplerate,
     #     frame_length=tts_frame_length,
     #     log_folder=log_folder,
     # )
+
     # vad = VADModule(
     #     printing=printing,
     #     input_framerate=rate,
     #     log_folder=log_folder,
     # )
-
-    speaker = SpeakerModule_InterruptionWhenChanges(
-        printing=printing,
-        rate=tts_model_samplerate,
-        frame_length=tts_frame_length,
-        log_folder=log_folder,
-    )
-    vad = VADSendWhenChangesModule(
+    # vad = VADSendWhenChangesModule(
+    #     printing=printing,
+    #     input_framerate=rate,
+    #     log_folder=log_folder,
+    # )
+    vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
         log_folder=log_folder,
+        frame_length=frame_length,
     )
 
     # create network
@@ -385,12 +399,16 @@ def main_speaker_interruption():
     # tts.subscribe(speaker)
 
     # create network
-    mic.subscribe(asr)
+    # mic.subscribe(asr)
     mic.subscribe(vad)
     asr.subscribe(llama_mem_icr)
     llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)
-    vad.subscribe(speaker)
+
+    vad.subscribe(asr)
+    vad.subscribe(llama_mem_icr)
+    # vad.subscribe(tts)
+    # vad.subscribe(speaker)
 
     # running system
     try:
