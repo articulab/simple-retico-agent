@@ -179,6 +179,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         self.audio_pointer = 0
         self.clear_after_finish = False
         self.time_logs_buffer = []
+        self.next_IU_is_BOS = True
 
     def current_text(self):
         """Convert received IUs data accumulated in current_input list into a string.
@@ -216,7 +217,15 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         iu, retico_core.UpdateType.COMMIT
                     )
                     self.append(um)
+
+                    # set self.next_IU_is_BOS to True because it is the EOT and next IU sent will be a BOS
+                    self.next_IU_is_BOS = True
             else:
+                # Reset self._previous_iu at each beginning of turn so that speakerModule can distinguish turns
+                if self.next_IU_is_BOS:
+                    self._previous_iu = None
+                    self.next_IU_is_BOS = False
+
                 raw_audio = self.audio_buffer[self.audio_pointer]
                 self.audio_pointer += 1
 

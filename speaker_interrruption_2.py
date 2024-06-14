@@ -100,18 +100,37 @@ class SpeakerInterruptionModule(retico_core.AbstractConsumingModule):
             if isinstance(iu, AudioVADIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
+                        # user starts talking, set vad_state to false to interrupt the audio output
                         print("Someone starts talking, speakers stops playing audio")
-                    if iu.payload and not self.vad_state:
-                        print("Someone starts talking, speakers stops playing audio")
-                    elif not iu.payload and self.vad_state:
-                        print("user stoped talking")
-                    self.vad_state = iu.payload
+                        self.vad_state = True
+                if ut == retico_core.UpdateType.COMMIT:
+                    if iu.vad_state == "user_turn":
+                        # user stoped talking, set vad_state to true because speaker can receive new audio from next user turn
+                        # print("user stoped talking")
+                        self.vad_state = False
+                        self.audio_buffer = []
             elif isinstance(iu, AudioIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if not self.vad_state and self.old_iu != iu.previous_iu:
-                        self.audio_buffer.append(bytes(iu.raw_audio))
-                    else:
+                    # if true, interruption is occuring
+                    if self.vad_state:
                         self.old_iu = iu
+                        # print("SPEAKER : Interruption occuring")
+                    else:
+                        if self.old_iu is not None and self.old_iu == iu.previous_iu:
+                            # print(
+                            #     "SPEAKER : IU is the end of the interrupted turn.",
+                            #     self.old_iu,
+                            # )
+                            self.old_iu = iu
+                        else:
+                            # print("SPEAKER : ADD AUDIO to buffer")
+                            self.audio_buffer.append(bytes(iu.raw_audio))
+                    # if not self.vad_state and self.old_iu != iu.previous_iu:
+                    #     # if self.old_iu != iu.previous_iu:
+                    #     # if not self.vad_state:
+                    #     self.audio_buffer.append(bytes(iu.raw_audio))
+                    # else:
+                    #     self.old_iu = iu
             else:
                 # raise Exception("Unknown IU type " + iu)
                 # raise NotImplementedError("Unknown IU type " + iu)

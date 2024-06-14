@@ -6,6 +6,7 @@ from coqui_tts_interruption import CoquiTTSInterruptionModule
 from llama_cpp_memory_incremental_interruption import (
     LlamaCppMemoryIncrementalInterruptionModule,
 )
+from speaker_interrruption_2 import SpeakerInterruptionModule
 from speaker_interruption import SpeakerModule_Interruption
 from speaker_interruption_when_changes import SpeakerModule_InterruptionWhenChanges
 from utils import *
@@ -361,7 +362,7 @@ def main_speaker_interruption():
         device=device,
     )
 
-    speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
+    # speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
     # speaker = SpeakerModule_InterruptionWhenChanges(
     #     printing=printing,
     #     rate=tts_model_samplerate,
@@ -374,6 +375,9 @@ def main_speaker_interruption():
     #     frame_length=tts_frame_length,
     #     log_folder=log_folder,
     # )
+    speaker = SpeakerInterruptionModule(
+        rate=tts_model_samplerate, log_folder=log_folder
+    )
 
     # vad = VADModule(
     #     printing=printing,
@@ -408,7 +412,7 @@ def main_speaker_interruption():
     vad.subscribe(asr)
     vad.subscribe(llama_mem_icr)
     # vad.subscribe(tts)
-    # vad.subscribe(speaker)
+    vad.subscribe(speaker)
 
     # running system
     try:
