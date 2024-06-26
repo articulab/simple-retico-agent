@@ -38,9 +38,7 @@ import threading
 import time
 import retico_core
 from llama_cpp import Llama
-from coqui_tts_interruption_new_coquiTTS import AudioTTSIU
 from utils import *
-from vad_turn import AudioVADIU
 
 
 class LlamaCppMemoryIncrementalInterruption:
@@ -58,7 +56,7 @@ class LlamaCppMemoryIncrementalInterruption:
         system_prompt=None,
         context_size=2000,
         short_memory_context_size=500,
-        n_gpu_layers=-1,
+        n_gpu_layers=100,
         device=None,
         **kwargs,
     ):
@@ -90,6 +88,7 @@ class LlamaCppMemoryIncrementalInterruption:
         ]
         self.role_token_patterns = []
         self.punctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
+        self.punctuation_ids = [b[0] for b in self.punctuation_text]
         self.utterances = []
         self.size_per_utterance = []
         self.short_memory_context_size = short_memory_context_size
@@ -103,8 +102,8 @@ class LlamaCppMemoryIncrementalInterruption:
         self.user_suf = b"\n\n"
         self.agent_pre = b""
         self.agent_suf = b"\n\n"
-        self.user_role = b"Child"
-        self.agent_role = b"Teacher"
+        self.user_role = b"Child :"
+        self.agent_role = b"Teacher :"
 
         # llama-cpp-python args
         self.context_size = context_size
@@ -124,29 +123,40 @@ class LlamaCppMemoryIncrementalInterruption:
         self.interruption = False
         self.last_punctuation_id = None
         self.nb_token_since_punct = None
+        self.nb_clauses = None
+        self.interrupted_speaker_iu = None
 
     def setup(self):
         """Instantiate the model with the given model info, if insufficient info given, raise an NotImplementedError.
         Init the prompt with the initialize_prompt function.
         Calculates the stopping with the init_stop_criteria function.
         """
+
+        n_gpu_layers = 0 if self.device != "cuda" else self.n_gpu_layers
+
         if self.model_path is not None:
+            print("LAAAAAMA 1", n_gpu_layers, self.device)
+            self.model = Llama(
+                model_path=self.model_path,
+                n_ctx=self.context_size,
+                n_gpu_layers=n_gpu_layers,
+            )
 
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
+                split_mode=2,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
-
-            n_gpu_layers = 0 if self.device == "cuda" else self.n_gpu_layers
+            print("LAAAAAMA 2", n_gpu_layers, self.device)
             self.model = Llama.from_pretrained(
                 repo_id=self.model_repo,
                 filename=self.model_name,
                 device_map=self.device,
                 n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
             )
 
         else:
@@ -195,7 +205,6 @@ class LlamaCppMemoryIncrementalInterruption:
         user_sentence_complete = (
             self.user_pre
             + self.user_role
-            + b" : "
             + bytes(user_sentence, "utf-8")
             + self.user_suf
         )
@@ -205,7 +214,57 @@ class LlamaCppMemoryIncrementalInterruption:
         self.utterances.append(user_sentence_complete)
         self.size_per_utterance.append(user_sentence_complete_nb_tokens)
         self.prompt += user_sentence_complete
-        print(self.user_role.decode("utf-8") + " : " + user_sentence)
+        print(self.user_role.decode("utf-8") + user_sentence)
+
+    def new_agent_sentence_interruption(self, new_agent_sentence):
+        print("NEW AGENT INTERRUPTION")
+        print("new_agent_sentence = ", new_agent_sentence)
+
+        # remove role
+        new_agent_sentence = new_agent_sentence[
+            len(self.agent_role) : len(new_agent_sentence)
+        ]
+        print("new_agent_sentence = ", new_agent_sentence)
+
+        # split the sentence into clauses
+        sentence_clauses = []
+        old_i = 0
+        for i, c in enumerate(new_agent_sentence):
+            if c in self.punctuation_ids or i == len(new_agent_sentence) - 1:
+                sentence_clauses.append(new_agent_sentence[old_i : i + 1])
+                old_i = i
+        print("sentence_clauses = ", sentence_clauses)
+
+        # remove all clauses after clause_id (the interrupted clause)
+        sentence_clauses = sentence_clauses[: self.interrupted_speaker_iu.clause_id + 1]
+        print("sentence_clauses = ", sentence_clauses)
+
+        # Shorten the last agent utterance until the last char outputted by the speakermodule before the interruption
+        sentence_clauses[-1] = sentence_clauses[-1][
+            : self.interrupted_speaker_iu.char_id + 1
+        ]
+        print("sentence_clauses = ", sentence_clauses)
+
+        # Merge the clauses back together
+        new_agent_sentence = b"".join(sentence_clauses)
+        print("new_agent_sentence = ", new_agent_sentence)
+
+        # Add the prefix and sufix back
+        new_agent_sentence = (
+            self.agent_pre + self.agent_role + new_agent_sentence + self.agent_suf
+        )
+        print("new_agent_sentence = ", new_agent_sentence)
+
+        # Calculate the number of tokens contained in the sentence
+        nb_tokens = len(self.model.tokenize(new_agent_sentence))
+
+        self.utterances.append(new_agent_sentence)
+        self.size_per_utterance.append(nb_tokens)
+        self.prompt += new_agent_sentence
+        # not adding the agent role because it is already generated by the model.
+        # TODO : change this by placing the role directly on the prompt?
+        print(new_agent_sentence.decode("utf-8"))
+        self.interrupted_speaker_iu = None
 
     def new_agent_sentence(
         self, agent_sentence, agent_sentence_nb_tokens, which_stop_criteria
@@ -221,10 +280,12 @@ class LlamaCppMemoryIncrementalInterruption:
         # print("self.interruption = ", self.interruption)
         # print("sentence = ", agent_sentence)
         if self.interruption:
-            # print("INTERRUPT")
             agent_sentence_reduced, nb_token_removed = self.remove_until_punctuation(
                 agent_sentence
             )
+            if self.interrupted_speaker_iu is not None:
+                self.new_agent_sentence_interruption(agent_sentence)
+                return
         elif which_stop_criteria == "stop_pattern":
             agent_sentence_reduced, nb_token_removed = self.remove_stop_patterns(
                 agent_sentence
@@ -250,36 +311,75 @@ class LlamaCppMemoryIncrementalInterruption:
         # TODO : change this by placing the role directly on the prompt?
         print(agent_sentence_complete.decode("utf-8"))
 
-    def modify_new_agent_sentence(self, grounded_word, word_id):
-        # TODO: check that the last sentence in self.utterances is the agent sentence
-        # that has been interrupted, and that needs to be shortened
-        if False:
-            raise NotImplementedError(
-                "The interrupted agent sentence is not in the self.utterances list"
+    def modify_new_agent_sentence(self, iu):
+        print("MODIFY NEW AGENT SENTENCE")
+        if iu.turn_id >= len(self.utterances):
+            self.interrupted_speaker_iu = iu
+        else:
+            # TODO: check that the last sentence in self.utterances is the agent sentence
+            # that has been interrupted, and that needs to be shortened
+            if False:
+                raise NotImplementedError(
+                    "The interrupted agent sentence is not in the self.utterances list"
+                )
+
+            # get interrupted agent sentence
+            new_agent_sentence = self.utterances[iu.turn_id]
+
+            # check if last utterance is the correct turn_id
+            print(f"len utterances and turn {len(self.utterances), iu.turn_id}")
+
+            # remove it from the prompt
+            self.prompt = self.prompt[0 : len(self.prompt) - len(new_agent_sentence)]
+
+            # remove prefix and suffix from the sentence
+            new_agent_sentence = new_agent_sentence[
+                len(self.agent_pre) : len(new_agent_sentence) - len(self.agent_suf)
+            ]
+            print("new_agent_sentence = ", new_agent_sentence)
+
+            # remove role
+            new_agent_sentence = new_agent_sentence[
+                len(self.agent_role) : len(new_agent_sentence)
+            ]
+            print("new_agent_sentence = ", new_agent_sentence)
+
+            # split the sentence into clauses
+            sentence_clauses = []
+            old_i = 0
+            for i, c in enumerate(new_agent_sentence):
+                if c in self.punctuation_ids:
+                    sentence_clauses.append(new_agent_sentence[old_i : i + 1])
+                    old_i = i + 1
+            print("sentence_clauses = ", sentence_clauses)
+
+            # remove all clauses after clause_id (the interrupted clause)
+            sentence_clauses = sentence_clauses[: iu.clause_id + 1]
+            print("sentence_clauses = ", sentence_clauses)
+
+            # Shorten the last agent utterance until the last char outputted by the speakermodule before the interruption
+            sentence_clauses[-1] = sentence_clauses[-1][: iu.char_id + 1]
+            print("sentence_clauses = ", sentence_clauses)
+
+            # Merge the clauses back together
+            new_agent_sentence = b"".join(sentence_clauses)
+            print("new_agent_sentence = ", new_agent_sentence)
+
+            # Add the prefix and sufix back
+            new_agent_sentence = (
+                self.agent_pre + self.agent_role + new_agent_sentence + self.agent_suf
             )
+            print("new_agent_sentence = ", new_agent_sentence)
 
-        # get interrupted agent sentence
-        new_agent_sentence = self.utterances[-1]
+            # Calculate the number of tokens contained in the sentence
+            self.size_per_utterance[-1] = len(self.model.tokenize(new_agent_sentence))
 
-        # remove it from the prompt
-        self.prompt = self.prompt[0 : len(self.prompt) - len(new_agent_sentence)]
+            # Add it back to the prompt
+            self.prompt += new_agent_sentence
 
-        # remove prefix and suffix from the sentence
-        new_agent_sentence = new_agent_sentence[
-            len(self.agent_pre) : len(new_agent_sentence) - len(self.agent_suf)
-        ]
-        # calculate how many token are removed
-        nb_token_removed = len(new_agent_sentence) - word_id
-        self.size_per_utterance[-1] -= nb_token_removed
-        # Shorten the last agent utterance until the last word outputted by the speakermodule before the interuption
-        new_agent_sentence = new_agent_sentence[word_id : len(new_agent_sentence)]
-        # Add the prefix and sufix back
-        new_agent_sentence = self.agent_pre + new_agent_sentence + self.agent_suf
-        # Add it back to the prompt
-        self.prompt += new_agent_sentence
-        # Add it back to utterances
-        self.utterances[-1] = new_agent_sentence
-        print("NEW AGENT SENTENCE : ", new_agent_sentence.decode("utf-8"))
+            # Add it back to utterances
+            self.utterances[-1] = new_agent_sentence
+            print("NEW AGENT SENTENCE : ", new_agent_sentence.decode("utf-8"))
 
     def remove_stop_patterns(self, sentence):
         """Function called when a stopping token pattern has been encountered during the sentence generation.
@@ -421,11 +521,15 @@ class LlamaCppMemoryIncrementalInterruption:
                 return True, self.role_token_patterns[i]
         return False, None
 
-    def process_full_sentence(self, user_sentence, subprocess, subprocess_interruption):
+    def process_full_sentence(
+        self, user_sentence, subprocess, subprocess_interruption, subprocess_EOT
+    ):
         self.new_user_sentence(user_sentence)
         self.prepare_prompt_memory()
         agent_sentence, agent_sentence_nb_tokens, which_stop_criteria = (
-            self.generate_next_sentence(subprocess, subprocess_interruption)
+            self.generate_next_sentence(
+                subprocess, subprocess_interruption, subprocess_EOT
+            )
         )
         self.new_agent_sentence(
             agent_sentence, agent_sentence_nb_tokens, which_stop_criteria
@@ -435,6 +539,7 @@ class LlamaCppMemoryIncrementalInterruption:
         self,
         subprocess,
         subprocess_interruption,
+        subprocess_EOT,
         top_k=40,
         top_p=0.95,
         temp=1.0,
@@ -526,6 +631,7 @@ class LlamaCppMemoryIncrementalInterruption:
         which_stop_criteria = None
         self.last_punctuation_id = 0
         self.nb_token_since_punct = 0
+        self.nb_clauses = 0
 
         for token in self.model.generate(
             tokens,
@@ -565,11 +671,17 @@ class LlamaCppMemoryIncrementalInterruption:
                 len_unfinished_clause,
             )
 
-        # TODO : Call the subprocess after stop criteria hit ?
+        # TODO : Call the subprocess after stop criteria hit ? if the stop pattern has been uncountered, it should be called after the stop criteria hit.
         # maybe not for role pattern but at least for stop pattern and interruption ?
         # len_unfinished_clause = len(last_sentence) - self.last_punctuation_id
         # REVOKE all words from unfinished clause + empty the current_output
-        subprocess_interruption()
+        if self.interruption:
+            print("LLM : INT")
+            subprocess_interruption()
+        else:
+            print("LLM : EOT")
+            # TODO : An IU significating that the sentence is over should be sent here with a subprocess_EOT() fct.
+            subprocess_EOT()
 
         return last_sentence, last_sentence_nb_tokens, which_stop_criteria
 
@@ -602,11 +714,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [retico_core.text.SpeechRecognitionIU, AudioVADIU, AudioTTSIU]
+        return [retico_core.text.SpeechRecognitionIU, AudioVADIU, TurnAudioIU]
 
     @staticmethod
     def output_iu():
-        return retico_core.text.TextIU
+        return TurnTextIU
 
     def __init__(
         self,
@@ -762,7 +874,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             # Construct UM and IU
             next_um = retico_core.abstract.UpdateMessage()
             output_iu = self.create_iu(self.latest_input_iu)
-            output_iu.set_text(payload)
+            output_iu.set_data(
+                text=payload,
+                turn_id=len(self.model_wrapper.utterances),
+                clause_id=self.model_wrapper.nb_clauses,
+            )
             if not self.latest_input_iu:
                 self.latest_input_iu = output_iu
             self.current_output.append(output_iu)
@@ -783,6 +899,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             #     # return None # TODO ?
 
             # REVOKE if stop patterns
+            # TODO : This should not be done here, but in the generate_next_sentence fct after stop criteria hit
             if stop_pattern is not None:
                 for id, token in enumerate(
                     stop_pattern
@@ -804,10 +921,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     self.revoke(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
 
-            # COMMIT if punctuation and not role patterns
-            if (
-                is_punctuation and role_pattern is None and stop_pattern is None
-            ):  # this works because role patterns end with a punctuation
+            # COMMIT if punctuation and not role patterns and not stop_pattern ?
+            if is_punctuation and role_pattern is None and stop_pattern is None:
+                self.model_wrapper.nb_clauses += 1
                 for iu in self.current_output:
                     self.commit(iu)
                     next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
@@ -822,10 +938,18 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 self.current_output = []
             self.append(next_um)
 
+        def subprocess_EOT():
+            next_um = retico_core.abstract.UpdateMessage()
+            iu = self.create_iu()
+            iu.final = True
+            next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
+            self.append(next_um)
+
         self.model_wrapper.process_full_sentence(
             self.recreate_sentence_from_um(self.msg),
             subprocess,
             subprocess_interruption_2,
+            subprocess_EOT,
         )
         # reset because it is end of sentence
         self.current_output = []
@@ -868,24 +992,24 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
-            elif isinstance(iu, AudioTTSIU):
+            elif isinstance(iu, TurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
-                    print(
-                        f"grounded_word, word_id, utterance[id], utterances= {iu.grounded_word, iu.word_id, self.model_wrapper.utterances[iu.word_id], self.model_wrapper.utterances}"
-                    )
-                    if iu.grounded_word == self.model_wrapper.utterances[iu.word_id]:
-                        # TODO: delete the end of the sentence after that word.
-                        # NOTE: As a word can be multiple times in the sentence,
-                        # it is probably better to try to match IU ids
-                        # or the place of the word in the user turn (example : word 4)
-                        self.model_wrapper.modify_new_agent_sentence(
-                            iu.grounded_word, iu.word_id
+                    if iu.final:
+                        print(
+                            "LLM : iu final, no interrupt, agent just stopped talking, ignore iu."
                         )
                     else:
-                        raise NotImplementedError(
-                            "the word_iu doesn't correspond to the same word as grounded_word"
+                        print(
+                            f"len turns = {len(self.model_wrapper.utterances), iu.turn_id}"
                         )
-                        continue
+                        print(f"utterances = {self.model_wrapper.utterances}")
+                        print(
+                            f"grounded_word, word_id, iu.char_id, iu.turn_id, iu.clause.id = {iu.grounded_word, iu.word_id, iu.char_id, iu.turn_id, iu.clause_id}"
+                        )
+                        # print(
+                        #     f"grounded_word, word_id, iu.char_id, iu.turn_id, iu.clause.id, utterances[turn_id] = {iu.grounded_word, iu.word_id, iu.char_id, iu.turn_id, iu.clause_id, self.model_wrapper.utterances[iu.turn_id]}"
+                        # )
+                        self.model_wrapper.modify_new_agent_sentence(iu)
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:

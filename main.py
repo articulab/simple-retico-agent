@@ -339,7 +339,7 @@ def main_speaker_interruption_2():
 
     asr = WhisperASRInterruptionModule(
         device=device,
-        printing=printing,
+        printing=True,
         full_sentences=True,
         input_framerate=rate,
         log_folder=log_folder,
@@ -378,15 +378,16 @@ def main_speaker_interruption_2():
 
     # create network
     mic.subscribe(vad)
-    asr.subscribe(llama_mem_icr)
-    llama_mem_icr.subscribe(tts)
-    tts.subscribe(speaker)
+    # asr.subscribe(llama_mem_icr)
+    # llama_mem_icr.subscribe(tts)
+    # tts.subscribe(speaker)
 
     vad.subscribe(asr)
-    vad.subscribe(llama_mem_icr)
-    vad.subscribe(tts)
-    vad.subscribe(speaker)
-    speaker.subscribe(llama_mem_icr)
+    # vad.subscribe(llama_mem_icr)
+    # vad.subscribe(tts)
+    # vad.subscribe(speaker)
+    # speaker.subscribe(llama_mem_icr)
+    # speaker.subscribe(vad)
 
     # running system
     try:
@@ -395,7 +396,13 @@ def main_speaker_interruption_2():
         keyboard.wait("q")
         network.stop(mic)
         merge_logs(log_folder)
-    except Exception as err:
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
         print(f"Unexpected {err}")
         network.stop(mic)
 
@@ -539,6 +546,44 @@ def main_speaker_interruption():
         network.stop(mic)
 
 
+def test_cuda():
+    # parameters definition
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
+    # device = "cpu"
+    printing = False
+    log_folder = create_new_log_folder("logs/run")
+    frame_length = 0.02
+    rate = 16000
+    tts_model_samplerate = 22050
+    tts_model = "vits_neon"
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        log_folder=log_folder,
+        device=device,
+    )
+    # running network with the Push To Talk system
+    try:
+        network.run(llama_mem_icr)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(llama_mem_icr)
+        merge_logs(log_folder)
+    except Exception as err:
+        print(f"Unexpected {err}")
+        network.stop(llama_mem_icr)
+
+
 msg = []
 
 if __name__ == "__main__":
@@ -547,4 +592,5 @@ if __name__ == "__main__":
     # main_demo()
     # main_speaker_interruption()
     main_speaker_interruption_2()
+    # test()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")

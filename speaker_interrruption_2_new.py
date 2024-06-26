@@ -7,19 +7,12 @@ and can interrupt this audio streaming if the user starts speaking (with the rec
 """
 
 import datetime
-import threading
-import time
 import pyaudio
 import retico_core
 import platform
 import retico_core.abstract
-from retico_core.audio import AudioIU, SpeakerModule
-from coqui_tts_interruption_new_coquiTTS import AudioTTSIU
-from utils import *
 
 from utils import *
-from vad import VADStateIU
-from vad_turn import AudioVADIU
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
@@ -39,12 +32,11 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        # return [AudioIU, AudioVADIU]
-        return [AudioTTSIU, AudioVADIU]
+        return [TurnAudioIU, AudioVADIU]
 
     @staticmethod
     def output_iu():
-        return
+        return TurnAudioIU
 
     def __init__(
         self,
@@ -81,6 +73,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self.vad_state = False
         self.audio_buffer = []
         self.audioIU_buffer = []
+        self.latest_processed_iu = None
+        self.interrupted_iu = None
         self.old_iu = None
         self.frame_length = frame_length
 
@@ -104,110 +98,184 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         # user starts talking, set vad_state to false to interrupt the audio output
-                        self.vad_state = True
+                        # self.vad_state = True
 
-                        print("Someone starts talking, speakers stops playing audio")
+                        # print("Someone starts talking, speakers stops playing audio")
 
-                        # Last IU in audioBuffer :
-                        if len(self.audioIU_buffer) != 0:
-                            prev_iu, word, word_id = (
-                                self.audioIU_buffer[-1].grounded_in,
-                                self.audioIU_buffer[-1].grounded_word,
-                                self.audioIU_buffer[-1].word_id,
+                        # # Last IU in audioBuffer :
+                        # if len(self.audioIU_buffer) != 0:
+                        #     prev_iu, word, word_id, turn_id, clause_id = (
+                        #         self.audioIU_buffer[-1].grounded_in,
+                        #         self.audioIU_buffer[-1].grounded_word,
+                        #         self.audioIU_buffer[-1].word_id,
+                        #         self.audioIU_buffer[-1].turn_id,
+                        #         self.audioIU_buffer[-1].clause_id,
+                        #     )
+                        #     print(
+                        #         f"last IU.grounded_in = {prev_iu, word, word_id, turn_id, clause_id}"
+                        #     )
+                        #     prev_ius = []
+                        #     while prev_iu.previous_iu is not None:
+                        #         prev_iu = prev_iu.previous_iu
+                        #         prev_ius.append(prev_iu.payload)
+                        #     prev_ius.reverse()
+
+                        #     print(
+                        #         "LAST AudioVADIU = ",
+                        #         "".join(prev_ius),
+                        #     )
+
+                        # # First IU in audioBuffer :
+                        # if len(self.audioIU_buffer) != 0:
+                        #     prev_iu, word, word_id, turn_id, clause_id = (
+                        #         self.audioIU_buffer[0].grounded_in,
+                        #         self.audioIU_buffer[0].grounded_word,
+                        #         self.audioIU_buffer[0].word_id,
+                        #         self.audioIU_buffer[0].turn_id,
+                        #         self.audioIU_buffer[0].clause_id,
+                        #     )
+                        #     print(
+                        #         f"first IU.grounded_in = {prev_iu, word, word_id, turn_id, clause_id}"
+                        #     )
+
+                        #     prev_ius = []
+                        #     while prev_iu.previous_iu is not None:
+                        #         prev_iu = prev_iu.previous_iu
+                        #         prev_ius.append(prev_iu.payload)
+                        #     prev_ius.reverse()
+                        #     print(
+                        #         "FIRST AudioVADIU = ",
+                        #         "".join(prev_ius),
+                        #     )
+
+                        # if len(self.audioIU_buffer) != 0:
+                        #     # send message to LLM with the last AudioTTSIU spoken by the speaker module
+                        #     last_iu = self.audioIU_buffer[0]
+                        #     um = retico_core.UpdateMessage.from_iu(
+                        #         last_iu, retico_core.UpdateType.ADD
+                        #     )
+                        #     self.append(um)
+                        #     # remove all audio in audio_buffer
+                        #     self.audio_buffer = []
+
+                        if self.latest_processed_iu is not None:
+
+                            prev_iu, word, word_id, char_id, turn_id, clause_id = (
+                                self.latest_processed_iu.grounded_in,
+                                self.latest_processed_iu.grounded_word,
+                                self.latest_processed_iu.word_id,
+                                self.latest_processed_iu.char_id,
+                                self.latest_processed_iu.turn_id,
+                                self.latest_processed_iu.clause_id,
                             )
-                            print(f"last IU.grounded_in = {prev_iu, word, word_id}")
-                            prev_ius = []
+                            prev_ius = [prev_iu.payload]
                             while prev_iu.previous_iu is not None:
                                 prev_iu = prev_iu.previous_iu
                                 prev_ius.append(prev_iu.payload)
                             prev_ius.reverse()
 
                             print(
-                                "LAST AudioVADIU = ",
+                                "SPEAKER : INTERRUPTED at : ",
                                 "".join(prev_ius),
                             )
 
-                        # First IU in audioBuffer :
-                        if len(self.audioIU_buffer) != 0:
-                            prev_iu, word, word_id = (
-                                self.audioIU_buffer[0].grounded_in,
-                                self.audioIU_buffer[0].grounded_word,
-                                self.audioIU_buffer[0].word_id,
-                            )
-                            print(f"first IU.grounded_in = {prev_iu, word, word_id}")
-
-                            prev_ius = []
-                            while prev_iu.previous_iu is not None:
-                                prev_iu = prev_iu.previous_iu
-                                prev_ius.append(prev_iu.payload)
-                            prev_ius.reverse()
                             print(
-                                "FIRST AudioVADIU = ",
-                                "".join(prev_ius),
+                                f"PARAMS INTER SENT TO LLM = {word, word_id, char_id, turn_id, clause_id}"
                             )
 
-                        if len(self.audioIU_buffer) != 0:
-                            # send message to LLM with the last AudioTTSIU spoken by the speaker module
-                            last_iu = self.audioIU_buffer[-1]
                             um = retico_core.UpdateMessage.from_iu(
-                                last_iu, retico_core.UpdateType.ADD
+                                self.latest_processed_iu, retico_core.UpdateType.ADD
                             )
                             self.append(um)
+                            self.interrupted_iu = self.latest_processed_iu
                             # remove all audio in audio_buffer
                             self.audio_buffer = []
+                            self.audioIU_buffer = []
+                            self.latest_processed_iu = None
 
-                if ut == retico_core.UpdateType.COMMIT:
-                    if iu.vad_state == "user_turn":
-                        # user stoped talking, set vad_state to true because speaker can receive new audio from next user turn
-                        # print("user stoped talking")
-                        self.vad_state = False
-                        self.audio_buffer = []
-                        self.audioIU_buffer = []
-            elif isinstance(iu, AudioTTSIU):
-                if ut == retico_core.UpdateType.ADD:
-                    # if true, interruption is occuring
-                    if self.vad_state:
-                        self.old_iu = iu
-                        # print("SPEAKER : Interruption occuring")
-                        # TODO : REVOKE so that it REVOKES IUs of TTS and LLM to align dialogue history with the interruption of speaker
-                        # print("iu.grounded_in : ", iu.grounded_in)
-                        prev_iu = iu.grounded_in
-                        prev_ius = []
-                        while prev_iu.previous_iu is not None:
-                            # print("prev_iu : ", prev_iu.previous_iu)
-                            prev_iu = prev_iu.previous_iu
-                            prev_ius.append(prev_iu.payload)
-                        prev_ius.reverse()
-                        print(
-                            "AudioIU = ",
-                            "".join(prev_ius),
-                        )
-                        # print(
-                        #     "iu.grounded_in.grounded_in : ", iu.grounded_in.grounded_in
-                        # )
-                    else:
-                        if self.old_iu is not None and self.old_iu == iu.previous_iu:
-                            # print(
-                            #     "SPEAKER : IU is the end of the interrupted turn.",
-                            #     self.old_iu,
-                            # )
-                            self.old_iu = iu
-                            # TODO : REVOKE so that it REVOKES IUs of TTS and LLM to align dialogue history with the interruption of speaker
-                            # print("iu.grounded_in : ", iu.grounded_in)
-                            # print(
-                            #     "iu.grounded_in.grounded_in : ",
-                            #     iu.grounded_in.grounded_in,
-                            # )
                         else:
-                            # print("SPEAKER : ADD AUDIO to buffer")
+                            print("SPEAKER : self.latest_processed_iu = None")
+
+                # if ut == retico_core.UpdateType.COMMIT:
+                #     if iu.vad_state == "user_turn":
+                #         # user stoped talking, set vad_state to true because speaker can receive new audio from next user turn
+                #         # print("user stoped talking")
+                #         self.vad_state = False
+                #         self.audio_buffer = []
+                #         self.audioIU_buffer = []
+
+            elif isinstance(iu, TurnAudioIU):
+                if ut == retico_core.UpdateType.ADD:
+                    if self.interrupted_iu is not None:
+                        if iu.final:
+                            print("SPEAKER : FINAL ignored")
+                        elif self.interrupted_iu.turn_id == iu.turn_id:
+                            print(
+                                f"SPEAKER : IU received [{iu.grounded_word}] is from the same turn {iu.turn_id} as interrupted IU, so it is cancelled."
+                            )
+
+                        else:
+                            print(
+                                f"SPEAKER : new IU received [{iu.grounded_word}] from a new turn {iu.turn_id}, set interrupted_iu to None"
+                            )
+                            self.interrupted_iu = None
                             self.audio_buffer.append(bytes(iu.raw_audio))
                             self.audioIU_buffer.append(iu)
-                    # if not self.vad_state and self.old_iu != iu.previous_iu:
-                    #     # if self.old_iu != iu.previous_iu:
-                    #     # if not self.vad_state:
-                    #     self.audio_buffer.append(bytes(iu.raw_audio))
-                    # else:
-                    #     self.old_iu = iu
+                    else:
+                        # print(f"SPEAKER : received new audio")
+                        if iu.final:
+                            print("SPEAKER : FINAL")
+                            self.audio_buffer.append(None)
+                            self.audioIU_buffer.append(iu)
+                        else:
+                            self.audio_buffer.append(bytes(iu.raw_audio))
+                            self.audioIU_buffer.append(iu)
+
+            # elif isinstance(iu, AudioTTSIU):
+            #     if ut == retico_core.UpdateType.ADD:
+            #         # if true, interruption is occuring
+            #         if self.vad_state:
+            #             self.old_iu = iu
+            #             # print("SPEAKER : Interruption occuring")
+            #             # TODO : REVOKE so that it REVOKES IUs of TTS and LLM to align dialogue history with the interruption of speaker
+            #             # print("iu.grounded_in : ", iu.grounded_in)
+            #             prev_iu = iu.grounded_in
+            #             prev_ius = []
+            #             while prev_iu.previous_iu is not None:
+            #                 # print("prev_iu : ", prev_iu.previous_iu)
+            #                 prev_iu = prev_iu.previous_iu
+            #                 prev_ius.append(prev_iu.payload)
+            #             prev_ius.reverse()
+            #             print(
+            #                 "AudioIU = ",
+            #                 "".join(prev_ius),
+            #             )
+            #             # print(
+            #             #     "iu.grounded_in.grounded_in : ", iu.grounded_in.grounded_in
+            #             # )
+            #         else:
+            #             if self.old_iu is not None and self.old_iu == iu.previous_iu:
+            #                 # print(
+            #                 #     "SPEAKER : IU is the end of the interrupted turn.",
+            #                 #     self.old_iu,
+            #                 # )
+            #                 self.old_iu = iu
+            #                 # TODO : REVOKE so that it REVOKES IUs of TTS and LLM to align dialogue history with the interruption of speaker
+            #                 # print("iu.grounded_in : ", iu.grounded_in)
+            #                 # print(
+            #                 #     "iu.grounded_in.grounded_in : ",
+            #                 #     iu.grounded_in.grounded_in,
+            #                 # )
+            #             else:
+            #                 # print("SPEAKER : ADD AUDIO to buffer")
+            #                 self.audio_buffer.append(bytes(iu.raw_audio))
+            #                 self.audioIU_buffer.append(iu)
+            #         # if not self.vad_state and self.old_iu != iu.previous_iu:
+            #         #     # if self.old_iu != iu.previous_iu:
+            #         #     # if not self.vad_state:
+            #         #     self.audio_buffer.append(bytes(iu.raw_audio))
+            #         # else:
+            #         #     self.old_iu = iu
             else:
                 # raise Exception("Unknown IU type " + iu)
                 # raise NotImplementedError("Unknown IU type " + iu)
@@ -216,11 +284,23 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         return None
 
     def callback(self, in_data, frame_count, time_info, status):
+
         if len(self.audio_buffer) == 0:
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
-        data = self.audio_buffer.pop()
-        self.audioIU_buffer.pop()
+
+        data = self.audio_buffer.pop(0)
+        iu = self.audioIU_buffer.pop(0)
+
+        # print("SPEAKER CALLBACK ", len(data))
+        if iu.final:
+            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+            self.append(um)
+            silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
+            return (silence_bytes, pyaudio.paContinue)
+        else:
+            self.latest_processed_iu = iu
+
         return (data, pyaudio.paContinue)
 
     def setup(self):

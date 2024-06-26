@@ -23,7 +23,8 @@ import time
 from faster_whisper import WhisperModel
 
 from utils import *
-from vad_turn import AudioVADIU
+
+# from vad_turn import AudioVADIU
 
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -188,6 +189,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             log_folder=log_folder,
             device=device,
         )
+        self.printing = printing
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
         self._asr_thread_active = False
@@ -205,7 +207,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         eos = False
         for iu, ut in update_message:
             if iu.vad_state == "interruption":
-                pass
+                continue
             elif iu.vad_state == "user_turn":
                 if self.input_framerate != iu.rate:
                     raise Exception("input framerate differs from iu framerate")
@@ -261,7 +263,8 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                 self.latest_input_iu = None
                 if len(um) != 0:
                     self.append(um)
-                    # print("WHISPER SEND : ", [(iu.payload, ut) for iu, ut in um])
+                    if self.printing:
+                        print("WHISPER SEND : ", [(iu.payload, ut) for iu, ut in um])
 
     def _asr_thread_2(self):
         """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.

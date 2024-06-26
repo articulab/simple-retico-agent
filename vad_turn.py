@@ -14,101 +14,6 @@ import webrtcvad
 from utils import *
 
 
-class VADStateIU(retico_core.abstract.IncrementalUnit):
-    """An Incremental IU describing the vad state (if someone is talking or not).
-
-    Attributes:
-        creator (AbstractModule): The module that created this IU
-        previous_iu (IncrementalUnit): A link to the IU created before the
-            current one.
-        grounded_in (IncrementalUnit): A link to the IU this IU is based on.
-        created_at (float): The UNIX timestamp of the moment the IU is created.
-        vad_state (bool): The vad state.
-    """
-
-    @staticmethod
-    def type():
-        return "VAD State IU"
-
-    def __init__(
-        self,
-        creator=None,
-        iuid=0,
-        previous_iu=None,
-        grounded_in=None,
-        vad_state=None,
-        **kwargs,
-    ):
-        super().__init__(
-            creator=creator,
-            iuid=iuid,
-            previous_iu=previous_iu,
-            grounded_in=grounded_in,
-            payload=vad_state,
-        )
-        self.vad_state = vad_state
-
-    def set_vad_state(self, vad_state):
-        """Sets the vad_state"""
-        self.payload = vad_state
-        self.vad_state = vad_state
-
-
-class AudioVADIU(retico_core.audio.AudioIU):
-    """An Incremental IU describing the vad state (if someone is talking or not).
-
-    Attributes:
-        creator (AbstractModule): The module that created this IU
-        previous_iu (IncrementalUnit): A link to the IU created before the
-            current one.
-        grounded_in (IncrementalUnit): A link to the IU this IU is based on.
-        created_at (float): The UNIX timestamp of the moment the IU is created.
-        vad_state (bool): The vad state.
-    """
-
-    @staticmethod
-    def type():
-        return "Audio VAD IU"
-
-    def __init__(
-        self,
-        creator=None,
-        iuid=0,
-        previous_iu=None,
-        grounded_in=None,
-        audio=None,
-        vad_state=None,
-        rate=None,
-        nframes=None,
-        sample_width=None,
-        **kwargs,
-    ):
-        super().__init__(
-            creator=creator,
-            iuid=iuid,
-            previous_iu=previous_iu,
-            grounded_in=grounded_in,
-            payload=audio,
-            raw_audio=audio,
-            rate=rate,
-            nframes=nframes,
-            sample_width=sample_width,
-        )
-        self.vad_state = vad_state
-
-    def set_data(
-        self, vad_state=None, audio=None, chunk_size=None, rate=None, sample_width=None
-    ):
-        # sample, self.chunk_size, self.rate, self.sample_width
-        """Sets the vad_state"""
-        self.payload = audio
-        self.raw_audio = audio
-        self.vad_state = vad_state
-        self.rate = rate
-        self.nframes = chunk_size
-        self.sample_width = sample_width
-
-
 class VADTurnModule(retico_core.AbstractModule):
     """A retico module that provides Voice Activity Detection (VAD) using a webrtcvad.
 
@@ -127,7 +32,7 @@ class VADTurnModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [AudioIU]
+        return [AudioIU, TurnAudioIU]
 
     @staticmethod
     def output_iu():
@@ -168,6 +73,7 @@ class VADTurnModule(retico_core.AbstractModule):
         self._n_bot_audio_chunks = None
         self.vad_state = False
         self.user_turn = False
+        self.user_turn_text = "no speaker"
         self.audio_buffer = []
         self.buffer_pointer = 0
 
@@ -322,26 +228,33 @@ class VADTurnModule(retico_core.AbstractModule):
         """
         lastest_iu = None
         for iu, ut in update_message:
-            if ut != retico_core.UpdateType.ADD:
-                continue
-            if self.input_framerate != iu.rate:
-                raise Exception("input framerate differs from iu framerate")
+            if isinstance(iu, TurnAudioIU):
+                if ut == retico_core.UpdateType.ADD:
+                    if iu.final:
+                        print("VADTURN : agent stopped talking")
+                        # self.user_turn = True
+                        self.user_turn_text = "no speaker"
+            elif isinstance(iu, AudioIU):
+                if ut == retico_core.UpdateType.ADD:
+                    if self.input_framerate != iu.rate:
+                        raise Exception("input framerate differs from iu framerate")
+                    self.add_audio(iu.raw_audio)
+                    lastest_iu = iu
 
-            self.add_audio(iu.raw_audio)
-            lastest_iu = iu
-
-        if not self.user_turn:
+        # if not self.user_turn:
+        if self.user_turn_text == "agent":
             # It is not a user turn, The agent could be speaking, or it could have finished speaking.
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
-                print("BOT")
+                print("INT")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
                 # - Take only the end of the audio_buffer, to remove the useless audio
                 # - Send a INTERRUPTION IU to all modules to make them stop generating new data (if the agent is talking, he gets interrupted by the user)
-                self.user_turn = True
+                # self.user_turn = True
+                self.user_turn_text = "user"
 
                 # self.audio_buffer = self.audio_buffer[
                 #     -int(self.get_n_bot_audio_chunks()) :
@@ -370,7 +283,9 @@ class VADTurnModule(retico_core.AbstractModule):
                     -int(self.get_n_bot_audio_chunks()) :
                 ]
                 # print("remove from audio buffer")
-        else:
+
+        # else:
+        elif self.user_turn_text == "user":
             # It is user turn, we are listenning for a long enough silence, which would be analyzed as a user EOT.
             silence = self.recognize_silence_2()
             if not silence:
@@ -439,7 +354,30 @@ class VADTurnModule(retico_core.AbstractModule):
 
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
-                self.user_turn = False
+                # self.user_turn = False
+                self.user_turn_text = "agent"
                 self.audio_buffer = []
                 # print("reset audio buffer")
                 return um
+
+        elif self.user_turn_text == "no speaker":
+            # nobody is speaking, we are waiting for user to speak.
+            # We are listenning for potential user beginning of turn (bot).
+            bot = self.recognize_bot()
+            if bot:
+                print("BOT")
+                # user wasn't talking, but he starts talking
+                # A bot has been detected, we'll :
+                # - set the user_turn parameter as True
+                # - Take only the end of the audio_buffer, to remove the useless audio
+                # - Send a INTERRUPTION IU to all modules to make them stop generating new data (if the agent is talking, he gets interrupted by the user)
+                # self.user_turn = True
+                self.user_turn_text = "user"
+            else:
+                # print("SILENCE")
+                # user wasn't talkin, and stays quiet
+                # No bot has been detected, we'll
+                # - empty the audio buffer to remove useless audio
+                self.audio_buffer = self.audio_buffer[
+                    -int(self.get_n_bot_audio_chunks()) :
+                ]
