@@ -286,6 +286,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
     def callback(self, in_data, frame_count, time_info, status):
 
         if len(self.audio_buffer) == 0:
+            # print("SPEAKER CALLBACK no buffer")
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
 
@@ -294,14 +295,15 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
         # print("SPEAKER CALLBACK ", len(data))
         if iu.final:
+            # print("SPEAKER CALLBACK final")
             um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
             self.append(um)
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
         else:
+            # print("SPEAKER CALLBACK audio")
             self.latest_processed_iu = iu
-
-        return (data, pyaudio.paContinue)
+            return (data, pyaudio.paContinue)
 
     def setup(self):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288"""

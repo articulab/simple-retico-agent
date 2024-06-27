@@ -417,16 +417,30 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         # print("current_text = ", current_text)
         # print("words = ", words)
         pre_pro_words = []
+        pre_pro_words_distinct = []
         try:
             for i, w in enumerate(words):
                 if w[0] == " ":
                     pre_pro_words.append(i - 1)
+                    if len(pre_pro_words) >= 2:
+                        pre_pro_words_distinct.append(
+                            words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+                        )
+                    else:
+                        pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
         except IndexError:
             print(f"INDEX ERROR : {words, pre_pro_words}")
             raise IndexError
 
         pre_pro_words.pop(0)
         pre_pro_words.append(len(words) - 1)
+        pre_pro_words_distinct.pop(0)
+        if len(pre_pro_words) >= 2:
+            pre_pro_words_distinct.append(
+                words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+            )
+        else:
+            pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
         # print("pre_pro_words = ", pre_pro_words)
 
         SPACE_TOKEN_ID = 16
@@ -453,9 +467,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
         # replace <blnk> with space
         pre_tokenized_text = [x if x != "<BLNK>" else "_" for x in pre_tokenized_txt]
-        # print("tokens = ", tokens)
-        # print("space_tokens_ids = ", space_tokens_ids)
-        # print("pre_tokenized_text = ", pre_tokenized_text)
         new_buffer = []
         for outputs in final_outputs:
             # intermediate parameters
@@ -475,7 +486,27 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
             # TODO: Sometimes it fails because the phonems of two words are combined
             # example : "for a" -> fora in phonems
+            # """ example 2 : " of" + " a" -> '_ə_v_ə_n_'
+            # pre_pro_words_distinct =  [[' Let'], [' me'], [' give'], [' you'], [' an'], [' example'], [' of'], [' an'], [' even'], [' number', ':']]
+            # pre_tokenized_words =  ['_l_ˈ_ɛ_t_', '_m_ˌ_i_ː_', '_ɡ_ˈ_ɪ_v_', '_j_u_ː_', '_ɐ_n_', '_ɛ_ɡ_z_ˈ_æ_m_p_ə_l_', '_ə_v_ə_n_', '_ˈ_i_ː_v_ə_n_', '_n_ˈ_ʌ_m_b_ɚ_,_']
+            # """
             # try to implement something that always validate this with a fusion of words in the preprocess
+            # print("tokens = ", tokens)
+
+            full_pre_tokenized_txt = (
+                self.tts.tts.synthesizer.tts_model.tokenizer.decode(tokens)
+            )
+            full_pre_tokenized_txt = full_pre_tokenized_txt.replace("<BLNK>", "_")
+            full_pre_tokenized_words = "".join(full_pre_tokenized_txt).split(" ")
+            pre_tokenized_words = "".join(pre_tokenized_text).split(" ")
+            print("full_pre_tokenized_txt = ", full_pre_tokenized_txt)
+            print("full_pre_tokenized_words = ", full_pre_tokenized_words)
+            print("space_tokens_ids = ", space_tokens_ids)
+            print("pre_tokenized_text = ", pre_tokenized_text)
+            print("words = ", words)
+            print("pre_pro_words_distinct = ", pre_pro_words_distinct)
+            print("pre_tokenized_words = ", pre_tokenized_words)
+            print("len = ", len(pre_pro_words_distinct), len(pre_tokenized_words))
             print(
                 f"assertion pre_pro_words, wav_words_chunk_len = {len(pre_pro_words), len(wav_words_chunk_len), pre_pro_words, wav_words_chunk_len}"
             )

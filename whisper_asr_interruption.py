@@ -237,7 +237,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             prediction = self.asr.recognize()
 
             if len(prediction) != 0:
-
                 um, new_tokens = retico_core.text.get_text_increment(self, prediction)
                 for i, token in enumerate(new_tokens):
                     output_iu = self.create_iu(self.latest_input_iu)

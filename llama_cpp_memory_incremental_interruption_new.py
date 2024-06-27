@@ -135,22 +135,20 @@ class LlamaCppMemoryIncrementalInterruption:
         n_gpu_layers = 0 if self.device != "cuda" else self.n_gpu_layers
 
         if self.model_path is not None:
-            print("LAAAAAMA 1", n_gpu_layers, self.device)
             self.model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.context_size,
                 n_gpu_layers=n_gpu_layers,
             )
 
-            self.model = Llama(
-                model_path=self.model_path,
-                n_ctx=self.context_size,
-                n_gpu_layers=n_gpu_layers,
-                split_mode=2,
-            )
+            # self.model = Llama(
+            #     model_path=self.model_path,
+            #     n_ctx=self.context_size,
+            #     n_gpu_layers=n_gpu_layers,
+            #     split_mode=2,
+            # )
 
         elif self.model_repo is not None and self.model_name is not None:
-            print("LAAAAAMA 2", n_gpu_layers, self.device)
             self.model = Llama.from_pretrained(
                 repo_id=self.model_repo,
                 filename=self.model_name,
@@ -767,7 +765,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # interruption
         self.thread_active = False
         self.full_sentence = False
-        self.msg = None
+        self.msg = []
         self.interruption = False
 
     def recreate_sentence_from_um(self, msg):
@@ -979,6 +977,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 elif ut == retico_core.UpdateType.COMMIT:
                     msg.append(iu)
                     # set self.full_sentence after modifying the self.msg ? so that it is not possible to start process_incremental witout the full sentence
+                    # TODO : check if when the interruption is set to false here, it doesn't sometimes cancel the interruption from the same turn (from a AudioVADIU just received).
                     self.full_sentence = True
                     self.interruption = False
                     self.model_wrapper.interruption = False
@@ -1014,7 +1013,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
-        self.msg = msg
+        self.msg.extend(msg)
 
     def _llm_thread(self):
         """

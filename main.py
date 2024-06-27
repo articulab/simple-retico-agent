@@ -339,7 +339,7 @@ def main_speaker_interruption_2():
 
     asr = WhisperASRInterruptionModule(
         device=device,
-        printing=True,
+        printing=printing,
         full_sentences=True,
         input_framerate=rate,
         log_folder=log_folder,
@@ -378,16 +378,16 @@ def main_speaker_interruption_2():
 
     # create network
     mic.subscribe(vad)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
 
     vad.subscribe(asr)
-    # vad.subscribe(llama_mem_icr)
-    # vad.subscribe(tts)
-    # vad.subscribe(speaker)
-    # speaker.subscribe(llama_mem_icr)
-    # speaker.subscribe(vad)
+    vad.subscribe(llama_mem_icr)
+    vad.subscribe(tts)
+    vad.subscribe(speaker)
+    speaker.subscribe(llama_mem_icr)
+    speaker.subscribe(vad)
 
     # running system
     try:
