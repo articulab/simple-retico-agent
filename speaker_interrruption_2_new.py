@@ -160,23 +160,12 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
                         if self.latest_processed_iu is not None:
 
-                            prev_iu, word, word_id, char_id, turn_id, clause_id = (
-                                self.latest_processed_iu.grounded_in,
+                            word, word_id, char_id, turn_id, clause_id = (
                                 self.latest_processed_iu.grounded_word,
                                 self.latest_processed_iu.word_id,
                                 self.latest_processed_iu.char_id,
                                 self.latest_processed_iu.turn_id,
                                 self.latest_processed_iu.clause_id,
-                            )
-                            prev_ius = [prev_iu.payload]
-                            while prev_iu.previous_iu is not None:
-                                prev_iu = prev_iu.previous_iu
-                                prev_ius.append(prev_iu.payload)
-                            prev_ius.reverse()
-
-                            print(
-                                "SPEAKER : INTERRUPTED at : ",
-                                "".join(prev_ius),
                             )
 
                             print(

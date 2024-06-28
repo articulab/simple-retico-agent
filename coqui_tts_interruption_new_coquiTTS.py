@@ -271,6 +271,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         end_of_clause = False
+                        end_of_turn = False
                         self.current_input = []
                         self.audio_buffer = []
                         self.audio_pointer = 0
@@ -493,28 +494,31 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             # try to implement something that always validate this with a fusion of words in the preprocess
             # print("tokens = ", tokens)
 
-            full_pre_tokenized_txt = (
-                self.tts.tts.synthesizer.tts_model.tokenizer.decode(tokens)
-            )
-            full_pre_tokenized_txt = full_pre_tokenized_txt.replace("<BLNK>", "_")
-            full_pre_tokenized_words = "".join(full_pre_tokenized_txt).split(" ")
-            pre_tokenized_words = "".join(pre_tokenized_text).split(" ")
-            print("full_pre_tokenized_txt = ", full_pre_tokenized_txt)
-            print("full_pre_tokenized_words = ", full_pre_tokenized_words)
-            print("space_tokens_ids = ", space_tokens_ids)
-            print("pre_tokenized_text = ", pre_tokenized_text)
-            print("words = ", words)
-            print("pre_pro_words_distinct = ", pre_pro_words_distinct)
-            print("pre_tokenized_words = ", pre_tokenized_words)
-            print("len = ", len(pre_pro_words_distinct), len(pre_tokenized_words))
-            print(
-                f"assertion pre_pro_words, wav_words_chunk_len = {len(pre_pro_words), len(wav_words_chunk_len), pre_pro_words, wav_words_chunk_len}"
-            )
-            assert len(pre_pro_words) == len(wav_words_chunk_len)
+            # full_pre_tokenized_txt = (
+            #     self.tts.tts.synthesizer.tts_model.tokenizer.decode(tokens)
+            # )
+            # full_pre_tokenized_txt = full_pre_tokenized_txt.replace("<BLNK>", "_")
+            # full_pre_tokenized_words = "".join(full_pre_tokenized_txt).split(" ")
+            # pre_tokenized_words = "".join(pre_tokenized_text).split(" ")
+            # print("full_pre_tokenized_txt = ", full_pre_tokenized_txt)
+            # print("full_pre_tokenized_words = ", full_pre_tokenized_words)
+            # print("space_tokens_ids = ", space_tokens_ids)
+            # print("pre_tokenized_text = ", pre_tokenized_text)
+            # print("words = ", words)
+            # print("pre_pro_words_distinct = ", pre_pro_words_distinct)
+            # print("pre_tokenized_words = ", pre_tokenized_words)
+            # print("len = ", len(pre_pro_words_distinct), len(pre_tokenized_words))
+            # print(
+            #     f"assertion pre_pro_words, wav_words_chunk_len = {len(pre_pro_words), len(wav_words_chunk_len), pre_pro_words, wav_words_chunk_len}"
+            # )
+            if len(pre_pro_words) > len(wav_words_chunk_len):
+                print("TTS word alignment not exact, less tokens than words")
+            elif len(pre_pro_words) < len(wav_words_chunk_len):
+                print("TTS word alignment not exact, more tokens than words")
 
             cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
-            print("cumsum_wav_words_chunk_len = ", cumsum_wav_words_chunk_len)
-            print("len_wav = ", len_wav)
+            # print("cumsum_wav_words_chunk_len = ", cumsum_wav_words_chunk_len)
+            # print("len_wav = ", len_wav)
 
             i = 0
             while i < len_wav:
