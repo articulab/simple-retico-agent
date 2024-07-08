@@ -18,7 +18,7 @@ import numpy as np
 import sys
 
 sys.path.append("C:\\Users\\Alafate\\Documents\\TTS\\")
-print(sys.path)
+# print(sys.path)
 from TTS.api import TTS, load_config
 import torch
 from utils import *
@@ -61,9 +61,7 @@ class CoquiTTSInterruption:
         """
 
         final_outputs = self.tts.tts(
-            text=text,
-            speaker="p225",
-            return_extra_outputs=True,
+            text=text, speaker="p225", return_extra_outputs=True, split_sentences=False
         )
 
         # if self.is_multilingual:
@@ -106,7 +104,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     Inputs : TextIU
 
-    Outputs : AudioIU
+    Outputs : TurnAudioIU
     """
 
     @staticmethod
@@ -173,8 +171,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             )
             model = next(iter(self.LANGUAGE_MAPPING[language]))
 
-        print("TTS LAN = ", language)
-        print("TTS MODEL = ", self.LANGUAGE_MAPPING[language][model])
         self.tts = CoquiTTSInterruption(
             model=self.LANGUAGE_MAPPING[language][model],
             language=language,
@@ -189,10 +185,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         self.chunk_size = None
         self.chunk_size_bytes = None
         self._tts_thread_active = False
-        self.latest_input_iu = None
-        self.audio_buffer = []
-        self.audio_pointer = 0
+        self.iu_buffer = []
+        self.buffer_pointer = 0
         self.time_logs_buffer = []
+        self.interrupted_turn = -1
+        self.current_turn_id = -1
 
     def current_text(self):
         """Convert received IUs data accumulated in current_input list into a string.
@@ -219,8 +216,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         t1 = time.time()
         while self._tts_thread_active:
-            # this sleep time calculation is complicated and useless
-            # if we don't send silence when there is no audio outputted by the tts model
             t2 = t1
             t1 = time.time()
             if t1 - t2 < self.frame_duration:
@@ -228,12 +223,12 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             else:
                 time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
-            if self.audio_pointer >= len(self.audio_buffer):
-                self.audio_pointer = 0
-                self.audio_buffer = []
+            if self.buffer_pointer >= len(self.iu_buffer):
+                self.buffer_pointer = 0
+                self.iu_buffer = []
             else:
-                iu = self.audio_buffer[self.audio_pointer]
-                self.audio_pointer += 1
+                iu = self.iu_buffer[self.buffer_pointer]
+                self.buffer_pointer += 1
                 um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
                 self.append(um)
 
@@ -254,140 +249,45 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         end_of_turn = False
         for iu, ut in update_message:
             if isinstance(iu, TurnTextIU):
-                if ut == retico_core.UpdateType.ADD:
-                    # self.current_input.append(iu)
-                    # self.latest_input_iu = iu
-                    continue
-                elif ut == retico_core.UpdateType.REVOKE:
-                    self.revoke(iu)
-                elif ut == retico_core.UpdateType.COMMIT:
-                    if iu.final:
-                        end_of_turn = True
-                    else:
-                        self.current_input.append(iu)
-                        self.latest_input_iu = iu
-                        end_of_clause = True
+                # print(
+                #     f"self.interrupted_turn vs iu.turn_id = {self.interrupted_turn, iu.turn_id}"
+                # )
+                if iu.turn_id != self.interrupted_turn:
+                    if ut == retico_core.UpdateType.ADD:
+                        continue
+                    elif ut == retico_core.UpdateType.REVOKE:
+                        self.revoke(iu)
+                    elif ut == retico_core.UpdateType.COMMIT:
+                        if iu.final:
+                            end_of_turn = True
+                        else:
+                            self.current_input.append(iu)
+                            end_of_clause = True
+                # else:
+                #     print("TTS do not process iu")
             elif isinstance(iu, AudioVADIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
+                        self.interrupted_turn = self.current_turn_id
                         end_of_clause = False
                         end_of_turn = False
                         self.current_input = []
-                        self.audio_buffer = []
-                        self.audio_pointer = 0
+                        self.iu_buffer = []
+                        self.buffer_pointer = 0
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
 
         if end_of_clause:
-            print("TTS : EOC")
+            self.current_turn_id = self.current_input[-1].turn_id
+            # print("TTS : EOC")
             start_time = time.time()
             start_date = datetime.datetime.now()
 
-            new_buffer = self.get_new_buffer_from_text_input()
+            new_buffer = self.get_new_iu_buffer_from_text_input()
 
-            # ADDITION
-            # new_audio, final_outputs = self.tts.synthesize(current_text)
-            # new_audio = self.tts.synthesize(current_text)
-
-            ## Fill buffer : the new way, but with audio chunk of the duration of the words, insteadd of a fixed duration
-            # tokens = self.tts.tts.synthetizer.tts_model.tokenizer.text_to_ids(
-            #     current_text
-            # )
-            # SPACE_TOKEN_ID = 16
-            # NB_FRAME_PER_DURATION = 256
-            # new_buffer = []
-            # for outputs in final_outputs:
-            # # intermediate parameters
-            # space_tokens_ids = [
-            #     i + 1
-            #     for i, x in enumerate(tokens)
-            #     if x == SPACE_TOKEN_ID or i == len(tokens) - 1
-            # ]
-            # len_wav = len(outputs["wav"])
-            # durations = outputs["outputs"]["durations"].squeeze().tolist()
-            # total_duration = int(sum(durations))
-
-            # wav_words_chunk_len = []
-            # old_len_w = 0
-            # for s_id in space_tokens_ids:
-            #     wav_words_chunk_len.append(
-            #         int(sum(durations[old_len_w:s_id])) * NB_FRAME_PER_DURATION
-            #     )
-            #     # wav_words_chunk_len.append(int(sum(durations[old_len_w:s_id])) * len_wav / total_duration )
-            #     old_len_w = s_id
-
-            # assert len(words) == len(wav_words_chunk_len)
-            # old_chunk_len = 0
-            # for i, chunk_len in enumerate(wav_words_chunk_len):
-            #     waveforms = outputs["wav"][
-            #         old_chunk_len : old_chunk_len + int(chunk_len)
-            #     ]
-            #     waveforms = np.array(waveforms)
-            #     waveforms = (waveforms * 32767).astype(np.int16).tobytes()
-            #     old_chunk_len = old_chunk_len + int(chunk_len)
-            #     # TODO: take fix chunk size of raw audio and not the word duration
-            #     new_buffer.append([waveforms, words[i]])
-
-            # ## Fill buffer : the new way and with fixed duration of audio chunk
-            # new_buffer = self.get_new_buffer_from_text_input(chunk_size_bytes)
-            # tokens = self.tts.tts.synthetizer.tts_model.tokenizer.text_to_ids(
-            #     current_text
-            # )
-            # SPACE_TOKEN_ID = 16
-            # NB_FRAME_PER_DURATION = 256
-            # new_buffer = []
-            # i = 0
-            # for outputs in final_outputs:
-            #     # intermediate parameters
-            #     space_tokens_ids = [
-            #         i + 1
-            #         for i, x in enumerate(tokens)
-            #         if x == SPACE_TOKEN_ID or i == len(tokens) - 1
-            #     ]
-            #     len_wav = len(outputs["wav"])
-            #     durations = outputs["outputs"]["durations"].squeeze().tolist()
-            #     total_duration = int(sum(durations))
-
-            #     wav_words_chunk_len = []
-            #     old_len_w = 0
-            #     for s_id in space_tokens_ids:
-            #         wav_words_chunk_len.append(
-            #             int(sum(durations[old_len_w:s_id])) * NB_FRAME_PER_DURATION
-            #         )
-            #         # wav_words_chunk_len.append(int(sum(durations[old_len_w:s_id])) * len_wav / total_duration )
-            #         old_len_w = s_id
-
-            #     assert len(words) == len(wav_words_chunk_len)
-
-            #     cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
-
-            #     while i < len_wav:
-            #         chunk = outputs["wav"][i : i + chunk_size_bytes]
-            #         if len(chunk) < chunk_size_bytes:
-            #             chunk = chunk + b"\x00" * (chunk_size_bytes - len(chunk))
-            #         temp_word = None
-            #         for j, len in enumerate(cumsum_wav_words_chunk_len):
-            #             if len > temp_word:
-            #                 temp_word = words[j]
-            #         new_buffer.append([chunk, temp_word])
-            #         i += chunk_size_bytes
-
-            # ## Fill buffer : old way
-            # new_buffer = []
-            # i = 0
-            # while i < len(new_audio):
-            #     chunk = new_audio[i : i + chunk_size_bytes]
-            #     if len(chunk) < chunk_size_bytes:
-            #         chunk = chunk + b"\x00" * (chunk_size_bytes - len(chunk))
-            #     new_buffer.append(chunk)
-            #     i += chunk_size_bytes
-
-            if len(self.audio_buffer) != 0:
-                self.audio_buffer.extend(new_buffer)
-            else:
-                self.audio_buffer = new_buffer
+            self.iu_buffer.extend(new_buffer)
             self.current_input = []
 
             end_time = time.time()
@@ -404,19 +304,26 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
         if end_of_turn:
-            print("TTS : EOT")
+            # print("TTS : EOT")
             iu = self.create_iu()
             iu.set_data(final=True)
-            self.audio_buffer.append(iu)
+            self.iu_buffer.append(iu)
 
         if end_of_turn and end_of_clause:
-            print("TTS : EOT & EOC")
+            # print("TTS : EOT & EOC")
+            pass
 
-    def get_new_buffer_from_text_input(self):
+    def get_new_iu_buffer_from_text_input(self):
+        """Function that aligns the TTS inputs and outputs.
+        It links the words sent by LLM to audio chunks generated by TTS model.
+        As we have access to the durations of the phonems generated by the model,
+        we can link the audio chunks sent to speaker to the words that it corresponds to.
+
+        Returns:
+            list[TurnAudioIU]: the TurnAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
+        """
         # preprocess on words
         current_text, words = self.current_text_and_words()
-        # print("current_text = ", current_text)
-        # print("words = ", words)
         pre_pro_words = []
         pre_pro_words_distinct = []
         try:
@@ -442,39 +349,25 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             )
         else:
             pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
-        # print("pre_pro_words = ", pre_pro_words)
 
         SPACE_TOKEN_ID = 16
         NB_FRAME_PER_DURATION = 256
-        PUNCTUATION = [",", ".", ":", "!", "?"]
-        # print("CURRENT TEXT = ", current_text)
         new_audio, final_outputs = self.tts.synthesize(current_text)
-        ## Fill buffer : the new way and with fixed duration of audio chunk
         tokens = self.tts.tts.synthesizer.tts_model.tokenizer.text_to_ids(current_text)
-        pre_tokenized_txt = [
-            self.tts.tts.synthesizer.tts_model.tokenizer.decode([y]) for y in tokens
-        ]
         space_tokens_ids = []
         for i, x in enumerate(tokens):
             if x == SPACE_TOKEN_ID or i == len(tokens) - 1:
                 space_tokens_ids.append(i + 1)
-            # elif pre_tokenized_txt[i] in PUNCTUATION:
-            #     space_tokens_ids.append(i)
-        # space_tokens_ids = [
-        #     i + 1
-        #     for i, x in enumerate(tokens)
-        #     if x == SPACE_TOKEN_ID or i == len(tokens) - 1
-        # ]
 
-        # replace <blnk> with space
-        pre_tokenized_text = [x if x != "<BLNK>" else "_" for x in pre_tokenized_txt]
+        # pre_tokenized_txt = [
+        #     self.tts.tts.synthesizer.tts_model.tokenizer.decode([y]) for y in tokens
+        # ]
+        # pre_tokenized_text = [x if x != "<BLNK>" else "_" for x in pre_tokenized_txt]
         new_buffer = []
         for outputs in final_outputs:
-            # intermediate parameters
             len_wav = len(outputs["wav"])
             durations = outputs["outputs"]["durations"].squeeze().tolist()
-            # print("durations = ", durations)
-            total_duration = int(sum(durations))
+            # total_duration = int(sum(durations))
 
             wav_words_chunk_len = []
             old_len_w = 0
@@ -485,79 +378,34 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 # wav_words_chunk_len.append(int(sum(durations[old_len_w:s_id])) * len_wav / total_duration )
                 old_len_w = s_id
 
-            # TODO: Sometimes it fails because the phonems of two words are combined
-            # example : "for a" -> fora in phonems
-            # """ example 2 : " of" + " a" -> '_ə_v_ə_n_'
-            # pre_pro_words_distinct =  [[' Let'], [' me'], [' give'], [' you'], [' an'], [' example'], [' of'], [' an'], [' even'], [' number', ':']]
-            # pre_tokenized_words =  ['_l_ˈ_ɛ_t_', '_m_ˌ_i_ː_', '_ɡ_ˈ_ɪ_v_', '_j_u_ː_', '_ɐ_n_', '_ɛ_ɡ_z_ˈ_æ_m_p_ə_l_', '_ə_v_ə_n_', '_ˈ_i_ː_v_ə_n_', '_n_ˈ_ʌ_m_b_ɚ_,_']
-            # """
-            # try to implement something that always validate this with a fusion of words in the preprocess
-            # print("tokens = ", tokens)
-
-            # full_pre_tokenized_txt = (
-            #     self.tts.tts.synthesizer.tts_model.tokenizer.decode(tokens)
-            # )
-            # full_pre_tokenized_txt = full_pre_tokenized_txt.replace("<BLNK>", "_")
-            # full_pre_tokenized_words = "".join(full_pre_tokenized_txt).split(" ")
-            # pre_tokenized_words = "".join(pre_tokenized_text).split(" ")
-            # print("full_pre_tokenized_txt = ", full_pre_tokenized_txt)
-            # print("full_pre_tokenized_words = ", full_pre_tokenized_words)
-            # print("space_tokens_ids = ", space_tokens_ids)
-            # print("pre_tokenized_text = ", pre_tokenized_text)
-            # print("words = ", words)
-            # print("pre_pro_words_distinct = ", pre_pro_words_distinct)
-            # print("pre_tokenized_words = ", pre_tokenized_words)
-            # print("len = ", len(pre_pro_words_distinct), len(pre_tokenized_words))
-            # print(
-            #     f"assertion pre_pro_words, wav_words_chunk_len = {len(pre_pro_words), len(wav_words_chunk_len), pre_pro_words, wav_words_chunk_len}"
-            # )
             if len(pre_pro_words) > len(wav_words_chunk_len):
                 print("TTS word alignment not exact, less tokens than words")
             elif len(pre_pro_words) < len(wav_words_chunk_len):
                 print("TTS word alignment not exact, more tokens than words")
 
             cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
-            # print("cumsum_wav_words_chunk_len = ", cumsum_wav_words_chunk_len)
-            # print("len_wav = ", len_wav)
 
             i = 0
             while i < len_wav:
-                # print("i + chunk_size_bytes = ", i + chunk_size_bytes)
                 chunk = outputs["wav"][i : i + self.chunk_size]
-                # print(len(chunk))
                 # modify raw audio to match correct format
                 chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
                 ## TODO : change that silence padding: padding with silence will slow down the speaker a lot
                 if len(chunk) < self.chunk_size_bytes:
                     chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
                     word_id = pre_pro_words[-1]
-                    # print("if")
-
                 else:
                     word_id = 0
                     for j, lenght in enumerate(cumsum_wav_words_chunk_len):
                         if i + self.chunk_size > lenght:
-                            # print("words = ", words[j])
-                            # temp_word = words[j]
                             word_id = pre_pro_words[j + 1]
                 temp_word = words[word_id]
                 grounded_iu = self.current_input[word_id]
                 words_until_word_id = words[: word_id + 1]
                 len_words = [len(word) for word in words[: word_id + 1]]
                 char_id = sum(len_words) - 1
-                # print("words pre = ", words_until_word_id)
-                # print("words pre = ", len_words)
-                # print("words pre = ", word_id)
-                # print("words = ", temp_word)
-                # print("len_words = ", len_words)
-                # print("char_id = ", char_id)
-                # print("char = ", current_text[char_id])
-                # print("iu.turn_id = ", grounded_iu.turn_id)
-                # print("iu.clause_id = ", grounded_iu.clause_id)
 
                 i += self.chunk_size
-                # new buffer is a IU buffer
-                # new_buffer.append([chunk, temp_word, word_id, char_id])
                 iu = self.create_iu(grounded_iu)
                 iu.set_data(
                     audio=chunk,
@@ -572,8 +420,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 )
                 new_buffer.append(iu)
 
-        # This would make final the last IU of each clause
-        # new_buffer[-1].final = True
         return new_buffer
 
     def setup(self):
@@ -591,10 +437,9 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
-        self.audio_pointer = 0
-        self.audio_buffer = []
+        self.buffer_pointer = 0
+        self.iu_buffer = []
         self._tts_thread_active = True
-        self.clear_after_finish = False
         threading.Thread(target=self._tts_thread).start()
 
     def shutdown(self):

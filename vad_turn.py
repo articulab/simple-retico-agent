@@ -231,7 +231,7 @@ class VADTurnModule(retico_core.AbstractModule):
             if isinstance(iu, TurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.final:
-                        print("VADTURN : agent stopped talking")
+                        # print("VADTURN : agent stopped talking")
                         # self.user_turn = True
                         self.user_turn_text = "no speaker"
             elif isinstance(iu, AudioIU):
