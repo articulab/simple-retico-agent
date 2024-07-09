@@ -362,19 +362,21 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
 
             i = 0
+            j = 0
             while i < len_wav:
                 chunk = outputs["wav"][i : i + self.chunk_size]
                 # modify raw audio to match correct format
                 chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
                 ## TODO : change that silence padding: padding with silence will slow down the speaker a lot
+                word_id = pre_pro_words[-1]
                 if len(chunk) < self.chunk_size_bytes:
                     chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
-                    word_id = pre_pro_words[-1]
                 else:
-                    word_id = 0
-                    for j, lenght in enumerate(cumsum_wav_words_chunk_len):
-                        if i + self.chunk_size > lenght:
-                            word_id = pre_pro_words[j + 1]
+                    while i + self.chunk_size >= cumsum_wav_words_chunk_len[j]:
+                        j += 1
+                    if j < len(pre_pro_words):
+                        word_id = pre_pro_words[j]
+
                 temp_word = words[word_id]
                 grounded_iu = self.current_input[word_id]
                 words_until_word_id = words[: word_id + 1]
