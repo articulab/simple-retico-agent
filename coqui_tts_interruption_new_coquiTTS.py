@@ -208,30 +208,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         words = [iu.text for iu in self.current_input]
         return "".join(words), words
 
-    def _tts_thread(self):
-        # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
-        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
-        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
-        it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
-        """
-        t1 = time.time()
-        while self._tts_thread_active:
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
-
-            if self.buffer_pointer >= len(self.iu_buffer):
-                self.buffer_pointer = 0
-                self.iu_buffer = []
-            else:
-                iu = self.iu_buffer[self.buffer_pointer]
-                self.buffer_pointer += 1
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-                self.append(um)
-
     def process_update(self, update_message):
         """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
 
@@ -421,6 +397,30 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 new_buffer.append(iu)
 
         return new_buffer
+
+    def _tts_thread(self):
+        # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
+        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
+        it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
+        """
+        t1 = time.time()
+        while self._tts_thread_active:
+            t2 = t1
+            t1 = time.time()
+            if t1 - t2 < self.frame_duration:
+                time.sleep(self.frame_duration)
+            else:
+                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+
+            if self.buffer_pointer >= len(self.iu_buffer):
+                self.buffer_pointer = 0
+                self.iu_buffer = []
+            else:
+                iu = self.iu_buffer[self.buffer_pointer]
+                self.buffer_pointer += 1
+                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                self.append(um)
 
     def setup(self):
         """

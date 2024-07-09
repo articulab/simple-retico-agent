@@ -230,7 +230,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
         Using the current output to create the final prediction and COMMIT the full final transcription.
         """
-        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
 
             time.sleep(0.01)
@@ -272,7 +271,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
         Having two different behaviors if EOS or not. Not using current output when EOS, directly generate IUs from last prediction.
         """
-        # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
             time.sleep(0.01)
 
