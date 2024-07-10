@@ -2,20 +2,29 @@
 LlamaCppMemoryIncrementalModule
 ==================
 
-A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
-The module generates a system answer from a constructed prompt (with a defined template) when a user full sentence (COMMIT IUs) is received from the ASR.
+A retico module that provides Natural Language Generation (NLG) using a Large Language Model
+(LLM), and handles user interruption.
 
-Definition :
-- LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
-- Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
+when a full user sentence (COMMIT SpeechRecognitionIUs) is received from the ASR, the module
+adds the sentence to the previous dialogue turns stored in the dialogue history to build a
+constructed prompt (with a defined template), it then use it to generates a system answer.
+During the generation, if a punctuation is encountered (end of clause), the IUs corresponding
+to the generated clause are COMMITED.
+Record the dialogue history by saving the dialogue turns from both the user and the agent.
 Update the dialogue history do that it doesn't exceed a certain threshold of token size.
 Put the dialogue history in the prompt at each new system sentence generation.
-- Incremental : During a new system sentence generation, send smaller chunks of sentence,
-instead of waiting for the generation end to send the whole sentence.
+The module stops its generation if it receives the information that the user started talking
+(user barge-in/interruption of agent turn). The interruption information is recognized by
+an AudioVADIU with a parameter vad_state="interruption". After an interruption, it aligns the
+agent interrupted sentence in dialogue history with the last word spoken by the agent (these
+informations are recognized when a TurnAudioIU with parameter final = False is received after
+an interruption).
+
+The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
 
 Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
 
-Outputs : TextIU
+Outputs : TurnTextIU
 
 
 example of the prompt template :
@@ -41,16 +50,25 @@ from utils import *
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
-    The module generates a system answer from a constructed prompt (with a defined template) when a user full sentence (COMMIT IUs) is received from the ASR.
+    """A retico module that provides Natural Language Generation (NLG) using a Large Language Model
+    (LLM), and handles user interruption.
 
-    Definition :
-    - LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
-    - Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
+    when a full user sentence (COMMIT SpeechRecognitionIUs) is received from the ASR, the module
+    adds the sentence to the previous dialogue turns stored in the dialogue history to build a
+    constructed prompt (with a defined template), it then use it to generates a system answer.
+    During the generation, if a punctuation is encountered (end of clause), the IUs corresponding
+    to the generated clause are COMMITED.
+    Record the dialogue history by saving the dialogue turns from both the user and the agent.
     Update the dialogue history do that it doesn't exceed a certain threshold of token size.
     Put the dialogue history in the prompt at each new system sentence generation.
-    - Incremental : During a new system sentence generation, send smaller chunks of sentence,
-    instead of waiting for the generation end to send the whole sentence.
+    The module stops its generation if it receives the information that the user started talking
+    (user barge-in/interruption of agent turn). The interruption information is recognized by
+    an AudioVADIU with a parameter vad_state="interruption". After an interruption, it aligns the
+    agent interrupted sentence in dialogue history with the last word spoken by the agent (these
+    informations are recognized when a TurnAudioIU with parameter final = False is received after
+    an interruption).
+
+    The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
 
     Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
 
@@ -59,7 +77,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "LlamaCppMemoryIncremental Module"
+        return "LlamaCppMemoryIncremental Interruption Module"
 
     @staticmethod
     def description():

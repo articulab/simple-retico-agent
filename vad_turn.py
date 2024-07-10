@@ -2,8 +2,36 @@
 VAD Module
 ==================
 
-This module provides Voice Activity Detection (VAD) using a webrtcvad.
-Only send an update message if the vad_state changes.
+This module uses webrtcvad's Voice Activity Detection (VAD) to enhance AudioIUs with turn-taking
+informations (like user_turn, silence or interruption).
+It takes AudioIUs as input and transform them into AudioVADIUs by adding to it turn-taking
+informations through the IU parameter vad_state.
+It also takes TurnAudioIUs as input (from the SpeakerModule), which provides information on when the
+speakers are outputting audio (when the agent is talking).
+
+The module considers that the current dialogue state (self.user_turn_text) can either be : 
+- the user turn
+- the agent turn
+- a silence between two turns
+
+The transitions between the 3 dialogue states are defined as following :
+- If, while the dialogue state is a silence and the received AudioIUS are recognized as containing 
+speech (VA = True), it considers that dialogue state switches to user turn, and sends (ADD) these
+IUs with vad_state = "user_turn".
+- If, while the dialogue state is user turn and a long silence is recognized (with a defined
+threshold), it considers that it is a user end of turn (EOT). It then COMMITS all IUs corresponding
+to current user turn (with vad_state = "user_turn") and dialogue state switches to agent turn.
+- If, while the dialogue state is agent turn, it receives the information that the SpeakerModule has
+outputted the whole agent turn (a TurnAudioIU with final=True), it considers that it is an agent end
+of turn, and dialogue state switches to silence.
+- If, while the dialogue state is agent turn and before receiving an agent EOT from SpeakerModule,
+it recognize audio containing speech, it considers the current agent turn is interrupted by the user
+(user barge-in), and sends this information to the other modules to make the agent stop talking (by 
+sending an empty IU with vad_state = "interruption"). Dialogue state then switches to user turn.
+
+Inputs : AudioIU, TurnAudioIU
+
+Outputs : AudioVADIU
 """
 
 import retico_core
@@ -15,20 +43,49 @@ from utils import *
 
 
 class VADTurnModule(retico_core.AbstractModule):
-    """A retico module that provides Voice Activity Detection (VAD) using a webrtcvad.
+    """a retico module using webrtcvad's Voice Activity Detection (VAD) to enhance AudioIUs with
+    turn-taking informations (like user turn, silence or interruption).
+    It takes AudioIUs as input and transform them into AudioVADIUs by adding to it turn-taking
+    informations through the IU parameter vad_state.
+    It also takes TurnAudioIUs as input (from the SpeakerModule), which provides information on when
+    the speakers are outputting audio (when the agent is talking).
 
-    Inputs : AudioIU
+    The module considers that the current dialogue state (self.user_turn_text) can either be :
+    - the user turn
+    - the agent turn
+    - a silence between two turns
 
-    Outputs : VADStateIU
+    The transitions between the 3 dialogue states are defined as following :
+    - If, while the dialogue state is a silence and the received AudioIUS are recognized as
+    containing speech (VA = True), it considers that dialogue state switches to user turn, and sends
+    (ADD) these IUs with vad_state = "user_turn".
+    - If, while the dialogue state is user turn and a long silence is recognized (with a defined
+    threshold), it considers that it is a user end of turn (EOT). It then COMMITS all IUs
+    corresponding to current user turn (with vad_state = "user_turn") and dialogue state switches to
+    agent turn.
+    - If, while the dialogue state is agent turn, it receives the information that the SpeakerModule
+    has outputted the whole agent turn (a TurnAudioIU with final=True), it considers that it is an
+    agent end of turn, and dialogue state switches to silence.
+    - If, while the dialogue state is agent turn and before receiving an agent EOT from
+    SpeakerModule, it recognize audio containing speech, it considers the current agent turn is
+    interrupted by the user (user barge-in), and sends this information to the other modules to make
+    the agent stop talking (by sending an empty IU with vad_state = "interruption"). Dialogue state
+    then switches to user turn.
+
+    Inputs : AudioIU, TurnAudioIU
+
+    Outputs : AudioVADIU
     """
 
     @staticmethod
     def name():
-        return "webrtcvad Module"
+        return "VAD Turn Module"
 
     @staticmethod
     def description():
-        return "A module that recognizes if someone is talking using webrtcvad."
+        return (
+            "a module enhancing AudioIUs with turn-taking states using webrtcvad's VAD"
+        )
 
     @staticmethod
     def input_ius():

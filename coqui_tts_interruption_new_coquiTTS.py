@@ -2,8 +2,24 @@
 coqui-ai TTS Module
 ==================
 
-This module provides on-device TTS capabilities by using the coqui-ai TTS library and its available
-models.
+A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
+audio), and handles user interruption.
+
+When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
+contained in UpdateMessage.
+This module also aligns the inputed words with the outputted audio, providing the outputted
+TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
+parameter), and its place in the agent's current sentence.
+The module stops synthesizing if it receives the information that the user started talking
+(user barge-in/interruption of agent turn). The interruption information is recognized by
+an AudioVADIU with a parameter vad_state="interruption".
+
+This modules uses the deep learning approach implemented with coqui-ai's TTS library :
+https://github.com/coqui-ai/TTS
+
+Inputs : TurnTextIU, AudioVADIU
+
+Outputs : TurnAudioIU
 """
 
 import datetime
@@ -25,14 +41,20 @@ from utils import *
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Text-To-Speech (TTS) using a deep learning approach implemented with coqui-ai's TTS library : https://github.com/coqui-ai/TTS.
-    Generates speech (audio data) from a sentence chunk (text data).
+    """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
+    audio), and handles user interruption.
 
-    Definition :
-    When receiving sentence chunks from LLM, add to the current input. Start TTS synthesizing the accumulated current input when receiving a COMMIT IU
-    (which, for now, is send by LLM when a ponctuation is encountered during sentence generation).
-    Incremental : the TTS generation could be considered incremental because it receives sentence chunks from LLM and generates speech chunks in consequence.
-    But it could be even more incremental because the TTS models could yield the generated audio data (TODO: to implement in future versions).
+    When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
+    contained in UpdateMessage.
+    This module also aligns the inputed words with the outputted audio, providing the outputted
+    TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
+    parameter), and its place in the agent's current sentence.
+    The module stops synthesizing if it receives the information that the user started talking
+    (user barge-in/interruption of agent turn). The interruption information is recognized by
+    an AudioVADIU with a parameter vad_state="interruption".
+
+    This modules uses the deep learning approach implemented with coqui-ai's TTS library :
+    https://github.com/coqui-ai/TTS
 
     Inputs : TurnTextIU, AudioVADIU
 
@@ -41,7 +63,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "coqui-ai TTS Module"
+        return "coqui-ai TTS Interruption Module"
 
     @staticmethod
     def description():
@@ -83,6 +105,16 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         device=None,
         **kwargs,
     ):
+        """
+        Initializes the CoquiTTSInterruption Module.
+
+        Args:
+            model (string): name of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
+            frame_duration (float): duration of the audio chunks contained in the outputted TurnAudioIUs.
+            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+        """
         super().__init__(**kwargs)
 
         # model

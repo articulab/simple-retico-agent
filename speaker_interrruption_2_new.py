@@ -1,9 +1,25 @@
 """
-SpeakerModule_Interruption
+SpeakerInterruptionModule
 ==================
 
-This module outputs the audio signal contained in the AudioIUs by the computer's speakers,
-and can interrupt this audio streaming if the user starts speaking (with the reception of AudioVADIU).
+A retico module that outputs through the computer's speakers the audio contained in
+TurnAudioIUs. The module stops the speakers if it receives the information that the user
+started talking (user barge-in/interruption of agent turn).
+The interruption information is recognized by an AudioVADIU with a parameter
+vad_state="interruption".
+
+The modules sends TurnAudioIUs in 2 cases :
+- When it is agent end of turn : when it consumes the last TurnAudioIU of an agent turn (with
+the parameter final=True), it sends back that IU to indicate to other modules that the agent has
+stopped talking.
+- When the agent turn is interrupted by the user : when it receives an AudioVADIU with a
+parameter vad_state="interruption", it sends the last TurnAudioIU consumed (ie. the last audio
+that has been spoken by the agent in the interrupted turn). It is useful to align the dialogue
+history with the last spoken words.
+
+Inputs : TurnAudioIU, AudioVADIU
+
+Outputs : TurnAudioIU
 """
 
 import datetime
@@ -16,10 +32,25 @@ from utils import *
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
-    """A module that consumes AudioIUs of arbitrary size and outputs them to the
-    speakers of the machine. It stops outputting audio if the user starts speaking,
-    because it also receives information trough the VADStateIU.
-    When a new IU is incoming, the module blocks as long as the current IU is being played.
+    """A retico module that outputs through the computer's speakers the audio contained in
+    TurnAudioIUs and handles user interruption.
+
+    The module stops sythetizing if it receives the information that the user started talking
+    (user barge-in/interruption of agent turn). The interruption information is recognized by
+    an AudioVADIU with a parameter vad_state="interruption".
+
+    The modules sends TurnAudioIUs in 2 cases :
+    - When it is agent end of turn : when it consumes the last TurnAudioIU of an agent turn (with
+    the parameter final=True), it sends back that IU to indicate to other modules that the agent has
+    stopped talking.
+    - When the agent turn is interrupted by the user : when it receives an AudioVADIU with a
+    parameter vad_state="interruption", it sends the last TurnAudioIU consumed (ie. the last audio
+    that has been spoken by the agent in the interrupted turn). It is useful to align the dialogue
+    history with the last spoken words.
+
+    Inputs : TurnAudioIU, AudioVADIU
+
+    Outputs : TurnAudioIU
     """
 
     @staticmethod
@@ -28,7 +59,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def description():
-        return "A consuming module that plays audio from speakers and stops playing audio if the user starts speaking (it receives a VADStateIU == True)"
+        return "A module that plays audio to speakers and stops playing audio if the user starts speaking."
 
     @staticmethod
     def input_ius():
@@ -42,14 +73,30 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self,
         rate=44100,
         frame_length=0.2,
-        sample_width=2,
         channels=1,
+        sample_width=2,
         use_speaker="both",
         device_index=None,
         log_file="speaker_interruption.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
+        """
+        Initializes the SpeakerInterruption Module.
+
+        Args:
+            whisper_model (string): name of the desired model, has to correspond to a model in the faster_whisper library.
+            device (string): wether the model will be executed on cpu or gpu (using "cuda").
+            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
+            rate (int): framerate of the played audio chunks.
+            frame_length (float): duration of the played audio chunks.
+            channels (int): number of channels (1=mono, 2=stereo) of the received AudioVADIUs.
+            sample_width (int):sample width (number of bits used to encode each frame) of the received AudioVADIUs.
+            use_speaker (string): wether the audio should be played in the right, left or both speakers.
+            device_index(string):
+            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+        """
         super().__init__(**kwargs)
         self.rate = rate
         self.sample_width = sample_width

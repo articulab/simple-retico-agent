@@ -2,10 +2,19 @@
 whisper ASR Module
 ==================
 
-This module provides on-device ASR capabilities by using the whisper transformer
-provided by huggingface. In addition, the ASR module provides end-of-utterance detection
-(with a VAD), so that produced hypotheses are being "committed" once an utterance is
-finished.
+A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper
+model. Periodically predicts a new text hypothesis from the input incremental speech and
+predicts a final hypothesis when it is the user end of turn.
+
+The received AudioVADIU are stored in a buffer from which a prediction is made periodically, the
+words that were not present in the previous hypothesis are ADDED, in contrary, the words that
+were present, but aren't anymore are REVOKED.
+It recognize the user's EOT information when COMMIT AudioVADIUs are received, a final prediciton
+is then made and the corresponding IUs are COMMITED.
+
+Inputs : AudioVADIU
+
+Outputs : SpeechRecognitionIU
 """
 
 import datetime
@@ -24,22 +33,22 @@ from faster_whisper import WhisperModel
 
 from utils import *
 
-# from vad_turn import AudioVADIU
-
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class WhisperASRInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
-    Recognize text from speech and predicts if the recognized text corresponds to a full sentence
-    (ie finishes with a silence longer than silence_threshold).
+    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper
+    model. Periodically predicts a new text hypothesis from the input incremental speech and
+    predicts a final hypothesis when it is the user end of turn.
 
-    Definition :
-    When receiving audio chunks from the Microphone Module, add to the audio_buffer (using the add_audio function).
-    The _asr_thread function, used as a thread in the prepare_run function, will call periodically the ASR model to recognize text from the current audio buffer.
-    Alongside the recognized text, the function returns an end-of-sentence prediction, that is True if a silence longer than a fixed threshold (here, 1s) is observed.
-    If an end-of-sentence is predicted, the recognized text is sent to the children modules (typically, the LLM).
+    The received AudioVADIU are stored in a buffer from which a prediction is made periodically, the
+    words that were not present in the previous hypothesis are ADDED, in contrary, the words that
+    were present, but aren't anymore are REVOKED.
+    It recognize the user's EOT information when COMMIT AudioVADIUs are received, a final prediciton
+    is then made and the corresponding IUs are COMMITED.
+
+    The faster_whisper library is used to speed up the whisper inference.
 
     Inputs : AudioVADIU
 
@@ -48,11 +57,11 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "Whipser ASR Module"
+        return "Whipser ASR Interruption Module"
 
     @staticmethod
     def description():
-        return "A module that recognizes speech using Whisper."
+        return "A module that recognizes transcriptions from speech using Whisper."
 
     @staticmethod
     def input_ius():
@@ -64,19 +73,33 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
     def __init__(
         self,
-        target_framerate=16000,
-        input_framerate=16000,
-        printing=False,
-        log_file="asr.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
-        device=None,
         # whisper_model="openai/whisper-base",
         # whisper_model="base.en",
         whisper_model="distil-large-v2",
+        device=None,
+        target_framerate=16000,
+        input_framerate=16000,
         channels=1,
         sample_width=2,
+        printing=False,
+        log_file="asr.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
+        """
+        Initializes the WhisperASRInterruption Module.
+
+        Args:
+            whisper_model (string): name of the desired model, has to correspond to a model in the faster_whisper library.
+            device (string): wether the model will be executed on cpu or gpu (using "cuda").
+            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
+            target_framerate (int): model's desired audio framerate.
+            input_framerate (int): framerate of the received AudioVADIUs.
+            channels (int): number of channels (1=mono, 2=stereo) of the received AudioVADIUs.
+            sample_width (int):sample width (number of bits used to encode each frame) of the received AudioVADIUs.
+            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+        """
         super().__init__(**kwargs)
 
         # model
