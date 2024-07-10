@@ -36,6 +36,7 @@ class CoquiTTSInterruption:
         speaker_wav,
         language,
         device=None,
+        printing=False,
     ):
 
         self.device = device_definition(device)
@@ -44,6 +45,7 @@ class CoquiTTSInterruption:
         self.language = language
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
+        self.printing = printing
 
     def setup(self):
         """Init chosen TTS model."""
@@ -61,7 +63,11 @@ class CoquiTTSInterruption:
         """
 
         final_outputs = self.tts.tts(
-            text=text, speaker="p225", return_extra_outputs=True, split_sentences=False
+            text=text,
+            speaker="p225",
+            return_extra_outputs=True,
+            split_sentences=False,
+            verbose=self.printing,
         )
 
         # if self.is_multilingual:
@@ -177,6 +183,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             is_multilingual=(language == "multi"),
             speaker_wav=speaker_wav,
             device=device,
+            printing=printing,
         )
 
         self.frame_duration = frame_duration
@@ -354,10 +361,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 # wav_words_chunk_len.append(int(sum(durations[old_len_w:s_id])) * len_wav / total_duration )
                 old_len_w = s_id
 
-            if len(pre_pro_words) > len(wav_words_chunk_len):
-                print("TTS word alignment not exact, less tokens than words")
-            elif len(pre_pro_words) < len(wav_words_chunk_len):
-                print("TTS word alignment not exact, more tokens than words")
+            if self.printing:
+                if len(pre_pro_words) > len(wav_words_chunk_len):
+                    print("TTS word alignment not exact, less tokens than words")
+                elif len(pre_pro_words) < len(wav_words_chunk_len):
+                    print("TTS word alignment not exact, more tokens than words")
 
             cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
 

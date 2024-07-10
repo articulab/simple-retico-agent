@@ -57,6 +57,7 @@ class LlamaCppMemoryIncrementalInterruption:
         short_memory_context_size=500,
         n_gpu_layers=100,
         device=None,
+        printing=False,
         **kwargs,
     ):
         """initialize LlamaCppMemoryIncrementalModule submodule and its attributes related to prompts, template and llama-cpp-python.
@@ -72,6 +73,7 @@ class LlamaCppMemoryIncrementalInterruption:
             device (string, optional): the device the module will run on (cuda for gpu, or cpu)
         """
         # prompts attributes
+        self.printing = printing
         self.initial_prompt = initial_prompt
         self.system_prompt = system_prompt
         self.prompt = None
@@ -136,6 +138,7 @@ class LlamaCppMemoryIncrementalInterruption:
                 model_path=self.model_path,
                 n_ctx=self.context_size,
                 n_gpu_layers=self.n_gpu_layers,
+                verbose=self.printing,
             )
 
         elif self.model_repo is not None and self.model_name is not None:
@@ -145,6 +148,7 @@ class LlamaCppMemoryIncrementalInterruption:
                 device_map=self.device,
                 n_ctx=self.context_size,
                 n_gpu_layers=self.n_gpu_layers,
+                verbose=self.printing,
             )
 
         else:
@@ -204,7 +208,7 @@ class LlamaCppMemoryIncrementalInterruption:
         self.utterances.append(user_sentence_complete)
         self.utterances_length.append(user_sentence_complete_nb_tokens)
         self.prompt += user_sentence_complete
-        print(self.user_role.decode("utf-8") + user_sentence)
+        print(self.user_role.decode("utf-8") + user_sentence + "\n\n")
 
     def new_agent_sentence(self, agent_sentence, agent_sentence_nb_tokens):
         """Function called to register a new agent sentence into the dialogue history (utterances attribute).
@@ -599,6 +603,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             initial_prompt,
             system_prompt,
             device=device,
+            printing=printing,
             **kwargs,
         )
         self.latest_input_iu = None

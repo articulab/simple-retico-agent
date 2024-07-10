@@ -247,7 +247,8 @@ class VADTurnModule(retico_core.AbstractModule):
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
-                print("INT")
+                if self.printing:
+                    print("VAD INTERRUPTION")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
@@ -315,7 +316,8 @@ class VADTurnModule(retico_core.AbstractModule):
                 return um
 
             else:
-                print("STOP")
+                if self.printing:
+                    print("VAD EOT")
                 # User was talking, but is not talking anymore (a >700ms silence has been observed)
                 # a user EOT has been predicted, we'll :
                 # - ADD additional IUs if there is some (sould not happen)
@@ -365,7 +367,8 @@ class VADTurnModule(retico_core.AbstractModule):
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
-                print("BOT")
+                if self.printing:
+                    print("VAD BOT")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
