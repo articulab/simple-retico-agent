@@ -24,83 +24,9 @@ import torch
 from utils import *
 
 
-class CoquiTTSInterruption:
-    """Sub-class of CoquiTTSModule, TTS model wrapper.
-    Called with the synthesize function that generates speech (audio data) from a sentence chunk (text data).
-    """
-
-    def __init__(
-        self,
-        model,
-        is_multilingual,
-        speaker_wav,
-        language,
-        device=None,
-        printing=False,
-    ):
-
-        self.device = device_definition(device)
-        self.tts = None
-        self.model = model
-        self.language = language
-        self.speaker_wav = speaker_wav
-        self.is_multilingual = is_multilingual
-        self.printing = printing
-
-    def setup(self):
-        """Init chosen TTS model."""
-        self.tts = TTS(self.model).to(self.device)
-
-    def synthesize(self, text):
-        """Takes the given text and returns the synthesized speech as 22050 Hz
-        int16-encoded numpy ndarray.
-
-        Args:
-            text (str): The speech to synthesize
-
-        Returns:
-            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
-        """
-
-        final_outputs = self.tts.tts(
-            text=text,
-            speaker="p225",
-            return_extra_outputs=True,
-            split_sentences=False,
-            verbose=self.printing,
-        )
-
-        # if self.is_multilingual:
-        #     # if "multilingual" in file or "vctk" in file:
-        #     final_outputs = self.tts.tts(
-        #         text=text,
-        #         language=self.language,
-        #         speaker_wav=self.speaker_wav,
-        #         # speaker="Ana Florence",
-        #     )
-        # else:
-        #     final_outputs = self.tts.tts(text=text, speed=1.0)
-
-        if len(final_outputs) != 2:
-            raise NotImplementedError(
-                "coqui TTS should output both wavforms and outputs"
-            )
-        else:
-            waveforms, outputs = final_outputs
-
-        # waveform = waveforms.squeeze(1).detach().numpy()[0]
-        waveform = np.array(waveforms)
-
-        # Convert float32 data [-1,1] to int16 data [-32767,32767]
-        waveform = (waveform * 32767).astype(np.int16).tobytes()
-
-        return waveform, outputs
-
-
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
     """A retico module that provides Text-To-Speech (TTS) using a deep learning approach implemented with coqui-ai's TTS library : https://github.com/coqui-ai/TTS.
-    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
-    Has a subclass, CoquiTTS, that handles the aspects related to TTS engineering.
+    Generates speech (audio data) from a sentence chunk (text data).
 
     Definition :
     When receiving sentence chunks from LLM, add to the current input. Start TTS synthesizing the accumulated current input when receiving a COMMIT IU
@@ -108,7 +34,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
     Incremental : the TTS generation could be considered incremental because it receives sentence chunks from LLM and generates speech chunks in consequence.
     But it could be even more incremental because the TTS models could yield the generated audio data (TODO: to implement in future versions).
 
-    Inputs : TextIU
+    Inputs : TurnTextIU, AudioVADIU
 
     Outputs : TurnAudioIU
     """
@@ -159,11 +85,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
     ):
         super().__init__(**kwargs)
 
-        # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
-
-        self.printing = printing
-
+        # model
         if language not in self.LANGUAGE_MAPPING:
             print("Unknown TTS language. Defaulting to English (en).")
             language = "en"
@@ -177,26 +99,74 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             )
             model = next(iter(self.LANGUAGE_MAPPING[language]))
 
-        self.tts = CoquiTTSInterruption(
-            model=self.LANGUAGE_MAPPING[language][model],
-            language=language,
-            is_multilingual=(language == "multi"),
-            speaker_wav=speaker_wav,
-            device=device,
-            printing=printing,
-        )
+        self.model = None
+        self.model_name = self.LANGUAGE_MAPPING[language][model]
+        self.device = device_definition(device)
+        self.language = language
+        self.speaker_wav = speaker_wav
+        self.is_multilingual = language == "multi"
 
+        # audio
         self.frame_duration = frame_duration
         self.samplerate = None
         self.samplewidth = 2
         self.chunk_size = None
         self.chunk_size_bytes = None
+
+        # general
+        self.printing = printing
+        self.log_file = manage_log_folder(log_folder, log_file)
         self._tts_thread_active = False
         self.iu_buffer = []
         self.buffer_pointer = 0
         self.time_logs_buffer = []
         self.interrupted_turn = -1
         self.current_turn_id = -1
+
+    def synthesize(self, text):
+        """Takes the given text and returns the synthesized speech as 22050 Hz
+        int16-encoded numpy ndarray.
+
+        Args:
+            text (str): The speech to synthesize
+
+        Returns:
+            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
+        """
+
+        final_outputs = self.model.tts(
+            text=text,
+            speaker="p225",
+            return_extra_outputs=True,
+            split_sentences=False,
+            verbose=self.printing,
+        )
+
+        # if self.is_multilingual:
+        #     # if "multilingual" in file or "vctk" in file:
+        #     final_outputs = self.model.tts(
+        #         text=text,
+        #         language=self.language,
+        #         speaker_wav=self.speaker_wav,
+        #         # speaker="Ana Florence",
+        #     )
+        # else:
+        #     final_outputs = self.model.tts(text=text, speed=1.0)
+
+        if len(final_outputs) != 2:
+            raise NotImplementedError(
+                "coqui TTS should output both wavforms and outputs"
+            )
+        else:
+            waveforms, outputs = final_outputs
+
+        # waveform = waveforms.squeeze(1).detach().numpy()[0]
+        waveform = np.array(waveforms)
+
+        # Convert float32 data [-1,1] to int16 data [-32767,32767]
+        waveform = (waveform * 32767).astype(np.int16).tobytes()
+
+        return waveform, outputs
 
     def current_text(self):
         """Convert received IUs data accumulated in current_input list into a string.
@@ -335,15 +305,15 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
         SPACE_TOKEN_ID = 16
         NB_FRAME_PER_DURATION = 256
-        new_audio, final_outputs = self.tts.synthesize(current_text)
-        tokens = self.tts.tts.synthesizer.tts_model.tokenizer.text_to_ids(current_text)
+        new_audio, final_outputs = self.synthesize(current_text)
+        tokens = self.model.synthesizer.tts_model.tokenizer.text_to_ids(current_text)
         space_tokens_ids = []
         for i, x in enumerate(tokens):
             if x == SPACE_TOKEN_ID or i == len(tokens) - 1:
                 space_tokens_ids.append(i + 1)
 
         # pre_tokenized_txt = [
-        #     self.tts.tts.synthesizer.tts_model.tokenizer.decode([y]) for y in tokens
+        #     self.model.synthesizer.tts_model.tokenizer.decode([y]) for y in tokens
         # ]
         # pre_tokenized_text = [x if x != "<BLNK>" else "_" for x in pre_tokenized_txt]
         new_buffer = []
@@ -436,10 +406,8 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
-        self.tts.setup()
-        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
-            "sample_rate"
-        ]
+        self.model = TTS(self.model_name).to(self.device)
+        self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
 
@@ -456,5 +424,5 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        self._tts_thread_active = False
         write_logs(self.log_file, self.time_logs_buffer)
+        self._tts_thread_active = False

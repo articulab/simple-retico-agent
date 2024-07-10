@@ -3,8 +3,7 @@ LlamaCppMemoryIncrementalModule
 ==================
 
 A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
-The LlamaCppMemoryIncrementalModule class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
-The LlamaCppMemoryIncremental subclass handles the aspects related to the LLM engineering.
+The module generates a system answer from a constructed prompt (with a defined template) when a user full sentence (COMMIT IUs) is received from the ASR.
 
 Definition :
 - LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
@@ -14,7 +13,7 @@ Put the dialogue history in the prompt at each new system sentence generation.
 - Incremental : During a new system sentence generation, send smaller chunks of sentence,
 instead of waiting for the generation end to send the whole sentence.
 
-Inputs : SpeechRecognitionIU
+Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
 
 Outputs : TextIU
 
@@ -41,61 +40,99 @@ from llama_cpp import Llama
 from utils import *
 
 
-class LlamaCppMemoryIncrementalInterruption:
-    """Sub-class of LlamaCppMemoryIncrementalModule, LLM wrapper. Handles all the LLM engineering part.
-    Called with the process_full_sentence function that generates a system answer from a constructed prompt when a user full sentence is received from the ASR.
+class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
+    """A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
+    The module generates a system answer from a constructed prompt (with a defined template) when a user full sentence (COMMIT IUs) is received from the ASR.
+
+    Definition :
+    - LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
+    - Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
+    Update the dialogue history do that it doesn't exceed a certain threshold of token size.
+    Put the dialogue history in the prompt at each new system sentence generation.
+    - Incremental : During a new system sentence generation, send smaller chunks of sentence,
+    instead of waiting for the generation end to send the whole sentence.
+
+    Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
+
+    Outputs : TurnTextIU
     """
+
+    @staticmethod
+    def name():
+        return "LlamaCppMemoryIncremental Module"
+
+    @staticmethod
+    def description():
+        return "A module that provides NLG using an LLM."
+
+    @staticmethod
+    def input_ius():
+        return [retico_core.text.SpeechRecognitionIU, AudioVADIU, TurnAudioIU]
+
+    @staticmethod
+    def output_iu():
+        return TurnTextIU
 
     def __init__(
         self,
         model_path,
         model_repo,
         model_name,
-        initial_prompt=None,
-        system_prompt=None,
+        initial_prompt,
+        system_prompt,
+        printing=False,
+        log_file="llm.csv",
+        log_folder="logs/test/16k/Recording (1)/demo",
+        device=None,
         context_size=2000,
         short_memory_context_size=500,
         n_gpu_layers=100,
-        device=None,
-        printing=False,
         **kwargs,
     ):
-        """initialize LlamaCppMemoryIncrementalModule submodule and its attributes related to prompts, template and llama-cpp-python.
+        """
+        Initializes the LlamaCppMemoryIncremental Module.
+
         Args:
             model_path (string): local model instantiation. The path to the desired local model weights file (my_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
             model_repo (string): HF model instantiation. The path to the desired remote hugging face model (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
             model_name (string): HF model instantiation. The name of the desired remote hugging face model (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
             initial_prompt (string): _description_. Deprecated. Defaults to None.
-            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt). Defaults to None.
+            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt)
             context_size (int, optional): Max number of tokens that the total prompt can contain. Defaults to 2000.
             short_memory_context_size (int, optional): Max number of tokens that the short term memory (dialogue history) can contain. Has to be lower than context_size. Defaults to 500.
             n_gpu_layers (int, optional): Number of model layers you want to run on GPU. Take the model nb layers if greater. Defaults to 100.
             device (string, optional): the device the module will run on (cuda for gpu, or cpu)
+            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
         """
-        # prompts attributes
+        super().__init__(**kwargs)
+
+        # model
+        self.model = None
+        self.model_path = model_path
+        self.model_repo = model_repo
+        self.model_name = model_name
+        self.context_size = context_size
+        self.device = device_definition(device)
+        self.n_gpu_layers = 0 if self.device != "cuda" else n_gpu_layers
+
+        # general
         self.printing = printing
+        self.time_logs_buffer = []
+        self.log_file = manage_log_folder(log_folder, log_file)
+        self.thread_active = False
+        self.full_sentence = False
+        self.interruption = False
+        self.nb_clauses = None
+        self.interrupted_speaker_iu = None
+        self.which_stop_criteria = None
+
+        # prompts attributes
         self.initial_prompt = initial_prompt
         self.system_prompt = system_prompt
         self.prompt = None
-        self.stop_token_ids = []
-        self.stop_token_text_patterns = [b"Child:", b"Child :"]
-        self.stop_token_patterns = []
-        self.role_token_text_patterns = [
-            b"Teacher:",
-            b"Teacher :",
-            b" Teacher:",
-            b" Teacher :",
-        ]
-        self.max_role_pattern_length = max(
-            [len(p) for p in self.role_token_text_patterns]
-        )
-        self.role_token_patterns = []
-        self.punctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
-        self.punctuation_ids = [b[0] for b in self.punctuation_text]
         self.utterances = []
         self.utterances_length = []
         self.short_memory_context_size = short_memory_context_size
-
         self.start_prompt = b"[INST] "
         self.end_prompt = b" [/INST]"
         self.nb_tokens_end_prompt = 0
@@ -107,57 +144,25 @@ class LlamaCppMemoryIncrementalInterruption:
         self.agent_suf = b"\n\n"
         self.user_role = b"Child :"
         self.agent_role = b"Teacher :"
+        self.stop_token_ids = []
+        self.stop_token_patterns = []
+        self.stop_token_text_patterns = [b"Child:", b"Child :"]
+        self.role_token_patterns = []
+        self.role_token_text_patterns = [
+            b"Teacher:",
+            b"Teacher :",
+            b" Teacher:",
+            b" Teacher :",
+        ]
+        self.max_role_pattern_length = max(
+            [len(p) for p in self.role_token_text_patterns]
+        )
+        self.punctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
+        self.punctuation_ids = [b[0] for b in self.punctuation_text]
 
-        # llama-cpp-python args
-        self.context_size = context_size
-        self.device = device_definition(device)
-        self.n_gpu_layers = 0 if self.device != "cuda" else n_gpu_layers
-        # Model loading method 1 (local init)
-        self.model_path = model_path
-        # Model loading method 2 (hf init)
-        self.model_repo = model_repo
-        self.model_name = model_name
-
-        # Model is not loaded for the moment
-        self.model = None
-
-        # interruption
-        self.interruption = False
-        self.nb_clauses = None
-        self.interrupted_speaker_iu = None
-        self.which_stop_criteria = None
-
-    def setup(self):
-        """Instantiate the model with the given model info, if insufficient info given, raise an NotImplementedError.
-        Init the prompt with the initialize_prompt function.
-        Calculates the stopping with the init_stop_criteria function.
-        """
-
-        if self.model_path is not None:
-            self.model = Llama(
-                model_path=self.model_path,
-                n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
-                verbose=self.printing,
-            )
-
-        elif self.model_repo is not None and self.model_name is not None:
-            self.model = Llama.from_pretrained(
-                repo_id=self.model_repo,
-                filename=self.model_name,
-                device_map=self.device,
-                n_ctx=self.context_size,
-                n_gpu_layers=self.n_gpu_layers,
-                verbose=self.printing,
-            )
-
-        else:
-            raise NotImplementedError(
-                "Please, when creating the module, you must give a model_path or model_repo and model_name"
-            )
-
-        self.initialize_prompt()
-        self.init_stop_criteria()
+    #######
+    # LLM MODULE
+    #######
 
     def init_stop_criteria(self):
         """Calculates the stopping token patterns using the instantiated model tokenizer."""
@@ -443,7 +448,6 @@ class LlamaCppMemoryIncrementalInterruption:
 
     def generate_next_sentence(
         self,
-        subprocess,
         top_k=40,
         top_p=0.95,
         temp=1.0,
@@ -521,7 +525,7 @@ class LlamaCppMemoryIncrementalInterruption:
             elif self.which_stop_criteria is None:
                 is_role_pattern, role_pattern = self.is_role_pattern(last_sentence)
                 is_punctuation = self.is_punctuation(word_bytes)
-                subprocess(
+                self.incremental_iu_sending(
                     word,
                     is_punctuation,
                     role_pattern,
@@ -529,90 +533,9 @@ class LlamaCppMemoryIncrementalInterruption:
 
         return last_sentence, last_sentence_nb_tokens
 
-
-class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Natural Language Generation (NLG) using a conversational LLM (Llama-2 type).
-    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
-    Has a subclass, LlamaCppMemoryIncremental, that handles the aspects related to LLM engineering.
-
-    Definition :
-    - LlamaCpp : Using the optimization library llama-cpp-python (execution in C++) for faster inference.
-    - Memory : Record the dialogue history by saving the dialogue turns from both the user and the system.
-    Update the dialogue history do that it doesn't exceed a certain threshold of token size.
-    Put the dialogue history in the prompt at each new system sentence generation.
-    - Incremental : During a new system sentence generation, send smaller chunks of sentence,
-    instead of waiting for the generation end to send the whole sentence.
-
-    Inputs : SpeechRecognitionIU
-
-    Outputs : TextIU
-    """
-
-    @staticmethod
-    def name():
-        return "LlamaCppMemoryIncremental Module"
-
-    @staticmethod
-    def description():
-        return "A module that provides NLG using an LLM."
-
-    @staticmethod
-    def input_ius():
-        return [retico_core.text.SpeechRecognitionIU, AudioVADIU, TurnAudioIU]
-
-    @staticmethod
-    def output_iu():
-        return TurnTextIU
-
-    def __init__(
-        self,
-        model_path,
-        model_repo,
-        model_name,
-        initial_prompt,
-        system_prompt,
-        printing=False,
-        log_file="llm.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
-        device=None,
-        **kwargs,
-    ):
-        """Initializes the LlamaCppMemoryIncremental Module.
-
-        Args:
-            model_path (string): local model instantiation. The path to the desired local model weights file (my_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
-            model_repo (string): HF model instantiation. The path to the desired remote hugging face model (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
-            model_name (string): HF model instantiation. The name of the desired remote hugging face model (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
-            initial_prompt (string): _description_. Deprecated.
-            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt)
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
-        """
-        super().__init__(**kwargs)
-        self.printing = printing
-        # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
-        # Model loading method 1
-        self.model_path = model_path
-        # Model loading method 2
-        self.model_repo = model_repo
-        self.model_name = model_name
-        self.model_wrapper = LlamaCppMemoryIncrementalInterruption(
-            self.model_path,
-            self.model_repo,
-            self.model_name,
-            initial_prompt,
-            system_prompt,
-            device=device,
-            printing=printing,
-            **kwargs,
-        )
-        self.latest_input_iu = None
-        self.time_logs_buffer = []
-
-        # interruption
-        self.thread_active = False
-        self.full_sentence = False
-        self.interruption = False
+    #######
+    # RETICO MODULE
+    #######
 
     def recreate_sentence_from_um(self, msg):
         """recreate the complete user sentence from the strings contained in every COMMIT update message IU (msg).
@@ -628,75 +551,76 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             sentence += iu.get_text() + " "
         return sentence
 
+    def incremental_iu_sending(
+        self,
+        payload,
+        is_punctuation=None,
+        role_pattern=None,
+    ):
+        """
+        This function will be called by the submodule at each token generation.
+        It handles the communication with the subscribed module (TTS for example),
+        by updating and publishing new UpdateMessage containing the new IUS.
+        IUs are :
+            - ADDED in every situation (the generated words are sent to the subscribed modules)
+            - COMMITTED if the last token generated is a punctuation (The TTS can start generating the voice corresponding to the clause)
+            - REVOKED if the last tokens generated corresponds to a role pattern (so that the subscribed module delete the role pattern)
+
+        Args:
+            payload (string): the text corresponding to the last generated token
+            is_punctuation (bool, optional): True if the last generated token correspond to a punctuation. Defaults to None.
+            stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
+        """
+        # Construct UM and IU
+        next_um = retico_core.abstract.UpdateMessage()
+        if len(self.current_input) > 0:
+            output_iu = self.create_iu(self.current_input[-1])
+        else:
+            output_iu = self.create_iu()
+        output_iu.set_data(
+            text=payload,
+            turn_id=len(self.utterances),
+            clause_id=self.nb_clauses,
+        )
+        self.current_output.append(output_iu)
+
+        # ADD
+        next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
+
+        # REVOKE if role patterns
+        if role_pattern is not None:
+            for id, token in enumerate(
+                role_pattern
+            ):  # take all IUs corresponding to stop pattern
+                iu = self.current_output.pop(
+                    -1
+                )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
+                iu.revoked = True
+                next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
+
+        # COMMIT if punctuation and not role patterns and not stop_pattern
+        if is_punctuation and role_pattern is None:
+            self.nb_clauses += 1
+            for iu in self.current_output:
+                self.commit(iu)
+                next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
+            if self.printing:
+                print(
+                    "LLM : send sentence after punctuation ",
+                    datetime.datetime.now().strftime("%T.%f")[:-3],
+                )
+            self.time_logs_buffer.append(
+                ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
+            )
+            self.current_output = []
+        self.append(next_um)
+
     def process_incremental(self):
         """Function that calls the submodule LLamaCppMemoryIncremental to generates a system answer (text) using the chosen LLM.
         Incremental : Use the subprocess function as a callback function for the submodule to call to check if the current chunk
         of generated sentence has to be sent to the Children Modules (TTS for example).
 
         """
-
-        def subprocess(
-            payload,
-            is_punctuation=None,
-            role_pattern=None,
-        ):
-            """
-            This function will be called by the submodule at each token generation.
-            It handles the communication with the subscribed module (TTS for example),
-            by updating and publishing new UpdateMessage containing the new IUS.
-            IUs are :
-                - ADDED in every situation (the generated words are sent to the subscribed modules)
-                - COMMITTED if the last token generated is a punctuation (The TTS can start generating the voice corresponding to the clause)
-                - REVOKED if the last tokens generated corresponds to a role pattern (so that the subscribed module delete the role pattern)
-
-            Args:
-                payload (string): the text corresponding to the last generated token
-                is_punctuation (bool, optional): True if the last generated token correspond to a punctuation. Defaults to None.
-                stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
-            """
-            # Construct UM and IU
-            next_um = retico_core.abstract.UpdateMessage()
-            if len(self.current_input) > 0:
-                output_iu = self.create_iu(self.current_input[-1])
-            else:
-                output_iu = self.create_iu(None)
-            output_iu.set_data(
-                text=payload,
-                turn_id=len(self.model_wrapper.utterances),
-                clause_id=self.model_wrapper.nb_clauses,
-            )
-            self.current_output.append(output_iu)
-
-            # ADD
-            next_um.add_iu(output_iu, retico_core.UpdateType.ADD)
-
-            # REVOKE if role patterns
-            if role_pattern is not None:
-                for id, token in enumerate(
-                    role_pattern
-                ):  # take all IUs corresponding to stop pattern
-                    iu = self.current_output.pop(
-                        -1
-                    )  # the IUs corresponding to the stop pattern are the last n ones where n=len(stop_pattern).
-                    iu.revoked = True
-                    next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
-
-            # COMMIT if punctuation and not role patterns and not stop_pattern
-            if is_punctuation and role_pattern is None:
-                self.model_wrapper.nb_clauses += 1
-                for iu in self.current_output:
-                    self.commit(iu)
-                    next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-                if self.printing:
-                    print(
-                        "LLM : send sentence after punctuation ",
-                        datetime.datetime.now().strftime("%T.%f")[:-3],
-                    )
-                self.time_logs_buffer.append(
-                    ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
-                )
-                self.current_output = []
-            self.append(next_um)
 
         if self.printing:
             print(
@@ -711,32 +635,28 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # TODO : find a way to have only one data buffer for generated token/text. currently we have competitively IU buffer (current_output), and text buffer (agent_sentence).
         # this way, we would only have to remove from one buffer when deleting stop pattern, or role pattern.
         user_sentence = self.recreate_sentence_from_um(self.current_input)
-        self.model_wrapper.new_user_sentence(user_sentence)
-        self.model_wrapper.prepare_dialogue_history()
+        self.new_user_sentence(user_sentence)
+        self.prepare_dialogue_history()
 
-        agent_sentence, agent_sentence_nb_tokens = (
-            self.model_wrapper.generate_next_sentence(subprocess)
-        )
+        agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence()
 
         next_um = retico_core.abstract.UpdateMessage()
 
-        if self.model_wrapper.which_stop_criteria == "interruption":
+        if self.which_stop_criteria == "interruption":
             # REVOKE every word in interrupted clause (every IU in current_output)
             for iu in self.current_output:
                 self.revoke(iu, remove_revoked=False)
                 next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
 
             # align dialogue history with last word spoken by speaker module
-            if self.model_wrapper.interrupted_speaker_iu is not None:
-                self.model_wrapper.interruption_alignment_new_agent_sentence(
-                    agent_sentence
-                )
+            if self.interrupted_speaker_iu is not None:
+                self.interruption_alignment_new_agent_sentence(agent_sentence)
 
-        elif self.model_wrapper.which_stop_criteria.startswith("stop_pattern"):
+        elif self.which_stop_criteria.startswith("stop_pattern"):
             # remove from agent sentence every word contained in the stop pattern encountered
-            pattern_id = int(self.model_wrapper.which_stop_criteria.split("_")[-1])
-            agent_sentence_reduced, nb_token_removed = (
-                self.model_wrapper.remove_stop_patterns(agent_sentence, pattern_id)
+            pattern_id = int(self.which_stop_criteria.split("_")[-1])
+            agent_sentence_reduced, nb_token_removed = self.remove_stop_patterns(
+                agent_sentence, pattern_id
             )
 
             # REVOKE every word contained in the stop pattern encountered
@@ -750,20 +670,18 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
-            self.model_wrapper.new_agent_sentence(
+            self.new_agent_sentence(
                 agent_sentence_reduced, agent_sentence_nb_tokens - nb_token_removed
             )
 
-        elif self.model_wrapper.which_stop_criteria == "stop_token":
+        elif self.which_stop_criteria == "stop_token":
             # add an IU significating that the agent turn is complete (EOT)
             iu = self.create_iu()
             iu.set_data(final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
-            self.model_wrapper.new_agent_sentence(
-                agent_sentence, agent_sentence_nb_tokens
-            )
+            self.new_agent_sentence(agent_sentence, agent_sentence_nb_tokens)
 
         else:
             raise NotImplementedError(
@@ -774,7 +692,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         # reset because it is end of sentence
         self.current_output = []
-        self.latest_input_iu = None
         # reset current_input ?? It could erase new IU from the next turn ?
         self.current_input = []
 
@@ -804,7 +721,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         self.interruption = True
-                        self.model_wrapper.interruption = True
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
@@ -824,9 +740,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                         # print(
                         #     f"grounded_word, word_id, iu.char_id, iu.turn_id, iu.clause.id = {iu.grounded_word, iu.word_id, iu.char_id, iu.turn_id, iu.clause_id}"
                         # )
-                        self.model_wrapper.interruption_alignment_last_agent_sentence(
-                            iu
-                        )
+                        self.interruption_alignment_last_agent_sentence(iu)
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
@@ -836,7 +750,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             self.current_input.extend(msg)
             self.full_sentence = True
             self.interruption = False
-            self.model_wrapper.interruption = False
 
     def _llm_thread(self):
         """
@@ -852,8 +765,37 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     def setup(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+
+        Instantiate the model with the given model info, if insufficient info given, raise an NotImplementedError.
+        Init the prompt with the initialize_prompt function.
+        Calculates the stopping with the init_stop_criteria function.
         """
-        self.model_wrapper.setup()
+
+        if self.model_path is not None:
+            self.model = Llama(
+                model_path=self.model_path,
+                n_ctx=self.context_size,
+                n_gpu_layers=self.n_gpu_layers,
+                verbose=self.printing,
+            )
+
+        elif self.model_repo is not None and self.model_name is not None:
+            self.model = Llama.from_pretrained(
+                repo_id=self.model_repo,
+                filename=self.model_name,
+                device_map=self.device,
+                n_ctx=self.context_size,
+                n_gpu_layers=self.n_gpu_layers,
+                verbose=self.printing,
+            )
+
+        else:
+            raise NotImplementedError(
+                "Please, when creating the module, you must give a model_path or model_repo and model_name"
+            )
+
+        self.initialize_prompt()
+        self.init_stop_criteria()
 
     def prepare_run(self):
         """
@@ -867,8 +809,5 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(
-            self.log_file,
-            self.time_logs_buffer,
-        )
+        write_logs(self.log_file, self.time_logs_buffer)
         self.thread_active = False

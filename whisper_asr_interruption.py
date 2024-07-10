@@ -30,45 +30,77 @@ transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class WhisperASRInterruption:
-    """Sub-class of WhisperASRModule, ASR model wrapper.
-    Called with the recognize function that recognize text from speech and predicts if the recognized text corresponds to a full sentence
+class WhisperASRInterruptionModule(retico_core.AbstractModule):
+    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
+    Recognize text from speech and predicts if the recognized text corresponds to a full sentence
     (ie finishes with a silence longer than silence_threshold).
+
+    Definition :
+    When receiving audio chunks from the Microphone Module, add to the audio_buffer (using the add_audio function).
+    The _asr_thread function, used as a thread in the prepare_run function, will call periodically the ASR model to recognize text from the current audio buffer.
+    Alongside the recognized text, the function returns an end-of-sentence prediction, that is True if a silence longer than a fixed threshold (here, 1s) is observed.
+    If an end-of-sentence is predicted, the recognized text is sent to the children modules (typically, the LLM).
+
+    Inputs : AudioVADIU
+
+    Outputs : SpeechRecognitionIU
     """
+
+    @staticmethod
+    def name():
+        return "Whipser ASR Module"
+
+    @staticmethod
+    def description():
+        return "A module that recognizes speech using Whisper."
+
+    @staticmethod
+    def input_ius():
+        return [AudioVADIU]
+
+    @staticmethod
+    def output_iu():
+        return SpeechRecognitionIU
 
     def __init__(
         self,
-        # whisper_model="openai/whisper-base",
-        # whisper_model="base.en",
-        whisper_model="distil-large-v2",
         target_framerate=16000,
-        input_framerate=44100,
-        channels=1,
-        sample_width=2,
+        input_framerate=16000,
         printing=False,
         log_file="asr.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
+        # whisper_model="openai/whisper-base",
+        # whisper_model="base.en",
+        whisper_model="distil-large-v2",
+        channels=1,
+        sample_width=2,
+        **kwargs,
     ):
-        self.device = device_definition(device)
+        super().__init__(**kwargs)
 
+        # model
+        self.device = device_definition(device)
         self.model = WhisperModel(
             whisper_model, device=self.device, compute_type="int8"
         )
-        self.printing = printing
 
+        # general
+        self.printing = printing
+        self.first_time = True
+        self.first_time_stop = False
+        self.log_file = manage_log_folder(log_folder, log_file)
+        self.time_logs_buffer = []
+        self._asr_thread_active = False
+        self.latest_input_iu = None
+        self.eos = False
         self.audio_buffer = []
+
+        # audio
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
         self.channels = channels
         self.sample_width = sample_width
-
-        # latency logs params
-        self.first_time = True
-        self.first_time_stop = False
-        # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
-        self.time_logs_buffer = []
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -131,71 +163,6 @@ class WhisperASRInterruption:
 
         return transcription
 
-    def reset(self):
-        """reset the vad state and empty the audio_buffer"""
-        # self.vad_state = True
-        self.audio_buffer = []
-
-
-class WhisperASRInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper model.
-    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
-    Has a subclass, WhisperASR, that handles the aspects related to ASR engineering.
-
-    Definition :
-    When receiving audio chunks from the Microphone Module, add to the audio_buffer (using the add_audio function).
-    The _asr_thread function, used as a thread in the prepare_run function, will call periodically the ASR model to recognize text from the current audio buffer.
-    Alongside the recognized text, the function returns an end-of-sentence prediction, that is True if a silence longer than a fixed threshold (here, 1s) is observed.
-    If an end-of-sentence is predicted, the recognized text is sent to the children modules (typically, the LLM).
-
-    Inputs : AudioIU
-
-    Outputs : SpeechRecognitionIU
-    """
-
-    @staticmethod
-    def name():
-        return "Whipser ASR Module"
-
-    @staticmethod
-    def description():
-        return "A module that recognizes speech using Whisper."
-
-    @staticmethod
-    def input_ius():
-        return [AudioVADIU]
-
-    @staticmethod
-    def output_iu():
-        return SpeechRecognitionIU
-
-    def __init__(
-        self,
-        target_framerate=16000,
-        input_framerate=16000,
-        printing=False,
-        log_file="asr.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
-        device=None,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        self.asr = WhisperASRInterruption(
-            printing=printing,
-            target_framerate=target_framerate,
-            input_framerate=input_framerate,
-            log_file=log_file,
-            log_folder=log_folder,
-            device=device,
-        )
-        self.printing = printing
-        self.target_framerate = target_framerate
-        self.input_framerate = input_framerate
-        self._asr_thread_active = False
-        self.latest_input_iu = None
-        self.eos = False
-
     def process_update(self, update_message):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
@@ -213,7 +180,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                     raise Exception("input framerate differs from iu framerate")
                 # ADD corresponds to new audio chunks of user sentence, to generate new transcription hypothesis
                 if ut == retico_core.UpdateType.ADD:
-                    self.asr.add_audio(iu.raw_audio)
+                    self.add_audio(iu.raw_audio)
                     if not self.latest_input_iu:
                         self.latest_input_iu = iu
                 # COMMIT corresponds to the user's full audio sentence, to generate a final transcription and send it to the LLM.
@@ -233,7 +200,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         while self._asr_thread_active:
 
             time.sleep(0.01)
-            prediction = self.asr.recognize()
+            prediction = self.recognize()
 
             if len(prediction) != 0:
                 um, new_tokens = retico_core.text.get_text_increment(self, prediction)
@@ -254,8 +221,8 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                         self.commit(iu)
                         um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
+                    self.audio_buffer = []
                     self.current_output = []
-                    self.asr.reset()
                     self.eos = False
 
                 self.latest_input_iu = None
@@ -274,7 +241,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         while self._asr_thread_active:
             time.sleep(0.01)
 
-            prediction = self.asr.recognize()
+            prediction = self.recognize()
 
             # if EOS, we'll generate the final prediction and COMMIT all words
             if self.eos:
@@ -316,5 +283,5 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
+        write_logs(self.log_file, self.time_logs_buffer)
         self._asr_thread_active = False
-        self.asr.reset()

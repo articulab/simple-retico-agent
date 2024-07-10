@@ -3,7 +3,7 @@ SpeakerModule_Interruption
 ==================
 
 This module outputs the audio signal contained in the AudioIUs by the computer's speakers,
-and can interrupt this audio streaming if the user starts speaking (with the reception of VADStateIUs).
+and can interrupt this audio streaming if the user starts speaking (with the reception of AudioVADIU).
 """
 
 import datetime
@@ -202,10 +202,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
 
         Write logs and close the audio stream."""
-        write_logs(
-            self.log_file,
-            self.time_logs_buffer,
-        )
+        write_logs(self.log_file, self.time_logs_buffer)
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None
