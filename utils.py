@@ -5,25 +5,22 @@ import os
 import torch
 import retico_core
 
-# new IUs
 
-
-class TurnAudioIU(retico_core.audio.AudioIU):
-    """
-    TODO: I have to decide which information I put in this IU,
-    to align it with the text in the LLM module
+class TextAlignedAudioIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
 
     Attributes:
-        - turn_id (int) : Which dialogue's turn the IU is part of.
-        - clause_id (int) : Which clause the IU is part of, in the current turn.
-        - word_id (int) : The id of the word that corresponds to the end of the IU.
-        - char_id (int) : The last char of the word the IU corresponds to (grounded_word).
-        - grounded_word (str) : The word corresponding to the word_id (utterance[word_id]).
+        - grounded_word : the word corresponding to the audio.
+        - turn_id (int) : The index of the dialogue's turn the IU is part of.
+        - clause_id (int) : The index of the clause the IU is part of, in the current turn.
+        - word_id (int) : The index of the word that corresponds to the end of the IU].
+        - char_id (int) : The index of the last character from the grounded_word.
+        - final (bool) : Wether the IU is an EOT.
     """
 
     @staticmethod
     def type():
-        return "Audio TTS IU"
+        return "Text Aligned Audio IU"
 
     def __init__(
         self,
@@ -74,18 +71,20 @@ class TurnAudioIU(retico_core.audio.AudioIU):
         sample_width=None,
         final=False,
     ):
-        """Sets data"""
+        """Sets AudioIU parameters and the alignment information"""
+        # alignment information
         self.grounded_word = grounded_word
         self.word_id = word_id
         self.char_id = char_id
         self.turn_id = turn_id
         self.clause_id = clause_id
+        self.final = final
+        # AudioIU information
         self.payload = audio
         self.raw_audio = audio
         self.rate = rate
         self.nframes = chunk_size
         self.sample_width = sample_width
-        self.final = final
 
 
 class TurnTextIU(retico_core.text.TextIU):
@@ -131,28 +130,27 @@ class TurnTextIU(retico_core.text.TextIU):
         clause_id=None,
         final=False,
     ):
-        self.payload = text
-        self.text = text
+        """Sets TextIU parameters and dialogue turns informations (turn_id, clause_id, final)"""
+        # dialogue turns information
         self.turn_id = turn_id
         self.clause_id = clause_id
         self.final = final
+        # TextIU information
+        self.payload = text
+        self.text = text
 
 
-class AudioVADIU(retico_core.audio.AudioIU):
-    """An Incremental IU describing the vad state (if someone is talking or not).
+class VADTurnAudioIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced by VADTurnModule with dialogue turn information (agent_turn, user_turn,
+    silence, interruption, etc) contained in the vad_state parameter.
 
     Attributes:
-        creator (AbstractModule): The module that created this IU
-        previous_iu (IncrementalUnit): A link to the IU created before the
-            current one.
-        grounded_in (IncrementalUnit): A link to the IU this IU is based on.
-        created_at (float): The UNIX timestamp of the moment the IU is created.
-        vad_state (bool): The vad state.
+        vad_state (string): dialogue turn information (agent_turn, user_turn, silence, interruption, etc) from VADTurnModule.
     """
 
     @staticmethod
     def type():
-        return "Audio VAD IU"
+        return "VADTurn Audio IU"
 
     def __init__(
         self,
@@ -183,85 +181,15 @@ class AudioVADIU(retico_core.audio.AudioIU):
     def set_data(
         self, vad_state=None, audio=None, chunk_size=None, rate=None, sample_width=None
     ):
-        # sample, self.chunk_size, self.rate, self.sample_width
-        """Sets the vad_state"""
+        """Sets AudioIU parameters and vad_state"""
+        # vad_state
+        self.vad_state = vad_state
+        # AudioIU information
         self.payload = audio
         self.raw_audio = audio
-        self.vad_state = vad_state
         self.rate = rate
         self.nframes = chunk_size
         self.sample_width = sample_width
-
-
-class AudioTTSIU(retico_core.audio.AudioIU):
-    """
-    TODO: I have to decide which information I put in this IU,
-    to align it with the text in the LLM module
-
-    Attributes:
-        - turn_id (int) : Which dialogue's turn the IU is part of.
-        - clause_id (int) : Which clause the IU is part of, in the current turn.
-        - word_id (int) : The id of the word that corresponds to the end of the IU.
-        - char_id (int) : The last char of the word the IU corresponds to (grounded_word).
-        - grounded_word (str) : The word corresponding to the word_id (utterance[word_id]).
-    """
-
-    @staticmethod
-    def type():
-        return "Audio TTS IU"
-
-    def __init__(
-        self,
-        creator=None,
-        iuid=0,
-        previous_iu=None,
-        grounded_in=None,
-        audio=None,
-        rate=None,
-        nframes=None,
-        sample_width=None,
-        grounded_word=None,
-        word_id=None,
-        char_id=None,
-        turn_id=None,
-        clause_id=None,
-        final=None,
-        **kwargs,
-    ):
-        super().__init__(
-            creator=creator,
-            iuid=iuid,
-            previous_iu=previous_iu,
-            grounded_in=grounded_in,
-            payload=audio,
-            raw_audio=audio,
-            rate=rate,
-            nframes=nframes,
-            sample_width=sample_width,
-        )
-        self.grounded_word = grounded_word
-        self.word_id = word_id
-        self.char_id = char_id
-        self.turn_id = turn_id
-        self.clause_id = clause_id
-        self.final = final
-
-    def set_data(
-        self,
-        grounded_word=None,
-        word_id=None,
-        char_id=None,
-        turn_id=None,
-        clause_id=None,
-        final=False,
-    ):
-        """Sets data"""
-        self.grounded_word = grounded_word
-        self.word_id = word_id
-        self.char_id = char_id
-        self.turn_id = turn_id
-        self.clause_id = clause_id
-        self.final = final
 
 
 # LOGS FUNCTIONS

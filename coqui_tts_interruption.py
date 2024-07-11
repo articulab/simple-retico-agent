@@ -5,21 +5,21 @@ coqui-ai TTS Module
 A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
 audio), and handles user interruption.
 
-When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
-contained in UpdateMessage.
+When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
+IUs contained in UpdateMessage.
 This module also aligns the inputed words with the outputted audio, providing the outputted
-TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
-parameter), and its place in the agent's current sentence.
+TextAlignedAudioIU with the information of the word it corresponds to (contained in the
+grounded_word parameter), and its place in the agent's current sentence.
 The module stops synthesizing if it receives the information that the user started talking
 (user barge-in/interruption of agent turn). The interruption information is recognized by
-an AudioVADIU with a parameter vad_state="interruption".
+an VADTurnAudioIU with a parameter vad_state="interruption".
 
 This modules uses the deep learning approach implemented with coqui-ai's TTS library :
 https://github.com/coqui-ai/TTS
 
-Inputs : TurnTextIU, AudioVADIU
+Inputs : TurnTextIU, VADTurnAudioIU
 
-Outputs : TurnAudioIU
+Outputs : TextAlignedAudioIU
 """
 
 import datetime
@@ -28,10 +28,11 @@ import os
 import threading
 import time
 from hashlib import blake2b
+import sys
 
 import retico_core
 import numpy as np
-import sys
+
 
 sys.path.append("C:\\Users\\Alafate\\Documents\\TTS\\")
 # print(sys.path)
@@ -44,21 +45,21 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
     """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
     audio), and handles user interruption.
 
-    When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
-    contained in UpdateMessage.
+    When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
+    IUs contained in UpdateMessage.
     This module also aligns the inputed words with the outputted audio, providing the outputted
-    TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
-    parameter), and its place in the agent's current sentence.
+    TextAlignedAudioIU with the information of the word it corresponds to (contained in the
+    grounded_word parameter), and its place in the agent's current sentence.
     The module stops synthesizing if it receives the information that the user started talking
     (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an AudioVADIU with a parameter vad_state="interruption".
+    an VADTurnAudioIU with a parameter vad_state="interruption".
 
     This modules uses the deep learning approach implemented with coqui-ai's TTS library :
     https://github.com/coqui-ai/TTS
 
-    Inputs : TurnTextIU, AudioVADIU
+    Inputs : TurnTextIU, VADTurnAudioIU
 
-    Outputs : TurnAudioIU
+    Outputs : TextAlignedAudioIU
     """
 
     @staticmethod
@@ -73,11 +74,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [TurnTextIU, AudioVADIU]
+        return [TurnTextIU, VADTurnAudioIU]
 
     @staticmethod
     def output_iu():
-        return TurnAudioIU
+        return TextAlignedAudioIU
 
     LANGUAGE_MAPPING = {
         "en": {
@@ -112,7 +113,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             model (string): name of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
             language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
             speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
-            frame_duration (float): duration of the audio chunks contained in the outputted TurnAudioIUs.
+            frame_duration (float): duration of the audio chunks contained in the outputted TextAlignedAudioIUs.
             printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
@@ -250,7 +251,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                             end_of_clause = True
                 # else:
                 #     print("TTS do not process iu")
-            elif isinstance(iu, AudioVADIU):
+            elif isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         self.interrupted_turn = self.current_turn_id
@@ -305,7 +306,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         we can link the audio chunks sent to speaker to the words that it corresponds to.
 
         Returns:
-            list[TurnAudioIU]: the TurnAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
+            list[TextAlignedAudioIU]: the TextAlignedAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
         """
         # preprocess on words
         current_text, words = self.current_text_and_words()

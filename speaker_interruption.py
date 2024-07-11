@@ -3,29 +3,29 @@ SpeakerInterruptionModule
 ==================
 
 A retico module that outputs through the computer's speakers the audio contained in
-TurnAudioIUs. The module stops the speakers if it receives the information that the user
+TextAlignedAudioIUs. The module stops the speakers if it receives the information that the user
 started talking (user barge-in/interruption of agent turn).
-The interruption information is recognized by an AudioVADIU with a parameter
+The interruption information is recognized by an VADTurnAudioIU with a parameter
 vad_state="interruption".
 
-The modules sends TurnAudioIUs in 2 cases :
-- When it is agent end of turn : when it consumes the last TurnAudioIU of an agent turn (with
-the parameter final=True), it sends back that IU to indicate to other modules that the agent has
-stopped talking.
-- When the agent turn is interrupted by the user : when it receives an AudioVADIU with a
-parameter vad_state="interruption", it sends the last TurnAudioIU consumed (ie. the last audio
-that has been spoken by the agent in the interrupted turn). It is useful to align the dialogue
-history with the last spoken words.
+The modules sends TextAlignedAudioIUs in 2 cases :
+- When it is agent end of turn : when it consumes the last TextAlignedAudioIU of an agent turn
+(with the parameter final=True), it sends back that IU to indicate to other modules that the
+agent has stopped talking.
+- When the agent turn is interrupted by the user : when it receives an VADTurnAudioIU with a
+parameter vad_state="interruption", it sends the last TextAlignedAudioIU consumed (ie. the last
+audio that has been spoken by the agent in the interrupted turn). It is useful to align the
+dialogue history with the last spoken words.
 
-Inputs : TurnAudioIU, AudioVADIU
+Inputs : TextAlignedAudioIU, VADTurnAudioIU
 
-Outputs : TurnAudioIU
+Outputs : TextAlignedAudioIU
 """
 
 import datetime
+import platform
 import pyaudio
 import retico_core
-import platform
 import retico_core.abstract
 
 from utils import *
@@ -33,24 +33,23 @@ from utils import *
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
     """A retico module that outputs through the computer's speakers the audio contained in
-    TurnAudioIUs and handles user interruption.
+    TextAlignedAudioIUs. The module stops the speakers if it receives the information that the user
+    started talking (user barge-in/interruption of agent turn).
+    The interruption information is recognized by an VADTurnAudioIU with a parameter
+    vad_state="interruption".
 
-    The module stops sythetizing if it receives the information that the user started talking
-    (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an AudioVADIU with a parameter vad_state="interruption".
+    The modules sends TextAlignedAudioIUs in 2 cases :
+    - When it is agent end of turn : when it consumes the last TextAlignedAudioIU of an agent turn
+    (with the parameter final=True), it sends back that IU to indicate to other modules that the
+    agent has stopped talking.
+    - When the agent turn is interrupted by the user : when it receives an VADTurnAudioIU with a
+    parameter vad_state="interruption", it sends the last TextAlignedAudioIU consumed (ie. the last
+    audio that has been spoken by the agent in the interrupted turn). It is useful to align the
+    dialogue history with the last spoken words.
 
-    The modules sends TurnAudioIUs in 2 cases :
-    - When it is agent end of turn : when it consumes the last TurnAudioIU of an agent turn (with
-    the parameter final=True), it sends back that IU to indicate to other modules that the agent has
-    stopped talking.
-    - When the agent turn is interrupted by the user : when it receives an AudioVADIU with a
-    parameter vad_state="interruption", it sends the last TurnAudioIU consumed (ie. the last audio
-    that has been spoken by the agent in the interrupted turn). It is useful to align the dialogue
-    history with the last spoken words.
+    Inputs : TextAlignedAudioIU, VADTurnAudioIU
 
-    Inputs : TurnAudioIU, AudioVADIU
-
-    Outputs : TurnAudioIU
+    Outputs : TextAlignedAudioIU
     """
 
     @staticmethod
@@ -63,11 +62,11 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [TurnAudioIU, AudioVADIU]
+        return [TextAlignedAudioIU, VADTurnAudioIU]
 
     @staticmethod
     def output_iu():
-        return TurnAudioIU
+        return TextAlignedAudioIU
 
     def __init__(
         self,
@@ -91,8 +90,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
             rate (int): framerate of the played audio chunks.
             frame_length (float): duration of the played audio chunks.
-            channels (int): number of channels (1=mono, 2=stereo) of the received AudioVADIUs.
-            sample_width (int):sample width (number of bits used to encode each frame) of the received AudioVADIUs.
+            channels (int): number of channels (1=mono, 2=stereo) of the received VADTurnAudioIUs.
+            sample_width (int):sample width (number of bits used to encode each frame) of the received VADTurnAudioIUs.
             use_speaker (string): wether the audio should be played in the right, left or both speakers.
             device_index(string):
             printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
@@ -138,7 +137,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                 ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
             )
         for iu, ut in update_message:
-            if isinstance(iu, AudioVADIU):
+            if isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         if self.latest_processed_iu is not None:
@@ -164,7 +163,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                         else:
                             print("SPEAKER : self.latest_processed_iu = None")
 
-            elif isinstance(iu, TurnAudioIU):
+            elif isinstance(iu, TextAlignedAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if self.interrupted_iu is not None:
                         # if, after an interrupted turn, an IU from a new turn has been received

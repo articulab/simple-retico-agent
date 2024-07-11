@@ -6,13 +6,15 @@ A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI'
 model. Periodically predicts a new text hypothesis from the input incremental speech and
 predicts a final hypothesis when it is the user end of turn.
 
-The received AudioVADIU are stored in a buffer from which a prediction is made periodically, the
-words that were not present in the previous hypothesis are ADDED, in contrary, the words that
-were present, but aren't anymore are REVOKED.
-It recognize the user's EOT information when COMMIT AudioVADIUs are received, a final prediciton
-is then made and the corresponding IUs are COMMITED.
+The received VADTurnAudioIU are stored in a buffer from which a prediction is made periodically,
+the words that were not present in the previous hypothesis are ADDED, in contrary, the words
+that were present, but aren't anymore are REVOKED.
+It recognize the user's EOT information when COMMIT VADTurnAudioIUs are received, a final
+prediciton is then made and the corresponding IUs are COMMITED.
 
-Inputs : AudioVADIU
+The faster_whisper library is used to speed up the whisper inference.
+
+Inputs : VADTurnAudioIU
 
 Outputs : SpeechRecognitionIU
 """
@@ -20,15 +22,12 @@ Outputs : SpeechRecognitionIU
 import datetime
 import os
 import threading
+import time
 import retico_core
-from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
-import torch
 import transformers
 import pydub
-import webrtcvad
 import numpy as np
-import time
 from faster_whisper import WhisperModel
 
 from utils import *
@@ -42,15 +41,15 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
     model. Periodically predicts a new text hypothesis from the input incremental speech and
     predicts a final hypothesis when it is the user end of turn.
 
-    The received AudioVADIU are stored in a buffer from which a prediction is made periodically, the
-    words that were not present in the previous hypothesis are ADDED, in contrary, the words that
-    were present, but aren't anymore are REVOKED.
-    It recognize the user's EOT information when COMMIT AudioVADIUs are received, a final prediciton
-    is then made and the corresponding IUs are COMMITED.
+    The received VADTurnAudioIU are stored in a buffer from which a prediction is made periodically,
+    the words that were not present in the previous hypothesis are ADDED, in contrary, the words
+    that were present, but aren't anymore are REVOKED.
+    It recognize the user's EOT information when COMMIT VADTurnAudioIUs are received, a final
+    prediciton is then made and the corresponding IUs are COMMITED.
 
     The faster_whisper library is used to speed up the whisper inference.
 
-    Inputs : AudioVADIU
+    Inputs : VADTurnAudioIU
 
     Outputs : SpeechRecognitionIU
     """
@@ -65,7 +64,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [AudioVADIU]
+        return [VADTurnAudioIU]
 
     @staticmethod
     def output_iu():
@@ -95,9 +94,9 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
             speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
             target_framerate (int): model's desired audio framerate.
-            input_framerate (int): framerate of the received AudioVADIUs.
-            channels (int): number of channels (1=mono, 2=stereo) of the received AudioVADIUs.
-            sample_width (int):sample width (number of bits used to encode each frame) of the received AudioVADIUs.
+            input_framerate (int): framerate of the received VADTurnAudioIUs.
+            channels (int): number of channels (1=mono, 2=stereo) of the received VADTurnAudioIUs.
+            sample_width (int):sample width (number of bits used to encode each frame) of the received VADTurnAudioIUs.
             printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
@@ -157,8 +156,8 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
     def recognize(self):
         """Recreate the audio signal received by the microphone by concatenating the audio chunks
         from the audio_buffer and transcribe this concatenation into a list of predicted words.
-        The function also keeps track of the user turns with the self.vad_state parameter that changes
-        with the EOS recognized with the self.recognize_silence() function.
+        The function also keeps track of the user turns with the self.vad_state parameter that
+        changes with the EOS recognized with the self.recognize_silence() function.
 
         Returns:
             (list[string], boolean): the list of words transcribed by the asr and the VAD state.

@@ -15,14 +15,14 @@ Update the dialogue history do that it doesn't exceed a certain threshold of tok
 Put the dialogue history in the prompt at each new system sentence generation.
 The module stops its generation if it receives the information that the user started talking
 (user barge-in/interruption of agent turn). The interruption information is recognized by
-an AudioVADIU with a parameter vad_state="interruption". After an interruption, it aligns the
+an VADTurnAudioIU with a parameter vad_state="interruption". After an interruption, it aligns the
 agent interrupted sentence in dialogue history with the last word spoken by the agent (these
-informations are recognized when a TurnAudioIU with parameter final = False is received after
+informations are recognized when a TextAlignedAudioIU with parameter final = False is received after
 an interruption).
 
 The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
 
-Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
+Inputs : SpeechRecognitionIU, VADTurnAudioIU, TextAlignedAudioIU
 
 Outputs : TurnTextIU
 
@@ -63,14 +63,14 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     Put the dialogue history in the prompt at each new system sentence generation.
     The module stops its generation if it receives the information that the user started talking
     (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an AudioVADIU with a parameter vad_state="interruption". After an interruption, it aligns the
+    an VADTurnAudioIU with a parameter vad_state="interruption". After an interruption, it aligns the
     agent interrupted sentence in dialogue history with the last word spoken by the agent (these
-    informations are recognized when a TurnAudioIU with parameter final = False is received after
+    informations are recognized when a TextAlignedAudioIU with parameter final = False is received after
     an interruption).
 
     The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
 
-    Inputs : SpeechRecognitionIU, AudioVADIU, TurnAudioIU
+    Inputs : SpeechRecognitionIU, VADTurnAudioIU, TextAlignedAudioIU
 
     Outputs : TurnTextIU
     """
@@ -85,7 +85,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [retico_core.text.SpeechRecognitionIU, AudioVADIU, TurnAudioIU]
+        return [
+            retico_core.text.SpeechRecognitionIU,
+            VADTurnAudioIU,
+            TextAlignedAudioIU,
+        ]
 
     @staticmethod
     def output_iu():
@@ -735,7 +739,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     msg.append(iu)
-            elif isinstance(iu, AudioVADIU):
+            elif isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         self.interruption = True
@@ -743,7 +747,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
-            elif isinstance(iu, TurnAudioIU):
+            elif isinstance(iu, TextAlignedAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.final:
                         # print(
@@ -772,7 +776,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     def _llm_thread(self):
         """
         function running the LLM, executed ina separated thread so that the generation can be interrupted,
-        if the user starts talking (the reception of an interruption AudioVADIU).
+        if the user starts talking (the reception of an interruption VADTurnAudioIU).
         """
         while self.thread_active:
             time.sleep(0.01)
