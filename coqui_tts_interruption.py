@@ -2,8 +2,24 @@
 coqui-ai TTS Module
 ==================
 
-This module provides on-device TTS capabilities by using the coqui-ai TTS library and its available
-models.
+A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
+audio), and handles user interruption.
+
+When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
+contained in UpdateMessage.
+This module also aligns the inputed words with the outputted audio, providing the outputted
+TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
+parameter), and its place in the agent's current sentence.
+The module stops synthesizing if it receives the information that the user started talking
+(user barge-in/interruption of agent turn). The interruption information is recognized by
+an AudioVADIU with a parameter vad_state="interruption".
+
+This modules uses the deep learning approach implemented with coqui-ai's TTS library :
+https://github.com/coqui-ai/TTS
+
+Inputs : TurnTextIU, AudioVADIU
+
+Outputs : TurnAudioIU
 """
 
 import datetime
@@ -15,89 +31,39 @@ from hashlib import blake2b
 
 import retico_core
 import numpy as np
+import sys
+
+sys.path.append("C:\\Users\\Alafate\\Documents\\TTS\\")
+# print(sys.path)
 from TTS.api import TTS, load_config
 import torch
 from utils import *
 
-from utils import *
-from vad_turn import AudioVADIU
-
-
-class CoquiTTSInterruption:
-    """Sub-class of CoquiTTSModule, TTS model wrapper.
-    Called with the synthesize function that generates speech (audio data) from a sentence chunk (text data).
-    """
-
-    def __init__(
-        self,
-        model,
-        is_multilingual,
-        speaker_wav,
-        language,
-        device=None,
-    ):
-
-        self.device = device_definition(device)
-        self.tts = None
-        self.model = model
-        self.language = language
-        self.speaker_wav = speaker_wav
-        self.is_multilingual = is_multilingual
-
-    def setup(self):
-        """Init chosen TTS model."""
-        self.tts = TTS(self.model).to(self.device)
-
-    def synthesize(self, text):
-        """Takes the given text and returns the synthesized speech as 22050 Hz
-        int16-encoded numpy ndarray.
-
-        Args:
-            text (str): The speech to synthesize
-
-        Returns:
-            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
-        """
-
-        if self.is_multilingual:
-            # if "multilingual" in file or "vctk" in file:
-            waveforms = self.tts.tts(
-                text=text,
-                language=self.language,
-                speaker_wav=self.speaker_wav,
-                # speaker="Ana Florence",
-            )
-        else:
-            waveforms = self.tts.tts(text=text, speed=2.0)
-
-        # waveform = waveforms.squeeze(1).detach().numpy()[0]
-        waveform = np.array(waveforms)
-
-        # Convert float32 data [-1,1] to int16 data [-32767,32767]
-        waveform = (waveform * 32767).astype(np.int16).tobytes()
-
-        return waveform
-
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
-    """A retico module that provides Text-To-Speech (TTS) using a deep learning approach implemented with coqui-ai's TTS library : https://github.com/coqui-ai/TTS.
-    This class handles the aspects related to retico architecture : messaging (update message, IUs, etc), incremental, etc.
-    Has a subclass, CoquiTTS, that handles the aspects related to TTS engineering.
+    """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
+    audio), and handles user interruption.
 
-    Definition :
-    When receiving sentence chunks from LLM, add to the current input. Start TTS synthesizing the accumulated current input when receiving a COMMIT IU
-    (which, for now, is send by LLM when a ponctuation is encountered during sentence generation).
-    Incremental : the TTS generation could be considered incremental because it receives sentence chunks from LLM and generates speech chunks in consequence.
-    But it could be even more incremental because the TTS models could yield the generated audio data (TODO: to implement in future versions).
+    When receiving COMMIT TurnTextIUs, synthesizes audio (TurnAudioIU) corresponding to all IUs
+    contained in UpdateMessage.
+    This module also aligns the inputed words with the outputted audio, providing the outputted
+    TurnAudioIU with the information of the word it corresponds to (contained in the grounded_word
+    parameter), and its place in the agent's current sentence.
+    The module stops synthesizing if it receives the information that the user started talking
+    (user barge-in/interruption of agent turn). The interruption information is recognized by
+    an AudioVADIU with a parameter vad_state="interruption".
 
-    Inputs : TextIU
+    This modules uses the deep learning approach implemented with coqui-ai's TTS library :
+    https://github.com/coqui-ai/TTS
 
-    Outputs : AudioIU
+    Inputs : TurnTextIU, AudioVADIU
+
+    Outputs : TurnAudioIU
     """
 
     @staticmethod
     def name():
-        return "coqui-ai TTS Module"
+        return "coqui-ai TTS Interruption Module"
 
     @staticmethod
     def description():
@@ -107,11 +73,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [retico_core.text.TextIU, AudioVADIU]
+        return [TurnTextIU, AudioVADIU]
 
     @staticmethod
     def output_iu():
-        return retico_core.audio.AudioIU
+        return TurnAudioIU
 
     LANGUAGE_MAPPING = {
         "en": {
@@ -119,6 +85,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             "vits": "tts_models/en/ljspeech/vits",
             "vits_neon": "tts_models/en/ljspeech/vits--neon",
             # "fast_pitch": "tts_models/en/ljspeech/fast_pitch", # bug sometimes
+            "vits_vctk": "tts_models/en/vctk/vits",
         },
         "multi": {
             "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2",  # bugs
@@ -131,21 +98,26 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         model="jenny",
         language="en",
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
-        dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
         log_file="tts.csv",
         log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
-        **kwargs
+        **kwargs,
     ):
+        """
+        Initializes the CoquiTTSInterruption Module.
+
+        Args:
+            model (string): name of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
+            frame_duration (float): duration of the audio chunks contained in the outputted TurnAudioIUs.
+            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+        """
         super().__init__(**kwargs)
 
-        # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
-
-        self.printing = printing
-
+        # model
         if language not in self.LANGUAGE_MAPPING:
             print("Unknown TTS language. Defaulting to English (en).")
             language = "en"
@@ -159,26 +131,74 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             )
             model = next(iter(self.LANGUAGE_MAPPING[language]))
 
-        self.tts = CoquiTTSInterruption(
-            model=self.LANGUAGE_MAPPING[language][model],
-            language=language,
-            is_multilingual=(language == "multi"),
-            speaker_wav=speaker_wav,
-            device=device,
-        )
+        self.model = None
+        self.model_name = self.LANGUAGE_MAPPING[language][model]
+        self.device = device_definition(device)
+        self.language = language
+        self.speaker_wav = speaker_wav
+        self.is_multilingual = language == "multi"
 
-        self.dispatch_on_finish = dispatch_on_finish
+        # audio
         self.frame_duration = frame_duration
         self.samplerate = None
         self.samplewidth = 2
+        self.chunk_size = None
+        self.chunk_size_bytes = None
+
+        # general
+        self.printing = printing
+        self.log_file = manage_log_folder(log_folder, log_file)
         self._tts_thread_active = False
-        self._latest_text = ""
-        self.latest_input_iu = None
-        self.audio_buffer = []
-        self.audio_pointer = 0
-        self.clear_after_finish = False
+        self.iu_buffer = []
+        self.buffer_pointer = 0
         self.time_logs_buffer = []
-        self.next_IU_is_BOS = True
+        self.interrupted_turn = -1
+        self.current_turn_id = -1
+
+    def synthesize(self, text):
+        """Takes the given text and returns the synthesized speech as 22050 Hz
+        int16-encoded numpy ndarray.
+
+        Args:
+            text (str): The speech to synthesize
+
+        Returns:
+            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
+        """
+
+        final_outputs = self.model.tts(
+            text=text,
+            speaker="p225",
+            return_extra_outputs=True,
+            split_sentences=False,
+            verbose=self.printing,
+        )
+
+        # if self.is_multilingual:
+        #     # if "multilingual" in file or "vctk" in file:
+        #     final_outputs = self.model.tts(
+        #         text=text,
+        #         language=self.language,
+        #         speaker_wav=self.speaker_wav,
+        #         # speaker="Ana Florence",
+        #     )
+        # else:
+        #     final_outputs = self.model.tts(text=text, speed=1.0)
+
+        if len(final_outputs) != 2:
+            raise NotImplementedError(
+                "coqui TTS should output both wavforms and outputs"
+            )
+        else:
+            waveforms, outputs = final_outputs
+
+        # waveform = waveforms.squeeze(1).detach().numpy()[0]
+        waveform = np.array(waveforms)
+
+        # Convert float32 data [-1,1] to int16 data [-32767,32767]
+        waveform = (waveform * 32767).astype(np.int16).tobytes()
+
+        return waveform, outputs
 
     def current_text(self):
         """Convert received IUs data accumulated in current_input list into a string.
@@ -188,51 +208,14 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         return "".join(iu.text for iu in self.current_input)
 
-    def _tts_thread(self):
-        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
-        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
-        it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
+    def current_text_and_words(self):
+        """Convert received IUs data accumulated in current_input list into a string.
+
+        Returns:
+            string: sentence chunk to synthesize speech from.
         """
-        t1 = time.time()
-        while self._tts_thread_active:
-            # this sleep time calculation is complicated and useless
-            # if we don't send silence when there is no audio outputted by the tts model
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
-
-            if self.audio_pointer >= len(self.audio_buffer):
-                if self.clear_after_finish:
-                    self.audio_pointer = 0
-                    self.audio_buffer = []
-                    self.clear_after_finish = False
-
-                    # for WOZ : send commit when finished turn
-                    iu = self.create_iu(self.latest_input_iu)
-                    um = retico_core.UpdateMessage.from_iu(
-                        iu, retico_core.UpdateType.COMMIT
-                    )
-                    self.append(um)
-
-                    # set self.next_IU_is_BOS to True because it is the EOT and next IU sent will be a BOS
-                    self.next_IU_is_BOS = True
-            else:
-                # Reset self._previous_iu at each beginning of turn so that speakerModule can distinguish turns
-                if self.next_IU_is_BOS:
-                    self._previous_iu = None
-                    self.next_IU_is_BOS = False
-
-                raw_audio = self.audio_buffer[self.audio_pointer]
-                self.audio_pointer += 1
-
-                # Only send data to speaker when there is actual data and do not send silence ?
-                iu = self.create_iu(self.latest_input_iu)
-                iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-                self.append(um)
+        words = [iu.text for iu in self.current_input]
+        return "".join(words), words
 
     def process_update(self, update_message):
         """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
@@ -247,61 +230,54 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         if not update_message:
             return None
 
-        final = False
+        end_of_clause = False
+        end_of_turn = False
         for iu, ut in update_message:
-            if isinstance(iu, retico_core.text.TextIU):
-                if ut == retico_core.UpdateType.ADD:
-                    self.current_input.append(iu)
-                    self.latest_input_iu = iu
-                elif ut == retico_core.UpdateType.REVOKE:
-                    # print("REVOKE : ", iu.text)
-                    # print("CURRENT INPUT : ", [iu.text for iu in self.current_input])
-                    self.revoke(iu)
-                elif ut == retico_core.UpdateType.COMMIT:
-                    # COMMIT IUs data are puncutation, should it append to current_input ?
-                    # self.current_input.append(iu)
-                    # self.latest_input_iu = iu
-                    final = True
+            if isinstance(iu, TurnTextIU):
+                # print(
+                #     f"self.interrupted_turn vs iu.turn_id = {self.interrupted_turn, iu.turn_id}"
+                # )
+                if iu.turn_id != self.interrupted_turn:
+                    if ut == retico_core.UpdateType.ADD:
+                        continue
+                    elif ut == retico_core.UpdateType.REVOKE:
+                        self.revoke(iu)
+                    elif ut == retico_core.UpdateType.COMMIT:
+                        if iu.final:
+                            end_of_turn = True
+                        else:
+                            self.current_input.append(iu)
+                            end_of_clause = True
+                # else:
+                #     print("TTS do not process iu")
             elif isinstance(iu, AudioVADIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
-                        final = False
-                        self.clear_after_finish = True
+                        self.interrupted_turn = self.current_turn_id
+                        end_of_clause = False
+                        end_of_turn = False
                         self.current_input = []
-                        # print("TTS interruption")
+                        self.iu_buffer = []
+                        self.buffer_pointer = 0
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
 
-        current_text = self.current_text()
-        if final or (
-            len(current_text) - len(self._latest_text) > 15
-            and not self.dispatch_on_finish
-        ):
-            # print("current_text = ", current_text)
+        if end_of_clause:
+            self.current_turn_id = self.current_input[-1].turn_id
+            # print("TTS : EOC")
             start_time = time.time()
             start_date = datetime.datetime.now()
 
-            self._latest_text = current_text
-            chunk_size = int(self.samplerate * self.frame_duration)
-            chunk_size_bytes = chunk_size * self.samplewidth
-            new_audio = self.tts.synthesize(current_text)
-            new_buffer = []
-            i = 0
-            while i < len(new_audio):
-                chunk = new_audio[i : i + chunk_size_bytes]
-                if len(chunk) < chunk_size_bytes:
-                    chunk = chunk + b"\x00" * (chunk_size_bytes - len(chunk))
-                new_buffer.append(chunk)
-                i += chunk_size_bytes
-            if self.clear_after_finish:
-                self.audio_buffer.extend(new_buffer)
-            else:
-                self.audio_buffer = new_buffer
+            new_buffer = self.get_new_iu_buffer_from_text_input()
+
+            self.iu_buffer.extend(new_buffer)
+            self.current_input = []
 
             end_time = time.time()
             end_date = datetime.datetime.now()
+
             if self.printing:
                 print(
                     "TTS execution time = " + str(round(end_time - start_time, 3)) + "s"
@@ -312,32 +288,173 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             self.time_logs_buffer.append(["Start", start_date.strftime("%T.%f")[:-3]])
             self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
-        if final:
-            self.clear_after_finish = True
-            self.current_input = []
+        if end_of_turn:
+            # print("TTS : EOT")
+            iu = self.create_iu()
+            iu.set_data(final=True)
+            self.iu_buffer.append(iu)
+
+        if end_of_turn and end_of_clause:
+            # print("TTS : EOT & EOC")
+            pass
+
+    def get_new_iu_buffer_from_text_input(self):
+        """Function that aligns the TTS inputs and outputs.
+        It links the words sent by LLM to audio chunks generated by TTS model.
+        As we have access to the durations of the phonems generated by the model,
+        we can link the audio chunks sent to speaker to the words that it corresponds to.
+
+        Returns:
+            list[TurnAudioIU]: the TurnAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
+        """
+        # preprocess on words
+        current_text, words = self.current_text_and_words()
+        pre_pro_words = []
+        pre_pro_words_distinct = []
+        try:
+            for i, w in enumerate(words):
+                if w[0] == " ":
+                    pre_pro_words.append(i - 1)
+                    if len(pre_pro_words) >= 2:
+                        pre_pro_words_distinct.append(
+                            words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+                        )
+                    else:
+                        pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+        except IndexError:
+            print(f"INDEX ERROR : {words, pre_pro_words}")
+            raise IndexError
+
+        pre_pro_words.pop(0)
+        pre_pro_words.append(len(words) - 1)
+        pre_pro_words_distinct.pop(0)
+        if len(pre_pro_words) >= 2:
+            pre_pro_words_distinct.append(
+                words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+            )
+        else:
+            pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+
+        SPACE_TOKEN_ID = 16
+        NB_FRAME_PER_DURATION = 256
+        new_audio, final_outputs = self.synthesize(current_text)
+        tokens = self.model.synthesizer.tts_model.tokenizer.text_to_ids(current_text)
+        space_tokens_ids = []
+        for i, x in enumerate(tokens):
+            if x == SPACE_TOKEN_ID or i == len(tokens) - 1:
+                space_tokens_ids.append(i + 1)
+
+        # pre_tokenized_txt = [
+        #     self.model.synthesizer.tts_model.tokenizer.decode([y]) for y in tokens
+        # ]
+        # pre_tokenized_text = [x if x != "<BLNK>" else "_" for x in pre_tokenized_txt]
+        new_buffer = []
+        for outputs in final_outputs:
+            len_wav = len(outputs["wav"])
+            durations = outputs["outputs"]["durations"].squeeze().tolist()
+            # total_duration = int(sum(durations))
+
+            wav_words_chunk_len = []
+            old_len_w = 0
+            for s_id in space_tokens_ids:
+                wav_words_chunk_len.append(
+                    int(sum(durations[old_len_w:s_id])) * NB_FRAME_PER_DURATION
+                )
+                # wav_words_chunk_len.append(int(sum(durations[old_len_w:s_id])) * len_wav / total_duration )
+                old_len_w = s_id
+
+            if self.printing:
+                if len(pre_pro_words) > len(wav_words_chunk_len):
+                    print("TTS word alignment not exact, less tokens than words")
+                elif len(pre_pro_words) < len(wav_words_chunk_len):
+                    print("TTS word alignment not exact, more tokens than words")
+
+            cumsum_wav_words_chunk_len = list(np.cumsum(wav_words_chunk_len))
+
+            i = 0
+            j = 0
+            while i < len_wav:
+                chunk = outputs["wav"][i : i + self.chunk_size]
+                # modify raw audio to match correct format
+                chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
+                ## TODO : change that silence padding: padding with silence will slow down the speaker a lot
+                word_id = pre_pro_words[-1]
+                if len(chunk) < self.chunk_size_bytes:
+                    chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
+                else:
+                    while i + self.chunk_size >= cumsum_wav_words_chunk_len[j]:
+                        j += 1
+                    if j < len(pre_pro_words):
+                        word_id = pre_pro_words[j]
+
+                temp_word = words[word_id]
+                grounded_iu = self.current_input[word_id]
+                words_until_word_id = words[: word_id + 1]
+                len_words = [len(word) for word in words[: word_id + 1]]
+                char_id = sum(len_words) - 1
+
+                i += self.chunk_size
+                iu = self.create_iu(grounded_iu)
+                iu.set_data(
+                    audio=chunk,
+                    chunk_size=self.chunk_size,
+                    rate=self.samplerate,
+                    sample_width=self.samplewidth,
+                    grounded_word=temp_word,
+                    word_id=word_id,
+                    char_id=char_id,
+                    turn_id=grounded_iu.turn_id,
+                    clause_id=grounded_iu.clause_id,
+                )
+                new_buffer.append(iu)
+
+        return new_buffer
+
+    def _tts_thread(self):
+        # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
+        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
+        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
+        it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
+        """
+        t1 = time.time()
+        while self._tts_thread_active:
+            t2 = t1
+            t1 = time.time()
+            if t1 - t2 < self.frame_duration:
+                time.sleep(self.frame_duration)
+            else:
+                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+
+            if self.buffer_pointer >= len(self.iu_buffer):
+                self.buffer_pointer = 0
+                self.iu_buffer = []
+            else:
+                iu = self.iu_buffer[self.buffer_pointer]
+                self.buffer_pointer += 1
+                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                self.append(um)
 
     def setup(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
-        self.tts.setup()
-        self.samplerate = self.tts.tts.synthesizer.tts_config.get("audio")[
-            "sample_rate"
-        ]
+        self.model = TTS(self.model_name).to(self.device)
+        self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
+        self.chunk_size = int(self.samplerate * self.frame_duration)
+        self.chunk_size_bytes = self.chunk_size * self.samplewidth
 
     def prepare_run(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
-        self.audio_pointer = 0
-        self.audio_buffer = []
+        self.buffer_pointer = 0
+        self.iu_buffer = []
         self._tts_thread_active = True
-        self.clear_after_finish = False
         threading.Thread(target=self._tts_thread).start()
 
     def shutdown(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        self._tts_thread_active = False
         write_logs(self.log_file, self.time_logs_buffer)
+        self._tts_thread_active = False
