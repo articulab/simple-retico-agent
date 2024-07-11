@@ -3,6 +3,193 @@ import datetime
 import os
 
 import torch
+import retico_core
+
+
+class TextAlignedAudioIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
+
+    Attributes:
+        - grounded_word : the word corresponding to the audio.
+        - turn_id (int) : The index of the dialogue's turn the IU is part of.
+        - clause_id (int) : The index of the clause the IU is part of, in the current turn.
+        - word_id (int) : The index of the word that corresponds to the end of the IU].
+        - char_id (int) : The index of the last character from the grounded_word.
+        - final (bool) : Wether the IU is an EOT.
+    """
+
+    @staticmethod
+    def type():
+        return "Text Aligned Audio IU"
+
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        audio=None,
+        rate=None,
+        nframes=None,
+        sample_width=None,
+        grounded_word=None,
+        word_id=None,
+        char_id=None,
+        turn_id=None,
+        clause_id=None,
+        final=None,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+            payload=audio,
+            raw_audio=audio,
+            rate=rate,
+            nframes=nframes,
+            sample_width=sample_width,
+        )
+        self.grounded_word = grounded_word
+        self.word_id = word_id
+        self.char_id = char_id
+        self.turn_id = turn_id
+        self.clause_id = clause_id
+        self.final = final
+
+    def set_data(
+        self,
+        grounded_word=None,
+        word_id=None,
+        char_id=None,
+        turn_id=None,
+        clause_id=None,
+        audio=None,
+        chunk_size=None,
+        rate=None,
+        sample_width=None,
+        final=False,
+    ):
+        """Sets AudioIU parameters and the alignment information"""
+        # alignment information
+        self.grounded_word = grounded_word
+        self.word_id = word_id
+        self.char_id = char_id
+        self.turn_id = turn_id
+        self.clause_id = clause_id
+        self.final = final
+        # AudioIU information
+        self.payload = audio
+        self.raw_audio = audio
+        self.rate = rate
+        self.nframes = chunk_size
+        self.sample_width = sample_width
+
+
+class TurnTextIU(retico_core.text.TextIU):
+    """TextIU enhanced with information related to dialogue turns, clauses, etc.
+
+    Attributes:
+        - turn_id (int) : Which dialogue's turn the IU is part of.
+        - clause_id (int) : Which clause the IU is part of, in the current turn.
+        - final (bool) : Wether the IU is an EOT.
+    """
+
+    @staticmethod
+    def type():
+        return "Turn Text IU"
+
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        text=None,
+        turn_id=None,
+        clause_id=None,
+        final=False,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+            payload=text,
+        )
+        self.turn_id = turn_id
+        self.clause_id = clause_id
+        self.final = final
+
+    def set_data(
+        self,
+        text=None,
+        turn_id=None,
+        clause_id=None,
+        final=False,
+    ):
+        """Sets TextIU parameters and dialogue turns informations (turn_id, clause_id, final)"""
+        # dialogue turns information
+        self.turn_id = turn_id
+        self.clause_id = clause_id
+        self.final = final
+        # TextIU information
+        self.payload = text
+        self.text = text
+
+
+class VADTurnAudioIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced by VADTurnModule with dialogue turn information (agent_turn, user_turn,
+    silence, interruption, etc) contained in the vad_state parameter.
+
+    Attributes:
+        vad_state (string): dialogue turn information (agent_turn, user_turn, silence, interruption, etc) from VADTurnModule.
+    """
+
+    @staticmethod
+    def type():
+        return "VADTurn Audio IU"
+
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        audio=None,
+        vad_state=None,
+        rate=None,
+        nframes=None,
+        sample_width=None,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+            payload=audio,
+            raw_audio=audio,
+            rate=rate,
+            nframes=nframes,
+            sample_width=sample_width,
+        )
+        self.vad_state = vad_state
+
+    def set_data(
+        self, vad_state=None, audio=None, chunk_size=None, rate=None, sample_width=None
+    ):
+        """Sets AudioIU parameters and vad_state"""
+        # vad_state
+        self.vad_state = vad_state
+        # AudioIU information
+        self.payload = audio
+        self.raw_audio = audio
+        self.rate = rate
+        self.nframes = chunk_size
+        self.sample_width = sample_width
 
 
 # LOGS FUNCTIONS
@@ -82,6 +269,7 @@ def merge_logs(log_folder):
         writer.writerow(["Total", first_start, last_stop, total_duration])
 
 
+# DEVICE DEF
 def device_definition(device):
     cuda_available = torch.cuda.is_available()
     final_device = None
