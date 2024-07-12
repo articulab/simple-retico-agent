@@ -23,22 +23,13 @@ Outputs : TextAlignedAudioIU
 """
 
 import datetime
-from email.mime import audio
-import os
 import threading
 import time
-from hashlib import blake2b
-import sys
-
 import retico_core
 import numpy as np
-
-
-sys.path.append("C:\\Users\\Alafate\\Documents\\TTS\\")
-# print(sys.path)
-from TTS.api import TTS, load_config
 import torch
 from utils import *
+from TTS.api import TTS
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):

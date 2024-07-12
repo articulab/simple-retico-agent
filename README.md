@@ -27,6 +27,20 @@ conda env create -n retico -f env_requirements/retico.yml
 Download the LLM weights of a quantized version of the Mistral-7B-Instruct-v0.2 model (from MistralAI) with [this link](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true), it is from [this Huggingface page](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
 At the root of your `retico_test` folder, create a `models` folder and put your newly downloaded `mistral-7b-instruct-v0.2.Q4_K_S.gguf` LLM weights file in it.
 
+### Installation of articulab's clone of CoquiTTS
+
+Clone the github repository
+
+```bash
+git clone <https://github.com/articulab/CoquiTTS.git>
+```
+
+Install the package on pip to make it available for imports
+
+```bash
+pip install -e .
+```
+
 ## Run the system
 
 Activate your new conda environment
