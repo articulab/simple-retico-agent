@@ -1,5 +1,5 @@
 """
-ZeroMQ Module
+ActiveMQ Module
 =============
 
 This module defines two incremental modules ZeroMQReader and ZeroMQWriter that act as a
@@ -24,6 +24,164 @@ from collections import deque
 
 import stomp
 import json
+
+
+class AMQIU(retico_core.IncrementalUnit):
+    """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters.
+
+    Args:
+        retico_core (_type_): _description_
+    """
+
+    def __init__(self, decorated_iu, headers, destination, **kwargs):
+        super().__init__()
+        self.decorated_iu = decorated_iu
+        self.headers = headers
+        self.destination = destination
+
+    @staticmethod
+    def type():
+        return "AMQ IU"
+
+    def get_deco_iu(self):
+        return self.decorated_iu
+
+
+class AMQWriter(retico_core.AbstractModule):
+
+    @staticmethod
+    def name():
+        return "ActiveMQ Writer Module"
+
+    @staticmethod
+    def description():
+        return "A Module providing writing onto a ActiveMQ bus"
+
+    @staticmethod
+    def output_iu():
+        return None
+
+    @staticmethod
+    def input_ius():
+        return [AMQIU]
+
+    def __init__(self, ip, port, **kwargs):
+        """Initializes the ActiveMQWriter.
+
+        Args: topic(str): the topic/scope where the information will be read.
+
+        """
+        super().__init__(**kwargs)
+        self.queue = deque()
+        hosts = [(ip, port)]
+        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
+        self.conn.connect("admin", "admin", wait=True)
+        # self.socket.bind("tcp://*:5555")
+
+    def process_update(self, update_message):
+        """
+        This assumes that the message is json formatted, then packages it as payload into an IU
+        """
+
+        for input_iu, ut in update_message:
+
+            # if the message body is created from IU's data
+            body = {}
+            body["payload"] = input_iu.get_deco_iu.__dict__["payload"]
+            body["update_type"] = str(ut)
+            print("dict = ", body)
+
+            # send the message to the correct destination
+            self.conn.send(
+                body=body,
+                destination=input_iu.destination,
+                headers=input_iu.headers,
+                persistent=True,
+            )
+
+        return None
+
+
+class AMQReader(retico_core.AbstractProducingModule):
+
+    @staticmethod
+    def name():
+        return "ActiveMQ Reader Module"
+
+    @staticmethod
+    def description():
+        return "A Module providing reading onto a ActiveMQ bus"
+
+    @staticmethod
+    def output_iu():
+        return AMQIU
+
+    def __init__(self, ip, port, **kwargs):
+        """Initializes the ActiveMQReader.
+
+        Args: topic(str): the topic/scope where the information will be read.
+
+        """
+        super().__init__(**kwargs)
+        self.queue = deque()
+        hosts = [(ip, port)]
+        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
+        self.conn.connect("admin", "admin", wait=True)
+        self.conn.set_listener("", self.Listener(self))
+        # self.socket.bind("tcp://*:5555")
+        self.target_iu_types = dict()
+
+    def add(self, destination, target_iu_type):
+        self.conn.subscribe(destination=destination, id=1, ack="auto")
+        self.target_iu_types[destination] = target_iu_type
+
+    def on_message(self, frame):
+
+        message = frame.body
+        destination = frame.headers["destination"]
+
+        if destination not in self.target_iu_types:
+            print(destination, "is not a recognized destination")
+            return None
+
+        output_iu = self.target_iu_types[destination](
+            creator=self,
+            iuid=f"{hash(self)}:{self.iu_counter}",
+            previous_iu=self._previous_iu,
+            grounded_in=None,
+        )
+        self.iu_counter += 1
+        self._previous_iu = output_iu
+
+        # output_iu.from_zmq(j)
+        output_iu.payload = message
+
+        update_message = retico_core.UpdateMessage()
+
+        if "update_type" not in frame.headers:
+            print("Incoming IU has no update_type!")
+            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
+        elif frame.headers["update_type"] == "UpdateType.ADD":
+            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
+        elif frame.headers["update_type"] == "UpdateType.REVOKE":
+            update_message.add_iu(output_iu, retico_core.UpdateType.REVOKE)
+        elif frame.headers["update_type"] == "UpdateType.COMMIT":
+            update_message.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+
+    class Listener(stomp.ConnectionListener):
+        def __init__(self, module):
+            super().__init__()
+            # in order to use methods of activeMQ we create its instance
+            self.module = module
+
+        # Override the methods on_error and on_message provides by the parent class
+        def on_error(self, frame):
+            self.module.on_listener_error(frame)
+            # print('received an error "%s"' % frame.body)
+
+        def on_message(self, frame):
+            # self.module.logMessageReception(frame)
+            self.module.on_message(frame)
 
 
 class AMQWriterOpening(retico_core.AbstractModule):
@@ -190,216 +348,6 @@ class fakeBEATSARA(retico_core.AbstractModule):
         # )
 
         return None
-
-
-class AMQIU(retico_core.IncrementalUnit):
-
-    @staticmethod
-    def type():
-        return "AMQ IU"
-
-    def get_payload(self):
-        """Return the text contained in the IU.
-
-        Returns:
-            str: The text contained in the IU.
-        """
-        return self.payload
-
-    def set_payload(self, payload):
-        """Sets the text contained in the IU.
-
-        Args:
-            text (str): The new text of the IU
-        """
-        self.payload = payload
-
-
-class AMQWriter(retico_core.AbstractModule):
-
-    @staticmethod
-    def name():
-        return "ActiveMQ Writer Module"
-
-    @staticmethod
-    def description():
-        return "A Module providing writing onto a ActiveMQ bus"
-
-    @staticmethod
-    def output_iu():
-        return None
-
-    @staticmethod
-    def input_ius():
-        return [retico_core.IncrementalUnit]
-
-    def __init__(self, ip, port, headers, destination, **kwargs):
-        """Initializes the ActiveMQWriter.
-
-        Args: topic(str): the topic/scope where the information will be read.
-
-        """
-        super().__init__(**kwargs)
-        self.queue = deque()
-        hosts = [(ip, port)]
-        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
-        self.conn.connect("admin", "admin", wait=True)
-        # self.socket.bind("tcp://*:5555")
-        self.headers = headers
-        self.destination = destination
-
-    def process_update(self, update_message):
-        """
-        This assumes that the message is json formatted, then packages it as payload into an IU
-        """
-        # print("ZMQ Writer process update", self.topic)
-
-        # assert self.headers == ["ELVISH_SCOPE", "MESSAGE_PREFIX"]
-
-        for input_iu, um in update_message:
-
-            # if the message body is created from IU's data
-            d = {}
-            d["payload"] = input_iu.__dict__["payload"]
-            d["update_type"] = str(um)
-            print("dict = ", d)
-            body = d
-            headers = self.headers
-
-            # testing with a fixed headers and XML body from BEAT
-            body = "vrWEFUI start"
-            headers = dict()
-            headers["ELVISH_SCOPE"] = "DEFAULT_SCOPE"
-            headers["MESSAGE_PREFIX"] = "vrExpress"
-
-            # # send the message to the correct destination
-            # self.conn.send(
-            #     body=body,
-            #     destination=self.destination,
-            #     headers=self.headers,
-            #     persistent=True,
-            # )
-
-            # step 1
-            headers["MESSAGE_PREFIX"] = "vrExpress"
-            body3 = "vrWEFUI start"
-            self.conn.send(
-                body=body3,
-                destination="/topic/DEFAULT_SCOPE",
-                headers=headers,
-                persistent=True,
-            )
-
-            # step 2
-            headers["MESSAGE_PREFIX"] = "vrSpeak"
-            body1 = 'vrSpeak Brad user 1000037 <?xml version="1.0" encoding="utf-16"?><act><participant id="brad" role="actor" /><bml><speech id="sp1" ref="voice_defaultTTS" type="application/ssml+xml"><mark name="T1" />hi <mark name="T2" /><mark name="T2" />i am <mark name="T3" /><mark name="T3" />sara <mark name="T4" /><mark name="T4" />what is <mark name="T5" /><mark name="T5" />your <mark name="T6" /><mark name="T6" />name <mark name="T7" /></speech><event message="vrAgentSpeech partial 1480100645859 T1 hi " stroke="sp1:T1" /><event message="vrAgentSpeech partial 1480100645859 T3 hi i am " stroke="sp1:T3" /><event message="vrAgentSpeech partial 1480100645859 T5 hi i am sara " stroke="sp1:T5" /><event message="vrAgentSpeech partial 1480100645859 T7 hi i am sara what is " stroke="sp1:T7" /><event message="vrAgentSpeech partial 1480100645859 T9 hi i am sara what is your " stroke="sp1:T9" /><event message="vrAgentSpeech partial 1480100645859 T11 hi i am sara what is your name " stroke="sp1:T11" /><sbm:event message="vrSpoke brad user 1480100642410 hi i am sara what is your name." stroke="sp1:relax" xmlns:xml="http://www.w3.org/XML/1998/namespace" xmlns:sbm="http://ict.usc.edu" /><intonation_break start="sp1:T0" end="sp1:T3"/><intonation_tone endtone="L-H%" start="sp1:T0" end="sp1:T4"/><intonation_tone endtone="L-L%" start="sp1:T3" end="sp1:T4"/><face type="FACS" au="2" amount="5.0"/><animation stroke="sp1:T3" priority="1" name="beat_low_right_Sara"/><head type="NOD" amount="0.1" repeats="1" relax="sp1:T3" priority="1" /><face type="FACS" stroke="sp1:T5" au="101" amount="1.0" priority="1" /><face type="FACS" start="sp1:T0" end="sp1:T0" au="103" amount="0.5"/><animation start="sp1:T0" priority="1" name="beat_middle_right_Sara"/><gaze participant = "Brad" target="Front" angle="0" start="7" sbm:joint-range="EYES" xmlns:sbm="http://ict.usc.edu"/></bml></act>'
-            self.conn.send(
-                body=body1,
-                destination="/topic/DEFAULT_SCOPE",
-                headers=headers,
-                persistent=True,
-            )
-
-        # headers = dict()
-        # headers["ELVISH_SCOPE"] = "DEFAULT_SCOPE"
-        # headers["MESSAGE_PREFIX"] = "vrWEFUI"
-
-        # body1 = 'vrSpeak Brad user 1000037 <?xml version="1.0" encoding="utf-16"?><act><participant id="brad" role="actor" /><bml><speech id="sp1" ref="voice_defaultTTS" type="application/ssml+xml"><mark name="T1" />hi <mark name="T2" /><mark name="T2" />i am <mark name="T3" /><mark name="T3" />sara <mark name="T4" /><mark name="T4" />what is <mark name="T5" /><mark name="T5" />your <mark name="T6" /><mark name="T6" />name <mark name="T7" /></speech><event message="vrAgentSpeech partial 1480100645859 T1 hi " stroke="sp1:T1" /><event message="vrAgentSpeech partial 1480100645859 T3 hi i am " stroke="sp1:T3" /><event message="vrAgentSpeech partial 1480100645859 T5 hi i am sara " stroke="sp1:T5" /><event message="vrAgentSpeech partial 1480100645859 T7 hi i am sara what is " stroke="sp1:T7" /><event message="vrAgentSpeech partial 1480100645859 T9 hi i am sara what is your " stroke="sp1:T9" /><event message="vrAgentSpeech partial 1480100645859 T11 hi i am sara what is your name " stroke="sp1:T11" /><sbm:event message="vrSpoke brad user 1480100642410 hi i am sara what is your name." stroke="sp1:relax" xmlns:xml="http://www.w3.org/XML/1998/namespace" xmlns:sbm="http://ict.usc.edu" /><intonation_break start="sp1:T0" end="sp1:T3"/><intonation_tone endtone="L-H%" start="sp1:T0" end="sp1:T4"/><intonation_tone endtone="L-L%" start="sp1:T3" end="sp1:T4"/><face type="FACS" au="2" amount="5.0"/><animation stroke="sp1:T3" priority="1" name="beat_low_right_Sara"/><head type="NOD" amount="0.1" repeats="1" relax="sp1:T3" priority="1" /><face type="FACS" stroke="sp1:T5" au="101" amount="1.0" priority="1" /><face type="FACS" start="sp1:T0" end="sp1:T0" au="103" amount="0.5"/><animation start="sp1:T0" priority="1" name="beat_middle_right_Sara"/><gaze participant = "Brad" target="Front" angle="0" start="7" sbm:joint-range="EYES" xmlns:sbm="http://ict.usc.edu"/></bml></act>'
-        # # body2 = 'vrSpeak Brad User 1466989728367 <?xml version="1.0" encoding="utf-16"?><act><participant id="Brad" role="actor" /><bml><event message="vrSpoke Brad User 6 " xmlns:sbm="​http://ict.usc.edu​" /> <animation priority="1" name="beat_low_right_sara" /></bml></act>'
-
-        # body3 = "vrWEFUI start"
-
-        # headers["MESSAGE_PREFIX"] = "vrExpress"
-        # self.conn.send(
-        #     body=body3,
-        #     destination="/topic/DEFAULT_SCOPE",
-        #     headers=headers,
-        #     persistent=True,
-        # )
-
-        # headers["MESSAGE_PREFIX"] = "vrSpeak"
-        # self.conn.send(
-        #     body=body1,
-        #     destination="/topic/DEFAULT_SCOPE",
-        #     headers=headers,
-        #     persistent=True,
-        # )
-
-        return None
-
-
-class AMQReader(retico_core.AbstractProducingModule):
-
-    @staticmethod
-    def name():
-        return "ActiveMQ Reader Module"
-
-    @staticmethod
-    def description():
-        return "A Module providing reading onto a ActiveMQ bus"
-
-    @staticmethod
-    def output_iu():
-        return AMQIU
-
-    def __init__(self, ip, port, destination, **kwargs):
-        """Initializes the ActiveMQReader.
-
-        Args: topic(str): the topic/scope where the information will be read.
-
-        """
-        super().__init__(**kwargs)
-        self.queue = deque()
-        hosts = [(ip, port)]
-        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
-        self.conn.connect("admin", "admin", wait=True)
-        self.conn.set_listener("", self.Listener(self))
-        self.conn.subscribe(destination=destination, id=1, ack="auto")
-        # self.socket.bind("tcp://*:5555")
-        self.destination = destination
-        # self.frame_buffer = []
-
-    class Listener(stomp.ConnectionListener):
-        def __init__(self, module):
-            super().__init__()
-            # in order to use methods of activeMQ we create its instance
-            self.module = module
-
-        # Override the methods on_error and on_message provides by the parent class
-        def on_error(self, frame):
-            self.module.on_listener_error(frame)
-            # print('received an error "%s"' % frame.body)
-
-        def on_message(self, frame):
-            # self.module.logMessageReception(frame)
-            self.module.on_message(frame)
-
-    def on_message(self, frame):
-        # self.frame_buffer.append(frame)
-
-        output_iu = self.create_iu()
-        output_iu.set_payload(frame)
-        update_message = retico_core.UpdateMessage()
-
-        if "update_type" not in frame.headers:
-            print("Incoming IU has no update_type!")
-            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
-        elif frame.headers["update_type"] == "UpdateType.ADD":
-            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
-        elif frame.headers["update_type"] == "UpdateType.REVOKE":
-            update_message.add_iu(output_iu, retico_core.UpdateType.REVOKE)
-        elif frame.headers["update_type"] == "UpdateType.COMMIT":
-            update_message.add_iu(output_iu, retico_core.UpdateType.COMMIT)
-
-        # print(update_message)
-        print([iu for (iu, ut) in update_message])
-        self.append(update_message)
-        # for queue in self._right_buffers:
-        #     while not queue.empty():
-        #         um = queue.get_nowait()
-        #         print([iu for (iu, ut) in um])
-        # print([[um for um in queue] for queue in self._right_buffers])
-        # return update_message
 
 
 class fakeTTSSARA(AbstractProducingModule):
