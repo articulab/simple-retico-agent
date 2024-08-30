@@ -1,8 +1,10 @@
 import keyboard
+import retico_core.abstract
 import torch
 
 from retico_core import *
 
+from amq import AMQReader, AMQWriter, AMQWriterOpening, fakeBEATSARA, fakeTTSSARA
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 from llama_cpp_memory_incremental_interruption import (
@@ -25,6 +27,8 @@ from woz_audio.WozMicrophone_one_file_allinone import (
 )
 from woz_audio.WaveModule import WaveModule
 from woz_audio.WozAsrModule import WozAsrModule
+
+from retico_zmq.retico_zmq.zmq import WriterSingleton, ZeroMQWriter, ReaderSingleton
 
 
 def callback(update_msg):
@@ -442,12 +446,167 @@ def test_cuda():
         network.stop(llama_mem_icr)
 
 
+def callback_fun(update_msg):
+    for x in update_msg:
+        print("callback = ", x)
+
+
+def test_body():
+    """
+    Writers are individual modules, but Readers are all a single module with the option of having many channels.
+    Each channel can be set to output a specific IU type.
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
+    # device = "cpu"
+    printing = False
+    log_folder = create_new_log_folder("logs/run")
+    frame_length = 0.02
+    rate = 16000
+
+    hosts = [("localhost", 61613)]
+    # ip = "127.0.0.1"
+    ip = "localhost"
+    port = "61613"
+
+    mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    amq = AMQWriterOpening(ip=ip, port=port, topic="test")
+
+    # # the IP of the writer should be the originating PC's IP
+    # WriterSingleton(ip=ip, port=port)
+    # test = ZeroMQWriter(topic="test")
+
+    # # the IP of the reader should be the target PC's IP
+    # reader = ReaderSingleton(ip=ip, port=port)
+    # reader.add(topic="test", target_iu_type=retico_core.text.TextIU)
+
+    cback = debug.CallbackModule(callback=callback_fun)
+
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(amq)
+    # asr.subscribe(test)
+    # asr.subscribe(reader)
+    # reader.subscribe(cback)
+
+    # running system
+    try:
+        network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+        # merge_logs(log_folder)
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
+        print(f"Unexpected {err}")
+        network.stop(mic)
+
+
+def test_body_2():
+    """
+    Testing SARA's body activation with a retico module simulating BEAT output (AMQWriter) and another simulating TTS output (fakeTTSSARA).
+    The fakeTTS module plays the speech.mp3 file, that is not the file matching the gesture.
+
+    SARA's body is moving every time the ASR is recognizing voice, and sending a message to the fake BEAT module.
+    -> Which means that it is possible to control SARA's body entirely with a real BEAT-like module implemented in retico
+    (and with retico modules sending data to the unity agent through an MQ like ActiveMQ).
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
+    # device = "cpu"
+    printing = False
+    log_folder = create_new_log_folder("logs/run")
+    frame_length = 0.02
+    rate = 16000
+
+    ip = "localhost"
+    port = "61613"
+
+    mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+
+    beat = fakeBEATSARA(ip=ip, port=port)
+
+    mark_path = "bodies/sara/mark.json"
+    speech_path = "bodies/sara/speech.mp3"
+    tts = fakeTTSSARA(
+        speech_file_path=speech_path, mark_file_path=mark_path, ip=ip, port=port
+    )
+
+    cback = debug.CallbackModule(callback=callback_fun)
+
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(beat)
+    tts.subscribe(cback)
+    # asr.subscribe(opening)
+    # amqr.subscribe(tts)
+    # amqr.subscribe(cback)
+
+    # running system
+    try:
+        network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+        # merge_logs(log_folder)
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
+        print(f"Unexpected {err}")
+        network.stop(mic)
+
+
 msg = []
 
 if __name__ == "__main__":
     # main_llama_cpp_python_chat_7b()
     # main_woz()
     # main_demo()
-    main_speaker_interruption()
+    # main_speaker_interruption()
     # test_cuda()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")
+
+    # test_body()
+    test_body_2()
