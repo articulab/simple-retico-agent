@@ -10,12 +10,15 @@ information revceived over the ZeroMQ bridge.
 # retico
 import os
 from pathlib import Path
+import random
 import subprocess
 import sys
+import numpy as np
 import retico_core
 from retico_core.abstract import *
 
 # zeromq & supporting libraries
+import retico_core.abstract
 import zmq, json
 import threading
 import datetime
@@ -24,6 +27,7 @@ from collections import deque
 
 import stomp
 import json
+from urllib.parse import unquote
 
 
 class AMQIU(retico_core.IncrementalUnit):
@@ -33,11 +37,11 @@ class AMQIU(retico_core.IncrementalUnit):
         retico_core (_type_): _description_
     """
 
-    def __init__(self, decorated_iu, headers, destination, **kwargs):
-        super().__init__()
-        self.decorated_iu = decorated_iu
-        self.headers = headers
-        self.destination = destination
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.decorated_iu = None
+        self.headers = None
+        self.destination = None
 
     @staticmethod
     def type():
@@ -45,6 +49,90 @@ class AMQIU(retico_core.IncrementalUnit):
 
     def get_deco_iu(self):
         return self.decorated_iu
+
+    def set_amq(self, decorated_iu, headers, destination):
+        self.decorated_iu = decorated_iu
+        self.headers = headers
+        self.destination = destination
+
+
+class AMQReader(retico_core.AbstractProducingModule):
+
+    @staticmethod
+    def name():
+        return "ActiveMQ Reader Module"
+
+    @staticmethod
+    def description():
+        return "A Module providing reading onto a ActiveMQ bus"
+
+    @staticmethod
+    def output_iu():
+        return IncrementalUnit
+
+    def __init__(self, ip, port, **kwargs):
+        """Initializes the ActiveMQReader.
+
+        Args: topic(str): the topic/scope where the information will be read.
+
+        """
+        super().__init__(**kwargs)
+        hosts = [(ip, port)]
+        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
+        self.conn.connect("admin", "admin", wait=True)
+        self.conn.set_listener("", self.Listener(self))
+        self.target_iu_types = dict()
+
+    class Listener(stomp.ConnectionListener):
+        def __init__(self, module):
+            super().__init__()
+            # in order to use methods of activeMQ we create its instance
+            self.module = module
+
+        # Override the methods on_error and on_message provides by the parent class
+        def on_error(self, frame):
+            self.module.on_listener_error(frame)
+            # print('received an error "%s"' % frame.body)
+
+        def on_message(self, frame):
+            # self.module.logMessageReception(frame)
+            self.module.on_message(frame)
+
+    def add(self, destination, target_iu_type):
+        self.conn.subscribe(destination=destination, id=1, ack="auto")
+        self.target_iu_types[destination] = target_iu_type
+
+    def on_message(self, frame):
+
+        message = frame.body
+        destination = frame.headers["destination"]
+
+        if destination not in self.target_iu_types:
+            print(destination, "is not a recognized destination")
+            return None
+
+        # create the decorated IU (cannot use classical create_iu from AbstractModule)
+        output_iu = self.target_iu_types[destination](
+            creator=self,
+            iuid=f"{hash(self)}:{self.iu_counter}",
+            previous_iu=self._previous_iu,
+            grounded_in=None,
+        )
+        self.iu_counter += 1
+        self._previous_iu = output_iu
+        output_iu.payload = message
+
+        update_message = retico_core.UpdateMessage()
+
+        if "update_type" not in frame.headers:
+            print("Incoming IU has no update_type!")
+            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
+        elif frame.headers["update_type"] == "UpdateType.ADD":
+            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
+        elif frame.headers["update_type"] == "UpdateType.REVOKE":
+            update_message.add_iu(output_iu, retico_core.UpdateType.REVOKE)
+        elif frame.headers["update_type"] == "UpdateType.COMMIT":
+            update_message.add_iu(output_iu, retico_core.UpdateType.COMMIT)
 
 
 class AMQWriter(retico_core.AbstractModule):
@@ -72,7 +160,6 @@ class AMQWriter(retico_core.AbstractModule):
 
         """
         super().__init__(**kwargs)
-        self.queue = deque()
         hosts = [(ip, port)]
         self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
         self.conn.connect("admin", "admin", wait=True)
@@ -83,105 +170,274 @@ class AMQWriter(retico_core.AbstractModule):
         This assumes that the message is json formatted, then packages it as payload into an IU
         """
 
-        for input_iu, ut in update_message:
+        for amq_iu, ut in update_message:
 
-            # if the message body is created from IU's data
-            body = {}
-            body["payload"] = input_iu.get_deco_iu.__dict__["payload"]
-            body["update_type"] = str(ut)
-            print("dict = ", body)
+            decorated_iu = amq_iu.get_deco_iu()
+
+            # # if we want to send a RETICO IU type message
+            # body = {}
+            # body["payload"] = input_iu.get_deco_iu.__dict__["payload"]
+            # body["update_type"] = str(ut)
+            # print("dict = ", body)
+
+            # if we just want to send the payload
+            body = decorated_iu.payload
 
             # send the message to the correct destination
+            # print(
+            #     f"sent {body},  to : {amq_iu.destination} , with headers : {amq_iu.headers}"
+            # )
             self.conn.send(
                 body=body,
-                destination=input_iu.destination,
-                headers=input_iu.headers,
+                destination=amq_iu.destination,
+                headers=amq_iu.headers,
                 persistent=True,
             )
 
         return None
 
 
-class AMQReader(retico_core.AbstractProducingModule):
+class TextAnswertoBEATBridge(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "ActiveMQ Reader Module"
+        return "TextAnswertoBEATBridge Module"
 
     @staticmethod
     def description():
-        return "A Module providing reading onto a ActiveMQ bus"
+        return "A Module providing a way to tranform transcript outputted from ASR into BEAT input format"
 
     @staticmethod
     def output_iu():
         return AMQIU
 
-    def __init__(self, ip, port, **kwargs):
-        """Initializes the ActiveMQReader.
+    @staticmethod
+    def input_ius():
+        return [IncrementalUnit]
+
+    def __init__(self, **kwargs):
+        """Initializes the TextAnswertoBEATBridge.
 
         Args: topic(str): the topic/scope where the information will be read.
 
         """
         super().__init__(**kwargs)
-        self.queue = deque()
-        hosts = [(ip, port)]
-        self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
-        self.conn.connect("admin", "admin", wait=True)
-        self.conn.set_listener("", self.Listener(self))
-        # self.socket.bind("tcp://*:5555")
-        self.target_iu_types = dict()
+        self.headers = [
+            {"ELVISH_SCOPE": "DEFAULT_SCOPE", "MESSAGE_PREFIX": "vrExpress"},
+            {"ELVISH_SCOPE": "DEFAULT_SCOPE", "MESSAGE_PREFIX": "vrSpeak"},
+        ]
+        self.destinations = ["/topic/DEFAULT_SCOPE", "/topic/vrSSML"]
+        self.buffer = []
 
-    def add(self, destination, target_iu_type):
-        self.conn.subscribe(destination=destination, id=1, ack="auto")
-        self.target_iu_types[destination] = target_iu_type
-
-    def on_message(self, frame):
-
-        message = frame.body
-        destination = frame.headers["destination"]
-
-        if destination not in self.target_iu_types:
-            print(destination, "is not a recognized destination")
-            return None
-
-        output_iu = self.target_iu_types[destination](
-            creator=self,
-            iuid=f"{hash(self)}:{self.iu_counter}",
-            previous_iu=self._previous_iu,
-            grounded_in=None,
+    def create_iu(self, decorated_iu, destination, headers, grounded_iu=None):
+        iu = super().create_iu(grounded_iu)
+        iu.set_amq(
+            decorated_iu=decorated_iu,
+            headers=headers,
+            destination=destination,
         )
-        self.iu_counter += 1
-        self._previous_iu = output_iu
+        return iu
 
-        # output_iu.from_zmq(j)
-        output_iu.payload = message
+    def process_update(self, update_message):
 
-        update_message = retico_core.UpdateMessage()
+        um = retico_core.abstract.UpdateMessage()
 
-        if "update_type" not in frame.headers:
-            print("Incoming IU has no update_type!")
-            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
-        elif frame.headers["update_type"] == "UpdateType.ADD":
-            update_message.add_iu(output_iu, retico_core.UpdateType.ADD)
-        elif frame.headers["update_type"] == "UpdateType.REVOKE":
-            update_message.add_iu(output_iu, retico_core.UpdateType.REVOKE)
-        elif frame.headers["update_type"] == "UpdateType.COMMIT":
-            update_message.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+        final = False
+        for input_iu, ut in update_message:
+            if ut == retico_core.UpdateType.COMMIT:
+                if input_iu.final:
+                    final = True
+                else:
+                    self.buffer.append(input_iu.payload)
 
-    class Listener(stomp.ConnectionListener):
-        def __init__(self, module):
-            super().__init__()
-            # in order to use methods of activeMQ we create its instance
-            self.module = module
+        if final:
+            if len(self.buffer) == 1:
+                complete_text = self.buffer[0]
+            else:
+                complete_text = "".join(self.buffer)
+            print(complete_text)
+            if complete_text is None:
+                print("complete text is NONE :", [iu for iu in update_message])
 
-        # Override the methods on_error and on_message provides by the parent class
-        def on_error(self, frame):
-            self.module.on_listener_error(frame)
-            # print('received an error "%s"' % frame.body)
+            # combo_list = [
+            #     ["greetings", "greeting", "NONE"],
+            #     ["introduction", "introduce", "NONE"],
+            #     ["farewell", "pre_closing", "NONE"],
+            #     ["NONE", "NONE", "NONE"],
+            # ]
+            # combo = combo_list[random.randrange(len(combo_list))]
 
-        def on_message(self, frame):
-            # self.module.logMessageReception(frame)
-            self.module.on_message(frame)
+            # from SARA NLG module
+            non_ascii = complete_text.replace("'", "")
+            ssml_utterance, beat_utterance = non_ascii, non_ascii
+            ssml_utterance = "<speak>" + ssml_utterance + "</speak>"
+            none = "NONE"
+            body = f"""vrExpress Brad user 1480100642410 <?xml version="1.0" encoding="UTF-8" standalone="no" ?> 
+            <act> <participant id="Brad" role="actor" /><fml> 
+            <turn continuation="false" />
+            <sentence intention="{none}" strategy="{none}" rapport="{none}" text="{beat_utterance}" />
+            </fml>
+            <bml>
+            <speech>"{beat_utterance}"</speech>
+            </bml>
+            <ssml>
+            <speech><s>"{beat_utterance}"</s></speech>
+            </ssml>
+            </act>"""
+            beat_iu = retico_core.text.TextIU(iuid=0)
+            beat_iu.payload = beat_utterance
+            ssml_iu = retico_core.text.TextIU(iuid=1)
+            ssml_iu.payload = ssml_utterance
+            default_scope_iu = retico_core.text.TextIU(iuid=2)
+            default_scope_iu.payload = body
+
+            # create AMQIU
+            output_iu = self.create_iu(
+                decorated_iu=ssml_iu,
+                destination="/topic/vrSSML",
+                headers=self.headers[1],
+            )
+            um.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+            output_iu = self.create_iu(
+                decorated_iu=beat_iu,
+                destination="/topic/vrNLG",
+                headers=self.headers[1],
+            )
+            um.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+            output_iu = self.create_iu(
+                decorated_iu=beat_iu,
+                destination="/topic/vrNLGWOZ",
+                headers=self.headers[1],
+            )
+            um.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+            output_iu = self.create_iu(
+                decorated_iu=default_scope_iu,
+                destination=self.destinations[0],
+                headers=self.headers[0],
+            )
+            um.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+
+            self.buffer = []
+            return um
+
+    # def process_update(self, update_message):
+    #     """
+    #     This assumes that the message is json formatted, then packages it as payload into an IU
+    #     """
+    #     um = retico_core.abstract.UpdateMessage()
+
+    #     msg = []
+    #     for input_iu, ut in update_message:
+    #         if ut == retico_core.UpdateType.COMMIT:
+    #             if not input_iu.final:
+    #                 msg.append(input_iu.payload)
+
+    #     if len(msg) == 0:
+    #         return None
+    #     elif len(msg) == 1:
+    #         complete_text = msg[0]
+    #     else:
+    #         complete_text = " ".join(msg)
+    #     print(complete_text)
+    #     if complete_text is None:
+    #         print("complete text is NONE :", [iu for iu in update_message])
+
+    #     # create BEAT format message from the IU's text
+    #     ssml_string = ""
+    #     for st in msg[:-1]:
+    #         ssml_string += st + """ <break strength="medium"/>"""
+    #     ssml_string += msg[-1]
+
+    #     # phases = [
+    #     #     "recommend_session",
+    #     #     "find_session_detail",
+    #     #     "find_person",
+    #     #     "recommend_people",
+    #     #     "like",
+    #     #     "food",
+    #     #     "dislike",
+    #     #     "party",
+    #     #     "introduction",
+    #     #     "farewell",
+    #     #     "reset",
+    #     #     "greeting",
+    #     #     "positive_confirmation",
+    #     #     "negative_confirmation",
+    #     #     "user_tells_about_work",
+    #     #     "gratitude",
+    #     #     "self_naming,",
+    #     # ]
+    #     # phase = phases[random.randrange(len(phases))]
+    #     # phase = "greetings"
+
+    #     # strategies = [
+    #     #     "baseline",
+    #     #     "None",
+    #     #     "SD",
+    #     #     "VSN",
+    #     #     "QE",
+    #     #     "ASN",
+    #     #     "VSN",
+    #     #     "BC",
+    #     #     "PR",
+    #     #     "RSE",
+    #     # ]
+    #     # strategy = strategies[random.randrange(len(strategies))]
+    #     # strategy = "NONE"
+
+    #     combo_not_working = [
+    #         ["NONE", "NONE", "NONE"],
+    #         [
+    #             "session_recommendation",
+    #             "indicate_start_of_session_recommendation",
+    #             "NONE",
+    #         ],
+    #         [
+    #             "goal_elicitation",
+    #             "start_goal_elicitation",
+    #             "NONE",
+    #         ],
+    #         [
+    #             "food_recommendation",
+    #             "indicate_start_of_food_recommendation_as_first_of_multiple_goals",
+    #             "NONE",
+    #         ],
+    #     ]
+
+    #     combo_list = [
+    #         ["greetings", "greeting", "NONE"],
+    #         ["introduction", "introduce", "NONE"],
+    #         ["farewell", "pre_closing", "NONE"],
+    #         ["NONE", "NONE", "NONE"],
+    #     ]
+    #     combo = combo_list[random.randrange(len(combo_list))]
+
+    #     formatted_text = f"""vrExpress Brad user 1480100642410 <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+    #     <act> <participant id="Brad" role="actor" /><fml>
+    #     <turn continuation="false" />
+    #     <affect type="neutral" target="addressee">
+    #     </affect> <culture type="neutral"> </culture>
+    #     <personality type="neutral"> </personality>
+    #     <sentence phase="{combo[0]}" intention="{combo[1]}" strategy="{combo[2]}" rapport="NONE" text="{complete_text}" />
+    #     </fml>
+    #     <bml>
+    #     <speech>
+    #     {complete_text}</speech>
+    #     </bml>
+    #     <ssml>
+    #     <speech><s>{ssml_string}</s></speech>
+    #     </ssml>
+    #     </act>"""
+
+    #     print("formatted_text = ", formatted_text)
+    #     text_iu = retico_core.text.TextIU(iuid=0)
+    #     text_iu.payload = formatted_text
+
+    #     # create AMQIU
+    #     output_iu = self.create_iu(decorated_iu=text_iu)
+    #     um.add_iu(output_iu, retico_core.UpdateType.COMMIT)
+
+    #     return um
 
 
 class AMQWriterOpening(retico_core.AbstractModule):
@@ -209,7 +465,6 @@ class AMQWriterOpening(retico_core.AbstractModule):
 
         """
         super().__init__(**kwargs)
-        self.queue = deque()
         hosts = [(ip, port)]
         self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
         self.conn.connect("admin", "admin", wait=True)
@@ -413,7 +668,7 @@ class fakeTTSSARA(AbstractProducingModule):
         message = frame.body
         destination = frame.headers["destination"]
 
-        print("TTS message, destination = ", destination)
+        # print("TTS message, destination = ", destination)
 
         if destination == "/topic/vrSSML":
             pass
@@ -423,10 +678,11 @@ class fakeTTSSARA(AbstractProducingModule):
         #     self.storeFile(mark_stream, type="mark")
 
         elif destination == "/topic/DEFAULT_SCOPE":
+
             message = message.split(" ")
-            print("message = ", message)
+            # print("message = ", message)
             if "RemoteSpeechCmd" == message[0]:
-                print("REMOTE")
+                # print("REMOTE")
                 self.sentence_id = message[1].split("+")[2]
 
                 # cmd = " ".join(message[1:])
@@ -449,59 +705,15 @@ class fakeTTSSARA(AbstractProducingModule):
                     )
 
             elif "PlaySound" == message[0]:
-                print("playsound")
+                # print("playsound")
                 # self.logger.debug("playsound")
-                self.play()
+                # self.play()
+                pass
 
-    # def process_update(self, update_message):
-
-    #     print("TTS process update")
-
-    #     for iu, ut in update_message:
-    #         frame = iu.payload
-
-    #         message = frame.body
-    #         destination = frame.headers["destination"]
-
-    #         print("TTS message, destination = ", destination)
-
-    #         if destination == "/topic/vrSSML":
-    #             pass
-    #         #     speech_stream = self.synthesis(text=message)
-    #         #     mark_stream = self.generateMark(message)
-    #         #     self.storeFile(speech_stream, type="speech")
-    #         #     self.storeFile(mark_stream, type="mark")
-
-    #         elif destination == "/topic/DEFAULT_SCOPE":
-    #             message = message.split(" ")
-    #             if "RemoteSpeechCmd" == message[0]:
-    #                 self.sentence_id = message[1].split("+")[2]
-
-    #                 # cmd = " ".join(message[1:])
-    #                 # idx = cmd.index('<')
-    #                 # text = cmd[idx:]
-    #                 # text = self.removeXMLTags(text)
-    #                 # text = self.removePunctuationMarks(text)
-
-    #                 with open(self.mark_file_path) as f:
-    #                     mark_json = json.load(f)
-
-    #                 if mark_json != {}:
-    #                     reply = self.generateMessage(mark_json)
-
-    #                     headers = dict()
-    #                     headers["ELVISH_SCOPE"] = "DEFAULT_SCOPE"
-    #                     headers["MESSAGE_PREFIX"] = "RemoteSpeechReply"
-    #                     self.send_message(
-    #                         message=reply, destination="DEFAULT_SCOPE", headers=headers
-    #                     )
-
-    #             elif "PlaySound" == message[0]:
-    #                 # print('playsound')
-    #                 # self.logger.debug("playsound")
-    #                 self.play()
-
-    #     return None
+            elif "vrSpeak" == message[0]:
+                text = unquote(message[1])
+                text2 = text.replace("+", " ")
+                print(f"vrSpeak message = {text2}\n")
 
     def send_message(
         self, message, destination, headers, isQueue=False, persistent=True

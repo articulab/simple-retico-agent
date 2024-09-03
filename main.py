@@ -4,7 +4,14 @@ import torch
 
 from retico_core import *
 
-from amq import AMQReader, AMQWriter, AMQWriterOpening, fakeBEATSARA, fakeTTSSARA
+from amq import (
+    AMQReader,
+    AMQWriter,
+    AMQWriterOpening,
+    TextAnswertoBEATBridge,
+    fakeBEATSARA,
+    fakeTTSSARA,
+)
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 from llama_cpp_memory_incremental_interruption import (
@@ -451,10 +458,14 @@ def callback_fun(update_msg):
         print("callback = ", x)
 
 
+def callback_only_beat(update_msg):
+    for x in update_msg:
+        print("callback = ", x)
+
+
 def test_body():
     """
-    Writers are individual modules, but Readers are all a single module with the option of having many channels.
-    Each channel can be set to output a specific IU type.
+    Testing if an ActiveMQ retico module (AMQWriterOpening) could trigger SARA's oppening animation.
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -526,6 +537,7 @@ def test_body():
 
 def test_body_2():
     """
+    ADDITION : testing if sound and further dialogue animations could be triggered by ActiveMQ retico modules (using fake BEAT and TTS modules).
     Testing SARA's body activation with a retico module simulating BEAT output (AMQWriter) and another simulating TTS output (fakeTTSSARA).
     The fakeTTS module plays the speech.mp3 file, that is not the file matching the gesture.
 
@@ -598,6 +610,206 @@ def test_body_2():
         network.stop(mic)
 
 
+def test_body_3():
+    """
+    ADDITION : using real BEAT module instead of a fake BEAT outputting the same message each trigger.
+    Testing SARA's body activation using a retico pipeline and BEAT for the gesture generation.
+    The retico pipeline is MIC - VAD - ASR, with 3 additional modules :
+    - TextAnswertoBEATBridge : a module creating a bridge between the ASR and BEAT
+    - AMQWriter : a module that sends the IUs to ActiveMQ (to communicate with BEAT and SARA body).
+    module simulating BEAT output (AMQWriter)
+    - fakeTTSSARA : a module that simulates SARA's TTS (fakeTTSSARA). The fakeTTS module plays the speech.mp3 file, that is not the file matching the gesture, but it is useful because the gestures are not played without receiving activeMQ message that says that the agent is talking.
+
+    SARA's body is moving with the message received by BEAT module.
+    -> Which means that it is possible to control SARA's body entirely with a real BEAT-like module implemented in retico
+    (and with retico modules sending data to the unity agent through an MQ like ActiveMQ).
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    printing = False
+    log_folder = create_new_log_folder("logs/run")
+    frame_length = 0.02
+    rate = 16000
+
+    ip = "localhost"
+    port = "61613"
+
+    mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+
+    txt_to_beat = TextAnswertoBEATBridge()
+
+    aw = AMQWriter(ip=ip, port=port)
+
+    # beat = fakeBEATSARA(ip=ip, port=port)
+
+    mark_path = "bodies/sara/mark.json"
+    speech_path = "bodies/sara/speech.mp3"
+    fake_tts = fakeTTSSARA(
+        speech_file_path=speech_path, mark_file_path=mark_path, ip=ip, port=port
+    )
+
+    cback = debug.CallbackModule(callback=callback_fun)
+
+    # 1rst network (without NLG, or real TTS) the user utterance is sent to BEAT to generate gestures, and a fake TTS module speaks a fixed mp3 file to run the gestures.
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(txt_to_beat)
+    txt_to_beat.subscribe(aw)
+    fake_tts.subscribe(cback)
+    # asr.subscribe(opening)
+    # amqr.subscribe(tts)
+    # amqr.subscribe(cback)
+
+    # running system
+    try:
+        network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+        # merge_logs(log_folder)
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
+        print(f"Unexpected {err}")
+        network.stop(mic)
+
+
+def test_body_4():
+    """
+    Testing SARA's body activation using a retico pipeline and BEAT for the gesture generation.
+    The retico pipeline is MIC - VAD - ASR, with 3 additional modules :
+    - TextAnswertoBEATBridge : a module creating a bridge between the ASR and BEAT
+    - AMQWriter : a module that sends the IUs to ActiveMQ (to communicate with BEAT and SARA body).
+    module simulating BEAT output (AMQWriter)
+    - fakeTTSSARA : a module that simulates SARA's TTS (fakeTTSSARA). The fakeTTS module plays the speech.mp3 file, that is not the file matching the gesture, but it is useful because the gestures are not played without receiving activeMQ message that says that the agent is talking.
+
+    SARA's body is moving with the message received by BEAT module.
+    -> Which means that it is possible to control SARA's body entirely with a real BEAT-like module implemented in retico
+    (and with retico modules sending data to the unity agent through an MQ like ActiveMQ).
+
+    TODO:
+    - integrate a NLG module to create an textual answer
+    - integrate a real TTS retico module in the pipeline, to synthetise voice from the textual answer
+    - integrate a speaker module in the pipeline
+    - make the speaker module send ActiveMQ messages to SARA's body when it plays the sound to verify that it can be synchronized.
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
+    # device = "cpu"
+    printing = False
+    log_folder = create_new_log_folder("logs/run")
+    frame_length = 0.02
+    tts_frame_length = 0.2
+    rate = 16000
+    tts_model_samplerate = 22050
+    tts_model = "vits_vctk"
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+
+    ip = "localhost"
+    port = "61613"
+
+    # mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+    mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+
+    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        log_folder=log_folder,
+        device=device,
+    )
+
+    txt_to_beat = TextAnswertoBEATBridge()
+
+    aw = AMQWriter(ip=ip, port=port)
+
+    # ar = AMQReader(ip=ip, port=port)
+    # ar.add(destination="/topic/DEFAULT_SCOPE", target_iu_type=retico_core.text.TextIU)
+
+    # tts = CoquiTTSInterruptionModule(
+    #     language="en",
+    #     model=tts_model,
+    #     printing=printing,
+    #     log_folder=log_folder,
+    #     frame_duration=tts_frame_length,
+    #     device=device,
+    # )
+
+    # speaker = SpeakerInterruptionModule(
+    #     rate=tts_model_samplerate, log_folder=log_folder
+    # )
+
+    # cback = debug.CallbackModule(callback=callback_fun)
+
+    # network
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(txt_to_beat)
+    txt_to_beat.subscribe(aw)
+    # ar.subscribe(tts)
+    # tts.subscribe(speaker)
+
+    # running system
+    try:
+        network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+        # merge_logs(log_folder)
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
+        print(f"Unexpected {err}")
+        network.stop(mic)
+
+
 msg = []
 
 if __name__ == "__main__":
@@ -609,4 +821,6 @@ if __name__ == "__main__":
     # merge_logs("logs/test/16k/Recording (1)/demo_4")
 
     # test_body()
-    test_body_2()
+    # test_body_2()
+    # test_body_3()
+    test_body_4()
