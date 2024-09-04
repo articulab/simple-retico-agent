@@ -810,6 +810,34 @@ def test_body_4():
         network.stop(mic)
 
 
+import importlib
+
+
+def test_structlog():
+    audio = importlib.import_module("retico-core.retico_core.audio")
+    absctract = importlib.import_module("retico-core.retico_core.absctract")
+    mic = audio.MicrophoneModule()
+    speakers = audio.SpeakerModule()
+
+    mic.subscribe(speakers)
+    # running system
+    try:
+        absctract.network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        absctract.network.stop(mic)
+        # merge_logs(log_folder)
+    except (
+        Exception,
+        NotImplementedError,
+        ValueError,
+        AttributeError,
+        AssertionError,
+    ) as err:
+        print(f"Unexpected {err}")
+        absctract.network.stop(mic)
+
+
 msg = []
 
 if __name__ == "__main__":
@@ -823,4 +851,6 @@ if __name__ == "__main__":
     # test_body()
     # test_body_2()
     # test_body_3()
-    test_body_4()
+    # test_body_4()
+
+    test_structlog()
