@@ -321,15 +321,12 @@ class VADTurnModule(retico_core.AbstractModule):
                 # ]
                 # print("BOT remove from audio buffer")
 
-                output_iu = self.create_iu(lastest_iu)
-                output_iu.set_data(vad_state="interruption")
-                # output_iu.set_data(
-                #     audio=audio,
-                #     chunk_size=self.chunk_size,
-                #     rate=self.rate,
-                #     sample_width=self.sample_width,
-                #     vad_state="interruption",
-                # )
+                # output_iu = self.create_iu(lastest_iu)
+                # output_iu.set_data(vad_state="interruption")
+                output_iu = self.create_iu(
+                    grounded_in=lastest_iu,
+                    vad_state="interruption",
+                )
 
                 return retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
@@ -361,8 +358,16 @@ class VADTurnModule(retico_core.AbstractModule):
                 # print("new self.buffer_pointer = ", self.buffer_pointer)
                 ius = []
                 for audio in new_audio:
-                    output_iu = self.create_iu(lastest_iu)
-                    output_iu.set_data(
+                    # output_iu = self.create_iu(lastest_iu)
+                    # output_iu.set_data(
+                    #     audio=audio,
+                    #     chunk_size=self.chunk_size,
+                    #     rate=self.target_framerate,
+                    #     sample_width=self.sample_width,
+                    #     vad_state="user_turn",
+                    # )
+                    output_iu = self.create_iu(
+                        grounded_in=lastest_iu,
                         audio=audio,
                         chunk_size=self.chunk_size,
                         rate=self.target_framerate,
@@ -388,9 +393,17 @@ class VADTurnModule(retico_core.AbstractModule):
                 # Add the last AudioIU if there is additional audio since last update_message (should not happen)
                 if self.buffer_pointer != len(self.audio_buffer) - 1:
                     for audio in self.audio_buffer[-self.buffer_pointer :]:
-                        output_iu = self.create_iu(lastest_iu)
-                        # output_iu.set_data(audio=audio, vad_state="user_turn")
-                        output_iu.set_data(
+                        # output_iu = self.create_iu(lastest_iu)
+                        # # output_iu.set_data(audio=audio, vad_state="user_turn")
+                        # output_iu.set_data(
+                        #     audio=audio,
+                        #     chunk_size=self.chunk_size,
+                        #     rate=self.target_framerate,
+                        #     sample_width=self.sample_width,
+                        #     vad_state="user_turn",
+                        # )
+                        output_iu = self.create_iu(
+                            grounded_in=lastest_iu,
                             audio=audio,
                             chunk_size=self.chunk_size,
                             rate=self.target_framerate,
@@ -401,9 +414,17 @@ class VADTurnModule(retico_core.AbstractModule):
                         ius.append((retico_core.UpdateType.ADD, output_iu))
 
                 for audio in self.audio_buffer:
-                    output_iu = self.create_iu(lastest_iu)
-                    # output_iu.set_data(audio=audio, vad_state="user_turn")
-                    output_iu.set_data(
+                    # output_iu = self.create_iu(lastest_iu)
+                    # # output_iu.set_data(audio=audio, vad_state="user_turn")
+                    # output_iu.set_data(
+                    #     audio=audio,
+                    #     chunk_size=self.chunk_size,
+                    #     rate=self.target_framerate,
+                    #     sample_width=self.sample_width,
+                    #     vad_state="user_turn",
+                    # )
+                    output_iu = self.create_iu(
+                        grounded_in=lastest_iu,
                         audio=audio,
                         chunk_size=self.chunk_size,
                         rate=self.target_framerate,

@@ -282,8 +282,9 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
         if end_of_turn:
             # print("TTS : EOT")
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            # iu = self.create_iu()
+            # iu.set_data(final=True)
+            iu = self.create_iu(final=True)
             self.iu_buffer.append(iu)
 
         if end_of_turn and end_of_clause:
@@ -386,8 +387,20 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 char_id = sum(len_words) - 1
 
                 i += self.chunk_size
-                iu = self.create_iu(grounded_iu)
-                iu.set_data(
+                # iu = self.create_iu(grounded_iu)
+                # iu.set_data(
+                #     audio=chunk,
+                #     chunk_size=self.chunk_size,
+                #     rate=self.samplerate,
+                #     sample_width=self.samplewidth,
+                #     grounded_word=temp_word,
+                #     word_id=word_id,
+                #     char_id=char_id,
+                #     turn_id=grounded_iu.turn_id,
+                #     clause_id=grounded_iu.clause_id,
+                # )
+                iu = self.create_iu(
+                    grounded_iu=grounded_iu,
                     audio=chunk,
                     chunk_size=self.chunk_size,
                     rate=self.samplerate,

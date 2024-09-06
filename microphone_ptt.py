@@ -47,6 +47,12 @@ class MicrophonePTTModule(MicrophoneModule):
             sample = self.audio_buffer.get(timeout=1.0)
         except queue.Empty:
             return None
-        output_iu = self.create_iu()
-        output_iu.set_audio(sample, self.chunk_size, self.rate, self.sample_width)
+        # output_iu = self.create_iu()
+        # output_iu.set_audio(sample, self.chunk_size, self.rate, self.sample_width)
+        output_iu = self.create_iu(
+            raw_audio=sample,
+            nframes=self.chunk_size,
+            rate=self.rate,
+            sample_width=self.sample_width,
+        )
         return retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)

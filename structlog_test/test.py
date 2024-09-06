@@ -437,17 +437,48 @@ logging.basicConfig(
     format="%(message)s",
 )
 
+
+def drop_messages(_, __, event_dict):
+    if event_dict.get("route") == "login":
+        raise structlog.DropEvent
+    return event_dict
+
+
+def drop_superior_messages(_, __, event_dict):
+    if event_dict.get("id"):
+        if event_dict.get("id") <= 2:
+            raise structlog.DropEvent
+    return event_dict
+
+
 # structlog.configure(
 #     processors=[
+#         structlog.contextvars.merge_contextvars,
+#         structlog.processors.add_log_level,
 #         structlog.processors.TimeStamper(fmt="iso"),
-#         structlog.dev.ConsoleRenderer(
-#             colors=True
-#         ),  # Format lisible et coloré pour le terminal
+#         drop_messages,
+#         drop_superior_messages,
+#         structlog.dev.ConsoleRenderer(),
 #     ],
 #     logger_factory=structlog.stdlib.LoggerFactory(),
 #     wrapper_class=structlog.stdlib.BoundLogger,
 #     cache_logger_on_first_use=True,
 # )
+
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        drop_messages,
+        drop_superior_messages,
+        structlog.dev.ConsoleRenderer(
+            colors=True
+        ),  # Format lisible et coloré pour le terminal
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
 
 # Logger pour le terminal
 terminal_logger = structlog.get_logger("terminal")
@@ -499,3 +530,11 @@ print(a.__dict__)
 terminal_logger.info(
     "This is a terminal log.", module="user_login", user="john_doe", **a.__dict__
 )
+terminal_logger = structlog.get_logger("console")
+terminal_logger.info("User created", name="John Doe", route="login", id=0)
+terminal_logger.info("Post Created", title="My first post", route="post", id=1)
+terminal_logger.info("Post Created", title="My first post", route="post", id=2)
+terminal_logger.info("Post Created", title="My first post", route="post", id=3)
+terminal_logger.info("Post Created", title="My first post", route="post", id=4)
+terminal_logger.warning("Post Created", title="My first post", route="post", id=4)
+terminal_logger.error("Post Created", title="My first post", route="post", id=4)

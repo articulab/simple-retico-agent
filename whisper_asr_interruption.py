@@ -227,14 +227,22 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             if len(prediction) != 0:
                 um, new_tokens = retico_core.text.get_text_increment(self, prediction)
                 for i, token in enumerate(new_tokens):
-                    output_iu = self.create_iu(self.latest_input_iu)
-                    output_iu.set_asr_results(
-                        [prediction],
-                        token,
-                        0.0,
-                        0.99,
-                        self.eos and (i == (len(new_tokens) - 1)),
+                    output_iu = self.create_iu(
+                        grounded_in=self.latest_input_iu,
+                        predictions=[prediction],
+                        text=token,
+                        stability=0.0,
+                        confidence=0.99,
+                        final=self.eos and (i == (len(new_tokens) - 1)),
                     )
+                    # output_iu = self.create_iu(self.latest_input_iu)
+                    # output_iu.set_asr_results(
+                    #     [prediction],
+                    #     token,
+                    #     0.0,
+                    #     0.99,
+                    #     self.eos and (i == (len(new_tokens) - 1)),
+                    # )
                     self.current_output.append(output_iu)
                     um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
@@ -272,10 +280,18 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                 ius = []
                 for i, token in enumerate(tokens):
                     # this way will not instantiate good grounded IUs because self.latest_input_iu will be the same for every IU
-                    output_iu = self.create_iu(self.latest_input_iu)
-                    output_iu.set_asr_results(
-                        [prediction], token, 0.0, 0.99, i == (len(tokens) - 1)
+                    output_iu = self.create_iu(
+                        grounded_in=self.latest_input_iu,
+                        predictions=[prediction],
+                        text=token,
+                        stability=0.0,
+                        confidence=0.99,
+                        final=self.eos and (i == (len(tokens) - 1)),
                     )
+                    # output_iu = self.create_iu(self.latest_input_iu)
+                    # output_iu.set_asr_results(
+                    #     [prediction], token, 0.0, 0.99, i == (len(tokens) - 1)
+                    # )
                     ius.append((output_iu, retico_core.UpdateType.COMMIT))
                     self.commit(output_iu)
                     self.current_output = []
@@ -285,8 +301,16 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             else:
                 um, new_tokens = retico_core.text.get_text_increment(self, prediction)
                 for i, token in enumerate(new_tokens):
-                    output_iu = self.create_iu(self.latest_input_iu)
-                    output_iu.set_asr_results([prediction], token, 0.0, 0.99, False)
+                    output_iu = self.create_iu(
+                        grounded_in=self.latest_input_iu,
+                        predictions=[prediction],
+                        text=token,
+                        stability=0.0,
+                        confidence=0.99,
+                        final=False,
+                    )
+                    # output_iu = self.create_iu(self.latest_input_iu)
+                    # output_iu.set_asr_results([prediction], token, 0.0, 0.99, False)
                     self.current_output.append(output_iu)
                     um.add_iu(output_iu, retico_core.UpdateType.ADD)
 

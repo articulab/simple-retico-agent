@@ -595,11 +595,20 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         # Construct UM and IU
         next_um = retico_core.abstract.UpdateMessage()
+        # if len(self.current_input) > 0:
+        #     output_iu = self.create_iu(self.current_input[-1])
+        # else:
+        #     output_iu = self.create_iu()
+        # output_iu.set_data(
+        #     text=payload,
+        #     turn_id=len(self.utterances),
+        #     clause_id=self.nb_clauses,
+        # )
+        last_iu = None
         if len(self.current_input) > 0:
-            output_iu = self.create_iu(self.current_input[-1])
-        else:
-            output_iu = self.create_iu()
-        output_iu.set_data(
+            last_iu = self.current_input[-1]
+        output_iu = self.create_iu(
+            grounded_iu=last_iu,
             text=payload,
             turn_id=len(self.utterances),
             clause_id=self.nb_clauses,
@@ -687,8 +696,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 iu.revoked = True
                 next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
             # add an IU significating that the agent turn is complete (EOT)
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            # iu = self.create_iu()
+            # iu.set_data(final=True)
+            iu = self.create_iu(final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -698,8 +708,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         elif self.which_stop_criteria == "stop_token":
             # add an IU significating that the agent turn is complete (EOT)
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            # iu = self.create_iu()
+            # iu.set_data(final=True)
+            iu = self.create_iu(final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history

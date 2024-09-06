@@ -37,11 +37,11 @@ class AMQIU(retico_core.IncrementalUnit):
         retico_core (_type_): _description_
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, decorated_iu, headers, destination, **kwargs):
         super().__init__(**kwargs)
-        self.decorated_iu = None
-        self.headers = None
-        self.destination = None
+        self.decorated_iu = decorated_iu
+        self.headers = headers
+        self.destination = destination
 
     @staticmethod
     def type():
@@ -230,7 +230,12 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
         self.buffer = []
 
     def create_iu(self, decorated_iu, destination, headers, grounded_iu=None):
-        iu = super().create_iu(grounded_iu)
+        iu = super().create_iu(
+            grounded_iu,
+            decorated_iu=decorated_iu,
+            destination=destination,
+            headers=headers,
+        )
         iu.set_amq(
             decorated_iu=decorated_iu,
             headers=headers,
