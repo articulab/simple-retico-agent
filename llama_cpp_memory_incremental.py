@@ -37,6 +37,7 @@ import datetime
 import retico_core
 from llama_cpp import Llama
 from utils import *
+from retico_core.utils import device_definition
 
 
 class LlamaCppMemoryIncremental:
@@ -501,7 +502,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         super().__init__(**kwargs)
         self.printing = printing
         # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         # Model loading method 1
         self.model_path = model_path
         # Model loading method 2
@@ -663,7 +664,7 @@ class LlamaCppMemoryIncrementalModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(
-            self.log_file,
-            self.time_logs_buffer,
-        )
+        # write_logs(
+        #     self.log_file,
+        #     self.time_logs_buffer,
+        # )

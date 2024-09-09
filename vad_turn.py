@@ -100,8 +100,8 @@ class VADTurnModule(retico_core.AbstractModule):
     def __init__(
         self,
         printing=False,
-        log_file="vad.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="vad.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         target_framerate=16000,
         input_framerate=44100,
         channels=1,
@@ -115,7 +115,7 @@ class VADTurnModule(retico_core.AbstractModule):
     ):
         super().__init__(**kwargs)
         self.printing = printing
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
 
         self.target_framerate = target_framerate
@@ -464,3 +464,6 @@ class VADTurnModule(retico_core.AbstractModule):
                 self.audio_buffer = self.audio_buffer[
                     -int(self.get_n_bot_audio_chunks()) :
                 ]
+
+    # def setup(self, log_folder=None):
+    #     super().setup(log_folder)

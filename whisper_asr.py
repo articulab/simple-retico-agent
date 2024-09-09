@@ -14,6 +14,7 @@ import threading
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
+from retico_core.utils import device_definition
 import torch
 import transformers
 import pydub
@@ -75,7 +76,7 @@ class WhisperASR:
         self.first_time = True
         self.first_time_stop = False
         # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
 
     def resample_audio(self, audio):
@@ -339,8 +340,8 @@ class WhisperASRModule(retico_core.AbstractModule):
         input_framerate=48000,
         silence_dur=1,
         printing=False,
-        log_file="asr.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="asr.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         **kwargs,
     ):
@@ -351,8 +352,8 @@ class WhisperASRModule(retico_core.AbstractModule):
             printing=printing,
             target_framerate=target_framerate,
             input_framerate=input_framerate,
-            log_file=log_file,
-            log_folder=log_folder,
+            # log_file=log_file,
+            # log_folder=log_folder,
             device=device,
         )
         self.target_framerate = target_framerate

@@ -76,8 +76,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         sample_width=2,
         use_speaker="both",
         device_index=None,
-        log_file="speaker_interruption.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="speaker_interruption.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
         """
@@ -111,7 +111,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self.time = None
 
         self.channels = channels
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
         self.first_time = True
 
@@ -209,10 +209,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             self.latest_processed_iu = iu
             return (data, pyaudio.paContinue)
 
-    def setup(self):
-        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288"""
-        return
-
     def prepare_run(self):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288"""
 
@@ -248,7 +244,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
 
         Write logs and close the audio stream."""
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_file, self.time_logs_buffer)
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None

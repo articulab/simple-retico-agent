@@ -14,11 +14,10 @@ import time
 from hashlib import blake2b
 
 import retico_core
+from retico_core.utils import device_definition
 import numpy as np
 from TTS.api import TTS, load_config
 import torch
-from utils import *
-
 from utils import *
 
 
@@ -135,15 +134,15 @@ class CoquiTTSModule(retico_core.AbstractModule):
         dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
-        log_file="tts.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="tts.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         **kwargs
     ):
         super().__init__(**kwargs)
 
         # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
 
         self.printing = printing
 
@@ -312,4 +311,4 @@ class CoquiTTSModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
         self._tts_thread_active = False
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_file, self.time_logs_buffer)

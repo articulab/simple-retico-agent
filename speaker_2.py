@@ -27,8 +27,8 @@ class SpeakerModule_2(SpeakerModule):
         channels=1,
         use_speaker="both",
         device_index=None,
-        log_file="speaker.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="speaker.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs
     ):
         super().__init__(
@@ -39,7 +39,7 @@ class SpeakerModule_2(SpeakerModule):
             **kwargs
         )
         self.channels = channels
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
         self.first_time = True
 
@@ -93,10 +93,10 @@ class SpeakerModule_2(SpeakerModule):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
 
         Write logs and close the audio stream."""
-        write_logs(
-            self.log_file,
-            self.time_logs_buffer,
-        )
+        # write_logs(
+        #     self.log_file,
+        #     self.time_logs_buffer,
+        # )
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None

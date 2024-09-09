@@ -47,6 +47,7 @@ import time
 import retico_core
 from llama_cpp import Llama
 from utils import *
+from retico_core.utils import *
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
@@ -103,8 +104,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         initial_prompt,
         system_prompt,
         printing=False,
-        log_file="llm.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="llm.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         context_size=2000,
         short_memory_context_size=500,
@@ -140,7 +141,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # general
         self.printing = printing
         self.time_logs_buffer = []
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.thread_active = False
         self.full_sentence = False
         self.interruption = False
@@ -795,7 +796,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 self.process_incremental()
                 self.full_sentence = False
 
-    def setup(self):
+    def setup(self, log_folder):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
 
@@ -803,6 +804,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Init the prompt with the initialize_prompt function.
         Calculates the stopping with the init_stop_criteria function.
         """
+        super().setup(log_folder)
 
         if self.model_path is not None:
             self.model = Llama(
@@ -842,5 +844,5 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_file, self.time_logs_buffer)
         self.thread_active = False

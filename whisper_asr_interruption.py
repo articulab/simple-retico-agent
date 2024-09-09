@@ -30,7 +30,10 @@ import pydub
 import numpy as np
 from faster_whisper import WhisperModel
 
-from utils import *
+# from utils import *
+from retico_core.utils import device_definition
+
+from utils import VADTurnAudioIU
 
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -81,8 +84,8 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         channels=1,
         sample_width=2,
         printing=False,
-        log_file="asr.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="asr.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
         """
@@ -111,7 +114,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         self.printing = printing
         self.first_time = True
         self.first_time_stop = False
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
         self._asr_thread_active = False
         self.latest_input_iu = None
@@ -329,5 +332,5 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_path, self.time_logs_buffer)
         self._asr_thread_active = False

@@ -1,41 +1,61 @@
+# import keyboard
+# import retico_core.abstract
+# import torch
+
+# from retico_core import *
+
+# from amq import (
+#     AMQReader,
+#     AMQWriter,
+#     AMQWriterOpening,
+#     TextAnswertoBEATBridge,
+#     fakeBEATSARA,
+#     fakeTTSSARA,
+# )
+# from vad_turn import VADTurnModule
+# from whisper_asr_interruption import WhisperASRInterruptionModule
+# from llama_cpp_memory_incremental_interruption import (
+#     LlamaCppMemoryIncrementalInterruptionModule,
+# )
+# from coqui_tts_interruption import CoquiTTSInterruptionModule
+# from speaker_interruption import SpeakerInterruptionModule
+
+# from whisper_asr import WhisperASRModule
+# from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
+# from coqui_tts import CoquiTTSModule
+# from speaker_2 import SpeakerModule_2
+# from microphone_ptt import MicrophonePTTModule
+
+# from utils import *
+# from woz_audio.WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
+# from woz_audio.WozMicrophone_one_file import WozMicrophoneModule_one_file
+# from woz_audio.WozMicrophone_one_file_allinone import (
+#     WozMicrophoneModule_one_file_allinone,
+# )
+# from woz_audio.WaveModule import WaveModule
+# from woz_audio.WozAsrModule import WozAsrModule
+
+# from retico_zmq.retico_zmq.zmq import WriterSingleton, ZeroMQWriter, ReaderSingleton
+# from retico_core.utils import *
+
 import keyboard
-import retico_core.abstract
+from retico_core import *
+from retico_core.abstract import *
+from retico_core.text import *
+from retico_core.utils import *
+import structlog
 import torch
 
-from retico_core import *
+from amq import TextAnswertoBEATBridge
 
-from amq import (
-    AMQReader,
-    AMQWriter,
-    AMQWriterOpening,
-    TextAnswertoBEATBridge,
-    fakeBEATSARA,
-    fakeTTSSARA,
-)
-from vad_turn import VADTurnModule
-from whisper_asr_interruption import WhisperASRInterruptionModule
 from llama_cpp_memory_incremental_interruption import (
     LlamaCppMemoryIncrementalInterruptionModule,
 )
-from coqui_tts_interruption import CoquiTTSInterruptionModule
+
 from speaker_interruption import SpeakerInterruptionModule
-
-from whisper_asr import WhisperASRModule
-from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
-from coqui_tts import CoquiTTSModule
-from speaker_2 import SpeakerModule_2
-from microphone_ptt import MicrophonePTTModule
-
-from utils import *
-from woz_audio.WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
-from woz_audio.WozMicrophone_one_file import WozMicrophoneModule_one_file
-from woz_audio.WozMicrophone_one_file_allinone import (
-    WozMicrophoneModule_one_file_allinone,
-)
-from woz_audio.WaveModule import WaveModule
-from woz_audio.WozAsrModule import WozAsrModule
-
-from retico_zmq.retico_zmq.zmq import WriterSingleton, ZeroMQWriter, ReaderSingleton
+from coqui_tts_interruption import CoquiTTSInterruptionModule
+from vad_turn import VADTurnModule
+from whisper_asr_interruption import WhisperASRInterruptionModule
 
 
 def callback(update_msg):
@@ -328,7 +348,8 @@ def main_speaker_interruption():
     # device = "cuda"
     # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    # log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     tts_frame_length = 0.2
     rate = 16000
@@ -350,7 +371,7 @@ def main_speaker_interruption():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        log_folder=log_folder,
+        # log_folder=log_folder,
     )
 
     llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
@@ -360,7 +381,7 @@ def main_speaker_interruption():
         None,
         system_prompt,
         printing=printing,
-        log_folder=log_folder,
+        # log_folder=log_folder,
         device=device,
     )
 
@@ -368,21 +389,28 @@ def main_speaker_interruption():
         language="en",
         model=tts_model,
         printing=printing,
-        log_folder=log_folder,
+        # log_folder=log_folder,
         frame_duration=tts_frame_length,
         device=device,
     )
 
     speaker = SpeakerInterruptionModule(
-        rate=tts_model_samplerate, log_folder=log_folder
+        rate=tts_model_samplerate,  # log_folder=log_folder
     )
 
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        log_folder=log_folder,
+        # log_folder=log_folder,
         frame_length=frame_length,
     )
+
+    # speakers = audio.SpeakerModule()
+    # amq = TextAnswertoBEATBridge()
+
+    # mic.subscribe(vad)
+    # vad.subscribe(asr)
+    # asr.subscribe(amq)
 
     # create network
     mic.subscribe(vad)
@@ -399,11 +427,11 @@ def main_speaker_interruption():
 
     # running system
     try:
-        network.run(mic)
+        network.run(mic, log_folder)
         print("Dialog system ready")
         keyboard.wait("q")
         network.stop(mic)
-        merge_logs(log_folder)
+        # merge_logs(log_folder)
     except (
         Exception,
         NotImplementedError,
@@ -811,31 +839,167 @@ def test_body_4():
 
 
 import importlib
+import structlog
 
 
 def test_structlog():
-    audio = importlib.import_module("retico-core.retico_core.audio")
-    absctract = importlib.import_module("retico-core.retico_core.absctract")
-    mic = audio.MicrophoneModule()
-    speakers = audio.SpeakerModule()
+    logger = structlog.get_logger()
+    # log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    printing = False
+    frame_length = 0.02
+    rate = 16000
 
-    mic.subscribe(speakers)
+    mic = audio.MicrophoneModule()
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=False,
+        full_sentences=True,
+        input_framerate=16000,
+        # log_folder=log_folder,
+    )
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        # log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    # speakers = audio.SpeakerModule()
+    amq = TextAnswertoBEATBridge()
+
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(amq)
+
     # running system
     try:
-        absctract.network.run(mic)
-        print("Dialog system ready")
+        network.run(mic, log_folder)
+        logger.info("Dialog system ready")
         keyboard.wait("q")
-        absctract.network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
-        absctract.network.stop(mic)
+        network.stop(mic)
+    except Exception:
+        logger.exception("test")
+        # network.stop(mic)
+
+
+def main_struct():
+    """
+    The `main_demo` function creates and runs a dialog system that is able to have a conversation with the user.
+
+    The dialog system is composed of different modules:
+    - a Microphone : captures the user's voice
+    - an ASR : transcribes the user's voice into text
+    - a LLM : generates a textual answer to the trancription from user's spoken sentence.
+    - a TTS : generates a spoken answer from the LLM's textual answer.
+    - a Speaker : outputs the spoken answer generated by the system.
+
+    We provide the system with a scenario (contained in the "system_prompt") that it will follow through the conversation :
+    The system is a teacher and it will teach mathematics to a 8-year-old child student (the user)
+
+    the parameters defined :
+    - model_path : the path to the weights of the LLM that will be used in the dialog system.
+    - system_prompt : a part of the prompt that will be given to the LLM at every agent turn to set the scenario of the conversation.
+    - printing : an argument that set to True will print a lot of information useful for degugging.
+    - rate : the target audio signal rate to which the audio captured by the microphone will be converted to (so that it is suitable for every module)
+    - frame_length : the chosen frame length in seconds at which the audio signal will be chunked.
+    - log_folder : the path to the folder where the logs (information about each module's latency) will be saved.
+
+    It is recommended to not modify the rate and frame_length parameters because the modules were coded with theses values
+    and it is not ensured that the system will run correctly with other values.
+    """
+
+    # parameters definition
+    logger = structlog.get_logger()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    printing = False
+    log_folder = "logs/run"
+    frame_length = 0.02
+    tts_frame_length = 0.2
+    rate = 16000
+    tts_model_samplerate = 22050
+    tts_model = "vits_vctk"
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+
+    # create modules
+    # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
+    # mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+    mic = audio.MicrophoneModule()
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        # log_folder=log_folder,
+    )
+
+    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        # log_folder=log_folder,
+        device=device,
+    )
+
+    tts = CoquiTTSInterruptionModule(
+        language="en",
+        model=tts_model,
+        printing=printing,
+        # log_folder=log_folder,
+        frame_duration=tts_frame_length,
+        device=device,
+    )
+
+    # speaker = SpeakerInterruptionModule(
+    #     rate=tts_model_samplerate,  # log_folder=log_folder
+    # )
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        # log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    amq = TextAnswertoBEATBridge()
+
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(llama_mem_icr)
+    asr.subscribe(amq)
+    llama_mem_icr.subscribe(tts)
+
+    # create network
+    # mic.subscribe(vad)
+    # asr.subscribe(llama_mem_icr)
+    # llama_mem_icr.subscribe(tts)
+    # tts.subscribe(speaker)
+
+    # vad.subscribe(asr)
+    # vad.subscribe(llama_mem_icr)
+    # vad.subscribe(tts)
+    # vad.subscribe(speaker)
+    # speaker.subscribe(llama_mem_icr)
+    # speaker.subscribe(vad)
+
+    # running system
+    try:
+        network.run(mic, log_folder)
+        logger.info("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+    except Exception:
+        logger.exception("test")
+        # network.stop(mic)
 
 
 msg = []
@@ -845,6 +1009,8 @@ if __name__ == "__main__":
     # main_woz()
     # main_demo()
     # main_speaker_interruption()
+    main_struct()
+    # test_structlog()
     # test_cuda()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")
 
@@ -852,5 +1018,3 @@ if __name__ == "__main__":
     # test_body_2()
     # test_body_3()
     # test_body_4()
-
-    test_structlog()

@@ -231,16 +231,16 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
 
     def create_iu(self, decorated_iu, destination, headers, grounded_iu=None):
         iu = super().create_iu(
-            grounded_iu,
+            grounded_iu=grounded_iu,
             decorated_iu=decorated_iu,
             destination=destination,
             headers=headers,
         )
-        iu.set_amq(
-            decorated_iu=decorated_iu,
-            headers=headers,
-            destination=destination,
-        )
+        # iu.set_amq(
+        #     decorated_iu=decorated_iu,
+        #     headers=headers,
+        #     destination=destination,
+        # )
         return iu
 
     def process_update(self, update_message):

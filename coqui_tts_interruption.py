@@ -30,6 +30,7 @@ import numpy as np
 import torch
 from utils import *
 from TTS.api import TTS
+from retico_core.utils import device_definition
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
@@ -92,8 +93,8 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         frame_duration=0.2,
         printing=False,
-        log_file="tts.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="tts.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         **kwargs,
     ):
@@ -139,7 +140,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
         # general
         self.printing = printing
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self._tts_thread_active = False
         self.iu_buffer = []
         self.buffer_pointer = 0
@@ -439,10 +440,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
                 self.append(um)
 
-    def setup(self):
+    def setup(self, log_folder):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
+        super().setup(log_folder)
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
@@ -461,5 +463,5 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_file, self.time_logs_buffer)
         self._tts_thread_active = False
