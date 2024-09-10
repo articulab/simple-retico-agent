@@ -10,9 +10,9 @@ import pyaudio
 import retico_core
 import platform
 from retico_core.audio import AudioIU, SpeakerModule
-from utils import *
+from additional_IUs import *
 
-from utils import *
+from additional_IUs import *
 
 
 class SpeakerModule_2(SpeakerModule):

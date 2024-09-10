@@ -9,7 +9,8 @@ import retico_core
 import csv
 from retico_core.audio import AudioIU
 
-from utils import *
+from additional_IUs import *
+from retico_core.log_utils import *
 
 # from audio import AudioIU, SpeechIU
 
@@ -26,7 +27,7 @@ class WozMicrophoneModule_one_file(retico_core.AbstractModule):
 
     @staticmethod
     def description():
-        return "A producing module that produce audio from wave file."
+        return "A producing module that produce audio fromq wave file."
 
     @staticmethod
     def output_iu():

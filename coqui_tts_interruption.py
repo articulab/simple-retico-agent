@@ -28,9 +28,10 @@ import time
 import retico_core
 import numpy as np
 import torch
-from utils import *
+
+from additional_IUs import *
 from TTS.api import TTS
-from retico_core.utils import device_definition
+from retico_core.log_utils import device_definition
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):

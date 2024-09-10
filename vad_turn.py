@@ -41,7 +41,7 @@ from retico_core.audio import AudioIU
 import pydub
 import webrtcvad
 
-from utils import *
+from additional_IUs import *
 
 
 class VADTurnModule(retico_core.AbstractModule):

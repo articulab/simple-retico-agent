@@ -13,7 +13,7 @@ import retico_core
 
 from retico_core.audio import MicrophoneModule
 
-from utils import *
+from additional_IUs import *
 
 
 class MicrophonePTTModule(MicrophoneModule):

@@ -28,7 +28,7 @@ import pyaudio
 import retico_core
 import retico_core.abstract
 
-from utils import *
+from additional_IUs import *
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):

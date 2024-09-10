@@ -14,7 +14,7 @@ import threading
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
-from retico_core.utils import device_definition
+from retico_core.log_utils import device_definition
 import torch
 import transformers
 import pydub
@@ -23,7 +23,7 @@ import numpy as np
 import time
 from faster_whisper import WhisperModel
 
-from utils import *
+from additional_IUs import *
 
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"

@@ -30,6 +30,32 @@ import json
 from urllib.parse import unquote
 
 
+# class AMQIU(retico_core.IncrementalUnit):
+#     """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters.
+
+#     Args:
+#         retico_core (_type_): _description_
+#     """
+
+#     def __init__(self, decorated_iu=None, headers=None, destination=None, **kwargs):
+#         super().__init__(**kwargs)
+#         self.decorated_iu = decorated_iu
+#         self.headers = headers
+#         self.destination = destination
+
+#     @staticmethod
+#     def type():
+#         return "AMQ IU"
+
+#     def get_deco_iu(self):
+#         return self.decorated_iu
+
+#     def set_amq(self, decorated_iu, headers, destination):
+#         self.decorated_iu = decorated_iu
+#         self.headers = headers
+#         self.destination = destination
+
+
 class AMQIU(retico_core.IncrementalUnit):
     """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters.
 
@@ -37,8 +63,23 @@ class AMQIU(retico_core.IncrementalUnit):
         retico_core (_type_): _description_
     """
 
-    def __init__(self, decorated_iu, headers, destination, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        decorated_iu=None,
+        headers=None,
+        destination=None,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+        )
         self.decorated_iu = decorated_iu
         self.headers = headers
         self.destination = destination
@@ -228,20 +269,21 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
         ]
         self.destinations = ["/topic/DEFAULT_SCOPE", "/topic/vrSSML"]
         self.buffer = []
+        self.iu_counter = 0
 
-    def create_iu(self, decorated_iu, destination, headers, grounded_iu=None):
-        iu = super().create_iu(
-            grounded_iu=grounded_iu,
-            decorated_iu=decorated_iu,
-            destination=destination,
-            headers=headers,
-        )
-        # iu.set_amq(
-        #     decorated_iu=decorated_iu,
-        #     headers=headers,
-        #     destination=destination,
-        # )
-        return iu
+    # def create_iu(self, decorated_iu, destination, headers, grounded_iu=None):
+    #     iu = super().create_iu(
+    #         grounded_iu=grounded_iu,
+    #         decorated_iu=decorated_iu,
+    #         destination=destination,
+    #         headers=headers,
+    #     )
+    #     # iu.set_amq(
+    #     #     decorated_iu=decorated_iu,
+    #     #     headers=headers,
+    #     #     destination=destination,
+    #     # )
+    #     return iu
 
     def process_update(self, update_message):
 
@@ -289,11 +331,33 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
             <speech><s>"{beat_utterance}"</s></speech>
             </ssml>
             </act>"""
-            beat_iu = retico_core.text.TextIU(iuid=0)
+            # create the decorated IU (cannot use classical create_iu from AbstractModule)
+            beat_iu = retico_core.text.TextIU(
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=self._previous_iu,
+                grounded_in=None,
+            )
+            self.iu_counter += 1
+            self._previous_iu = output_iu
             beat_iu.payload = beat_utterance
-            ssml_iu = retico_core.text.TextIU(iuid=1)
+            ssml_iu =retico_core.text.TextIU(
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=self._previous_iu,
+                grounded_in=None,
+            )
+            self.iu_counter += 1
+            self._previous_iu = output_iu
             ssml_iu.payload = ssml_utterance
-            default_scope_iu = retico_core.text.TextIU(iuid=2)
+            default_scope_iu = retico_core.text.TextIU(
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=self._previous_iu,
+                grounded_in=None,
+            )
+            self.iu_counter += 1
+            self._previous_iu = output_iu
             default_scope_iu.payload = body
 
             # create AMQIU

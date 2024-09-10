@@ -36,7 +36,7 @@
 # from woz_audio.WozAsrModule import WozAsrModule
 
 # from retico_zmq.retico_zmq.zmq import WriterSingleton, ZeroMQWriter, ReaderSingleton
-# from retico_core.utils import *
+# from retico_core.log_utils import *
 
 import keyboard
 from retico_core import *
@@ -53,7 +53,9 @@ from llama_cpp_memory_incremental_interruption import (
 )
 
 from speaker_interruption import SpeakerInterruptionModule
+
 from coqui_tts_interruption import CoquiTTSInterruptionModule
+from utils import plotting_run
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 
@@ -959,9 +961,9 @@ def main_struct():
         device=device,
     )
 
-    # speaker = SpeakerInterruptionModule(
-    #     rate=tts_model_samplerate,  # log_folder=log_folder
-    # )
+    speaker = SpeakerInterruptionModule(
+        rate=tts_model_samplerate,  # log_folder=log_folder
+    )
 
     vad = VADTurnModule(
         printing=printing,
@@ -970,26 +972,26 @@ def main_struct():
         frame_length=frame_length,
     )
 
-    amq = TextAnswertoBEATBridge()
+    # amq = TextAnswertoBEATBridge()
 
-    mic.subscribe(vad)
-    vad.subscribe(asr)
-    asr.subscribe(llama_mem_icr)
-    asr.subscribe(amq)
-    llama_mem_icr.subscribe(tts)
+    # mic.subscribe(vad)
+    # vad.subscribe(asr)
+    # asr.subscribe(llama_mem_icr)
+    # asr.subscribe(amq)
+    # llama_mem_icr.subscribe(tts)
 
     # create network
-    # mic.subscribe(vad)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+    mic.subscribe(vad)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(tts)
+    tts.subscribe(speaker)
 
-    # vad.subscribe(asr)
-    # vad.subscribe(llama_mem_icr)
-    # vad.subscribe(tts)
-    # vad.subscribe(speaker)
-    # speaker.subscribe(llama_mem_icr)
-    # speaker.subscribe(vad)
+    vad.subscribe(asr)
+    vad.subscribe(llama_mem_icr)
+    vad.subscribe(tts)
+    vad.subscribe(speaker)
+    speaker.subscribe(llama_mem_icr)
+    speaker.subscribe(vad)
 
     # running system
     try:
@@ -1000,6 +1002,8 @@ def main_struct():
     except Exception:
         logger.exception("test")
         # network.stop(mic)
+    finally:
+        plotting_run()
 
 
 msg = []

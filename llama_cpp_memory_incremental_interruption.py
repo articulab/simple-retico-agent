@@ -46,8 +46,8 @@ import threading
 import time
 import retico_core
 from llama_cpp import Llama
-from utils import *
-from retico_core.utils import *
+from additional_IUs import *
+from retico_core.log_utils import *
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
