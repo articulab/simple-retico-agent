@@ -81,7 +81,7 @@ class VADTurnModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "VAD Turn Module"
+        return "VADTurn Module"
 
     @staticmethod
     def description():

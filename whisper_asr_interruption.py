@@ -59,7 +59,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "Whipser ASR Interruption Module"
+        return "WhisperASR Module"
 
     @staticmethod
     def description():

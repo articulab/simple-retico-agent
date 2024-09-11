@@ -57,7 +57,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "coqui-ai TTS Interruption Module"
+        return "CoquiTTS Module"
 
     @staticmethod
     def description():
@@ -286,7 +286,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             # print("TTS : EOT")
             # iu = self.create_iu()
             # iu.set_data(final=True)
-            iu = self.create_iu(final=True)
+            iu = self.create_iu(grounded_in=self.iu_buffer[-1].grounded_in, final=True)
             self.iu_buffer.append(iu)
 
         if end_of_turn and end_of_clause:
@@ -402,7 +402,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 #     clause_id=grounded_iu.clause_id,
                 # )
                 iu = self.create_iu(
-                    grounded_iu=grounded_iu,
+                    grounded_in=grounded_iu,
                     audio=chunk,
                     chunk_size=self.chunk_size,
                     rate=self.samplerate,

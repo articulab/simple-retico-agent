@@ -913,7 +913,7 @@ def main_struct():
     """
 
     # parameters definition
-    logger = structlog.get_logger()
+    logger = structlog.get_logger("main")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"

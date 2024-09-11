@@ -78,7 +78,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "LlamaCppMemoryIncremental Interruption Module"
+        return "LlamaCppMemoryIncremental Module"
 
     @staticmethod
     def description():
@@ -608,8 +608,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         last_iu = None
         if len(self.current_input) > 0:
             last_iu = self.current_input[-1]
+        print("last_iu = ", last_iu)
         output_iu = self.create_iu(
-            grounded_iu=last_iu,
+            grounded_in=last_iu,
             text=payload,
             turn_id=len(self.utterances),
             clause_id=self.nb_clauses,
@@ -669,6 +670,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         user_sentence = self.recreate_sentence_from_um(self.current_input)
         self.new_user_sentence(user_sentence)
         self.prepare_dialogue_history()
+        last_processed_iu = self.current_input[-1]
 
         agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence()
 
@@ -699,7 +701,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             # add an IU significating that the agent turn is complete (EOT)
             # iu = self.create_iu()
             # iu.set_data(final=True)
-            iu = self.create_iu(final=True)
+            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -711,7 +713,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             # add an IU significating that the agent turn is complete (EOT)
             # iu = self.create_iu()
             # iu.set_data(final=True)
-            iu = self.create_iu(final=True)
+            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
