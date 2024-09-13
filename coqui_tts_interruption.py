@@ -149,6 +149,8 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         self.interrupted_turn = -1
         self.current_turn_id = -1
 
+        self.first_clause = True
+
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
         int16-encoded numpy ndarray.
@@ -250,6 +252,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         self.interrupted_turn = self.current_turn_id
                         end_of_clause = False
                         end_of_turn = False
+                        self.first_clause = True
                         self.current_input = []
                         self.iu_buffer = []
                         self.buffer_pointer = 0
@@ -259,6 +262,10 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                     continue
 
         if end_of_clause:
+            if self.first_clause:
+                self.terminal_logger.info("start_process")
+                self.file_logger.info("start_process")
+                self.first_clause = False
             self.current_turn_id = self.current_input[-1].turn_id
             # print("TTS : EOC")
             start_time = time.time()
@@ -283,6 +290,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
             self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
 
         if end_of_turn:
+            self.first_clause = True
             # print("TTS : EOT")
             # iu = self.create_iu()
             # iu.set_data(final=True)

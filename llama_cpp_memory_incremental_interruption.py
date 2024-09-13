@@ -795,6 +795,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         while self.thread_active:
             time.sleep(0.01)
             if self.full_sentence:
+                self.terminal_logger.info("start_process")
+                self.file_logger.info("start_process")
                 self.process_incremental()
                 self.full_sentence = False
 

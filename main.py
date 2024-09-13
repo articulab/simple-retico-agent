@@ -55,7 +55,7 @@ from llama_cpp_memory_incremental_interruption import (
 from speaker_interruption import SpeakerInterruptionModule
 
 from coqui_tts_interruption import CoquiTTSInterruptionModule
-from utils import plotting_run
+from utils import plotting_run, plotting_run_2
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 
@@ -1003,7 +1003,7 @@ def main_struct():
         logger.exception("test")
         # network.stop(mic)
     finally:
-        plotting_run()
+        plotting_run_2()
 
 
 msg = []

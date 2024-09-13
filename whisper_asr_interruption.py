@@ -126,6 +126,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         self.input_framerate = input_framerate
         self.channels = channels
         self.sample_width = sample_width
+        self.start_process = True
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -199,10 +200,15 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         eos = False
         for iu, ut in update_message:
             if iu.vad_state == "interruption":
+                self.start_process = True
                 continue
             elif iu.vad_state == "user_turn":
                 if self.input_framerate != iu.rate:
                     raise Exception("input framerate differs from iu framerate")
+                if self.start_process:
+                    self.terminal_logger.info("start_process")
+                    self.file_logger.info("start_process")
+                    self.start_process = False
                 # ADD corresponds to new audio chunks of user sentence, to generate new transcription hypothesis
                 if ut == retico_core.UpdateType.ADD:
                     self.add_audio(iu.raw_audio)
@@ -213,6 +219,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                     # self.asr.add_audio(iu.raw_audio) # already added ? if we add COMMIT IUs to audio_buffer, we'll have double audio chunks
                     # generate the final hypothesis here instead of in _asr_thead ?
                     eos = True
+                    self.start_process = True
         self.eos = eos
 
     def _asr_thread(self):

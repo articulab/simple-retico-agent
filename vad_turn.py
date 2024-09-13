@@ -327,6 +327,8 @@ class VADTurnModule(retico_core.AbstractModule):
                     grounded_in=lastest_iu,
                     vad_state="interruption",
                 )
+                self.terminal_logger.info("interruption")
+                self.file_logger.info("interruption")
 
                 return retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
@@ -382,6 +384,8 @@ class VADTurnModule(retico_core.AbstractModule):
             else:
                 if self.printing:
                     print("VAD EOT")
+                self.terminal_logger.info("user_EOT")
+                self.file_logger.info("user_EOT")
                 # User was talking, but is not talking anymore (a >700ms silence has been observed)
                 # a user EOT has been predicted, we'll :
                 # - ADD additional IUs if there is some (sould not happen)
@@ -449,6 +453,8 @@ class VADTurnModule(retico_core.AbstractModule):
             if bot:
                 if self.printing:
                     print("VAD BOT")
+                self.terminal_logger.info("user_BOT")
+                self.file_logger.info("user_BOT")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True

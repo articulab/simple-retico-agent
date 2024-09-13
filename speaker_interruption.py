@@ -140,6 +140,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             if isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
+                        self.terminal_logger.info("interruption")
+                        self.file_logger.info("interruption")
                         if self.latest_processed_iu is not None:
                             # word, word_id, char_id, turn_id, clause_id = (
                             #     self.latest_processed_iu.grounded_word,
@@ -194,17 +196,23 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             and the pyaudio type informing wether the stream should continue or stop.
         """
         if len(self.audio_iu_buffer) == 0:
+            self.terminal_logger.info("output_silence")
+            self.file_logger.info("output_silence")
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
 
         iu = self.audio_iu_buffer.pop(0)
         #
         if iu.final:
+            self.terminal_logger.info("agent_EOT")
+            self.file_logger.info("agent_EOT")
             um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
             self.append(um)
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
         else:
+            self.terminal_logger.info("output_audio")
+            self.file_logger.info("output_audio")
             data = bytes(iu.raw_audio)
             self.latest_processed_iu = iu
             return (data, pyaudio.paContinue)
