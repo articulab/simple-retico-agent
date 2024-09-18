@@ -449,11 +449,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
                 self.append(um)
 
-    def setup(self, log_folder):
+    def setup(self, **kwargs):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
-        super().setup(log_folder)
+        super().setup(**kwargs)
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
@@ -463,6 +463,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
+        super().prepare_run()
         self.buffer_pointer = 0
         self.iu_buffer = []
         self._tts_thread_active = True
@@ -472,5 +473,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
+        super().shutdown()
         # write_logs(self.log_file, self.time_logs_buffer)
         self._tts_thread_active = False

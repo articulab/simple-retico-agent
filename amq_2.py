@@ -152,17 +152,38 @@ class AMQReader(retico_core.AbstractProducingModule):
             print(destination, "is not a recognized destination")
             return None
 
+        try:
+            # try to parse the message to create a dict (it has to be a structured message JSON), and put it in the IU's init parameters.
+            # create the decorated IU (cannot use classical create_iu from AbstractModule)
+            msg_json = json.loads(message)
+            output_iu = self.target_iu_types[destination](
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=self._previous_iu,
+                grounded_in=None,
+                **msg_json,
+            )
+        except Exception:
+            # if message not parsable as a structured message (JSON), then put it as the IU's payload.
+            # create the decorated IU (cannot use classical create_iu from AbstractModule)
+            output_iu = self.target_iu_types[destination](
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=self._previous_iu,
+                grounded_in=None,
+                payload=message,
+            )
+
         # create the decorated IU (cannot use classical create_iu from AbstractModule)
-        output_iu = self.target_iu_types[destination](
-            creator=self,
-            iuid=f"{hash(self)}:{self.iu_counter}",
-            previous_iu=self._previous_iu,
-            grounded_in=None,
-        )
+        # output_iu = self.target_iu_types[destination](
+        #     creator=self,
+        #     iuid=f"{hash(self)}:{self.iu_counter}",
+        #     previous_iu=self._previous_iu,
+        #     grounded_in=None,
+        # )
+        # output_iu.payload = message
         self.iu_counter += 1
         self._previous_iu = output_iu
-        output_iu.payload = message
-
         update_message = retico_core.UpdateMessage()
 
         if "update_type" not in frame.headers:
@@ -228,6 +249,30 @@ class AMQWriter(retico_core.AbstractModule):
             # print(
             #     f"sent {body},  to : {amq_iu.destination} , with headers : {amq_iu.headers}"
             # )
+            self.conn.send(
+                body=body,
+                destination=amq_iu.destination,
+                headers=amq_iu.headers,
+                persistent=True,
+            )
+
+        return None
+
+    def process_update_2(self, update_message):
+        """
+        This assumes that the message is json formatted, then packages it as payload into an IU
+        """
+
+        for amq_iu, ut in update_message:
+
+            # create a JSOn from all decorated IU extracted information
+            decorated_iu = amq_iu.get_deco_iu()
+            body = json.dumps(decorated_iu.__dict__)
+
+            # send the message to the correct destination
+            print(
+                f"sent {body},  to : {amq_iu.destination} , with headers : {amq_iu.headers}"
+            )
             self.conn.send(
                 body=body,
                 destination=amq_iu.destination,
@@ -341,7 +386,7 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
             self.iu_counter += 1
             self._previous_iu = output_iu
             beat_iu.payload = beat_utterance
-            ssml_iu =retico_core.text.TextIU(
+            ssml_iu = retico_core.text.TextIU(
                 creator=self,
                 iuid=f"{hash(self)}:{self.iu_counter}",
                 previous_iu=self._previous_iu,

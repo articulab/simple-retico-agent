@@ -7,7 +7,7 @@ from retico_core.log_utils import *
 import structlog
 import torch
 
-from amq import TextAnswertoBEATBridge
+from amq_2 import TextAnswertoBEATBridge
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 

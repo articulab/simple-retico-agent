@@ -6,6 +6,33 @@ from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib
+import structlog
+
+
+def filter_has_key(_, __, event_dict, key):
+    if event_dict.get(key):
+        raise structlog.DropEvent
+    return event_dict
+
+
+def filter_does_not_have_key(_, __, event_dict, key):
+    if not event_dict.get(key):
+        raise structlog.DropEvent
+    return event_dict
+
+
+def filter_value_in_list(_, __, event_dict, key, values):
+    if event_dict.get(key):
+        if event_dict.get(key) in values:
+            raise structlog.DropEvent
+    return event_dict
+
+
+def filter_value_not_in_list(_, __, event_dict, key, values):
+    if event_dict.get(key):
+        if event_dict.get(key) not in values:
+            raise structlog.DropEvent
+    return event_dict
 
 
 def extract_number(f):

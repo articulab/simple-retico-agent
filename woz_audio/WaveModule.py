@@ -54,8 +54,9 @@ class WaveModule(retico_core.AbstractProducingModule):
         output_iu.dispatch = True
         return retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
 
-    def setup(self):
+    def setup(self, **kwargs):
         """Set up the wave file"""
+        super().setup(**kwargs)
         self.r_file = wave.open(self.file_name, "rb")
 
     def prepare_run(self):

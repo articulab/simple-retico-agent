@@ -331,6 +331,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
+        super().prepare_run()
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
         print("ASR started")
@@ -339,5 +340,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
+        super().shutdown()
         # write_logs(self.log_path, self.time_logs_buffer)
         self._asr_thread_active = False

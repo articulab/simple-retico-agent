@@ -219,7 +219,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     def prepare_run(self):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288"""
-
+        super().prepare_run()
         p = self._p
 
         if platform.system() == "Darwin":
@@ -252,6 +252,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
 
         Write logs and close the audio stream."""
+        super().shutdown()
         # write_logs(self.log_file, self.time_logs_buffer)
         self.stream.stop_stream()
         self.stream.close()

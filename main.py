@@ -44,18 +44,31 @@ from retico_core.abstract import *
 from retico_core.text import *
 from retico_core.utils import *
 import structlog
+from functools import partial
 import torch
 
-from amq import TextAnswertoBEATBridge
+from amq_2 import TextAnswertoBEATBridge
+
+from retico_amq.amq import AMQReader, AMQWriter, AMQBridgeTest
+
+# from amq import TextAnswertoBEATBridge
 
 from llama_cpp_memory_incremental_interruption import (
     LlamaCppMemoryIncrementalInterruptionModule,
 )
 
+from microphone_ptt import MicrophonePTTModule
 from speaker_interruption import SpeakerInterruptionModule
 
 from coqui_tts_interruption import CoquiTTSInterruptionModule
-from utils import plotting_run, plotting_run_2
+from utils import (
+    filter_has_key,
+    filter_none_module,
+    filter_not_match_modules,
+    filter_value_in_list,
+    plotting_run,
+    plotting_run_2,
+)
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
 
@@ -1006,6 +1019,72 @@ def main_struct():
         plotting_run_2()
 
 
+def simple_log_test():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    printing = False
+    log_folder = "logs/run"
+    frame_length = 0.02
+    rate = 16000
+    ip = "localhost"
+    port = "61613"
+
+    mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
+
+    vad = VADTurnModule(
+        printing=printing,
+        input_framerate=rate,
+        log_folder=log_folder,
+        frame_length=frame_length,
+    )
+
+    asr = WhisperASRInterruptionModule(
+        device=device,
+        printing=printing,
+        full_sentences=True,
+        input_framerate=rate,
+        log_folder=log_folder,
+    )
+
+    headers = {"header_key_test": "header_value_test"}
+    destination = "/topic/AMQ_test"
+
+    bridge = AMQBridgeTest(headers, destination)
+
+    aw = AMQWriter(ip=ip, port=port)
+
+    ar = AMQReader(ip=ip, port=port)
+    ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
+
+    cback = debug.CallbackModule(callback=callback_fun)
+
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(bridge)
+    bridge.subscribe(aw)
+    aw.subscribe(cback)
+    ar.subscribe(cback)
+
+    # FILTERS FOR LOGGING SYSTEM
+    network.LOG_FILTERS = [
+        partial(filter_has_key, key="module"),
+        partial(
+            filter_value_in_list,
+            key="module",
+            values=["Microphone Module", "VADTurn Module"],
+        ),
+    ]
+
+    # running system
+    try:
+        network.run(mic)
+        print("Dialog system ready")
+        keyboard.wait("q")
+        network.stop(mic)
+    except Exception as err:
+        print(f"Unexpected {err}")
+        network.stop(mic)
+
+
 msg = []
 
 if __name__ == "__main__":
@@ -1013,7 +1092,7 @@ if __name__ == "__main__":
     # main_woz()
     # main_demo()
     # main_speaker_interruption()
-    main_struct()
+    # main_struct()
     # test_structlog()
     # test_cuda()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")
@@ -1022,3 +1101,5 @@ if __name__ == "__main__":
     # test_body_2()
     # test_body_3()
     # test_body_4()
+    # test_amq()
+    simple_log_test()

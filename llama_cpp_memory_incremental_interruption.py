@@ -800,7 +800,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 self.process_incremental()
                 self.full_sentence = False
 
-    def setup(self, log_folder):
+    def setup(self, **kwargs):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
 
@@ -808,7 +808,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Init the prompt with the initialize_prompt function.
         Calculates the stopping with the init_stop_criteria function.
         """
-        super().setup(log_folder)
+        super().setup(**kwargs)
 
         if self.model_path is not None:
             self.model = Llama(
@@ -840,6 +840,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
+        super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
         print("LLM started")
@@ -848,5 +849,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
+        super().shutdown()
         # write_logs(self.log_file, self.time_logs_buffer)
         self.thread_active = False

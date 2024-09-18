@@ -43,7 +43,7 @@ class CoquiTTS:
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
 
-    def setup(self):
+    def setup(self, **kwargs):
         """Init chosen TTS model."""
         self.tts = TTS(self.model).to(self.device)
 
@@ -287,7 +287,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
             self.clear_after_finish = True
             self.current_input = []
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """

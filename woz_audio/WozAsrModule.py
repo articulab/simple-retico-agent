@@ -90,18 +90,3 @@ class WozAsrModule(retico_core.AbstractProducingModule):
         um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
         self.append(um)
         print("after process_update :")
-
-    def setup(self):
-        pass
-
-    def prepare_run(self):
-        # print("prepare_run")
-        # question = "write your sentence : "
-        # loop = asyncio.new_event_loop()
-        # asyncio.set_event_loop(loop)
-        # coroutine = self.gather_sentence(question)
-        # loop.run_until_complete(coroutine)
-        pass
-
-    def shutdown(self):
-        pass
