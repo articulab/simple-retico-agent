@@ -47,6 +47,7 @@ import structlog
 from functools import partial
 import torch
 
+from additional_IUs import TurnTextIU
 from amq_2 import TextAnswertoBEATBridge
 
 from retico_amq.amq import AMQReader, AMQWriter, AMQBridgeTest
@@ -63,9 +64,11 @@ from speaker_interruption import SpeakerInterruptionModule
 from coqui_tts_interruption import CoquiTTSInterruptionModule
 from utils import (
     filter_has_key,
-    filter_none_module,
-    filter_not_match_modules,
+    filter_does_not_have_key,
+    # filter_none_module,
+    # filter_not_match_modules,
     filter_value_in_list,
+    filter_value_not_in_list,
     plotting_run,
     plotting_run_2,
 )
@@ -497,8 +500,22 @@ def test_cuda():
 
 
 def callback_fun(update_msg):
-    for x in update_msg:
-        print("callback = ", x)
+    for iu, ut in update_msg:
+        black_listed_keys = {
+            "creator",
+            "previous_iu",
+            "grounded_in",
+            "_processed_list",
+            "mutex",
+            "committed",
+            "revoked",
+            "meta_data",
+        }
+        iu_info = iu.__dict__
+        # print("KEYS = ", iu_info.keys())
+        # print("DICT = ", iu_info)
+        iu_info = {key: iu_info[key] for key in iu_info.keys() - black_listed_keys}
+        print("callback = ", iu_info)
 
 
 def callback_only_beat(update_msg):
@@ -1027,6 +1044,11 @@ def simple_log_test():
     rate = 16000
     ip = "localhost"
     port = "61613"
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -1045,6 +1067,17 @@ def simple_log_test():
         log_folder=log_folder,
     )
 
+    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
+        model_path,
+        None,
+        None,
+        None,
+        system_prompt,
+        printing=printing,
+        # log_folder=log_folder,
+        device=device,
+    )
+
     headers = {"header_key_test": "header_value_test"}
     destination = "/topic/AMQ_test"
 
@@ -1053,24 +1086,39 @@ def simple_log_test():
     aw = AMQWriter(ip=ip, port=port)
 
     ar = AMQReader(ip=ip, port=port)
-    ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
+    # ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
+    ar.add(destination=destination, target_iu_type=TurnTextIU)
 
     cback = debug.CallbackModule(callback=callback_fun)
 
+    # mic.icribe(cback)
+
     mic.subscribe(vad)
     vad.subscribe(asr)
-    asr.subscribe(bridge)
+    asr.subscribe(llama_mem_icr)
+    llama_mem_icr.subscribe(bridge)
     bridge.subscribe(aw)
     aw.subscribe(cback)
     ar.subscribe(cback)
 
     # FILTERS FOR LOGGING SYSTEM
     network.LOG_FILTERS = [
-        partial(filter_has_key, key="module"),
+        partial(filter_does_not_have_key, key="module"),
         partial(
             filter_value_in_list,
             key="module",
             values=["Microphone Module", "VADTurn Module"],
+        ),
+        # partial(filter_has_key, key="module"),
+        # partial(
+        #     filter_value_not_in_list,
+        #     key="level",
+        #     values=["error"],
+        # ),
+        partial(
+            filter_value_not_in_list,
+            key="event",
+            values=["new iu json"],
         ),
     ]
 
