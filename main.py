@@ -50,7 +50,7 @@ import torch
 from additional_IUs import TurnTextIU
 from amq_2 import TextAnswertoBEATBridge
 
-from retico_amq.amq import AMQReader, AMQWriter, AMQBridgeTest
+from retico_amq.amq import AMQReader, AMQWriter, AMQBridge
 
 # from amq import TextAnswertoBEATBridge
 
@@ -1044,11 +1044,6 @@ def simple_log_test():
     rate = 16000
     ip = "localhost"
     port = "61613"
-    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
-    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
-        The teacher is teaching mathemathics to the child student.\
-        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-        You play the role of a teacher. Here is the beginning of the conversation :"
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -1067,27 +1062,15 @@ def simple_log_test():
         log_folder=log_folder,
     )
 
-    llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
-        model_path,
-        None,
-        None,
-        None,
-        system_prompt,
-        printing=printing,
-        # log_folder=log_folder,
-        device=device,
-    )
-
     headers = {"header_key_test": "header_value_test"}
     destination = "/topic/AMQ_test"
 
-    bridge = AMQBridgeTest(headers, destination)
+    bridge = AMQBridge(headers, destination)
 
     aw = AMQWriter(ip=ip, port=port)
 
     ar = AMQReader(ip=ip, port=port)
-    # ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
-    ar.add(destination=destination, target_iu_type=TurnTextIU)
+    ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
 
     cback = debug.CallbackModule(callback=callback_fun)
 
@@ -1095,8 +1078,7 @@ def simple_log_test():
 
     mic.subscribe(vad)
     vad.subscribe(asr)
-    asr.subscribe(llama_mem_icr)
-    llama_mem_icr.subscribe(bridge)
+    asr.subscribe(bridge)
     bridge.subscribe(aw)
     aw.subscribe(cback)
     ar.subscribe(cback)
@@ -1118,7 +1100,7 @@ def simple_log_test():
         partial(
             filter_value_not_in_list,
             key="event",
-            values=["new iu json"],
+            values=["new iu", "sent", "error", "before sent"],
         ),
     ]
 

@@ -571,7 +571,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         sentence = ""
         for iu in msg:
-            sentence += iu.get_text() + " "
+            # sentence += iu.get_text() + " "
+            sentence += iu.payload + " "
         return sentence
 
     def incremental_iu_sending(
@@ -608,7 +609,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         last_iu = None
         if len(self.current_input) > 0:
             last_iu = self.current_input[-1]
-        print("last_iu = ", last_iu)
+        # print("last_iu = ", last_iu)
         output_iu = self.create_iu(
             grounded_in=last_iu,
             text=payload,

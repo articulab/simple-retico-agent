@@ -117,7 +117,7 @@ class TurnTextIU(retico_core.text.TextIU):
             iuid=iuid,
             previous_iu=previous_iu,
             grounded_in=grounded_in,
-            payload=text,
+            text=text,
         )
         self.turn_id = turn_id
         self.clause_id = clause_id
