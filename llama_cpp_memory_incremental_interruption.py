@@ -47,7 +47,9 @@ import time
 import retico_core
 from llama_cpp import Llama
 from additional_IUs import *
+
 from retico_core.log_utils import *
+from retico_core.utils import device_definition
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):

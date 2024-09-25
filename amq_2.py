@@ -19,7 +19,7 @@ from retico_core.abstract import *
 
 # zeromq & supporting libraries
 import retico_core.abstract
-import zmq, json
+import json
 import threading
 import datetime
 import time

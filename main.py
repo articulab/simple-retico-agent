@@ -48,7 +48,7 @@ from functools import partial
 import torch
 
 from additional_IUs import TurnTextIU
-from amq_2 import TextAnswertoBEATBridge
+from amq_2 import TextAnswertoBEATBridge, fakeBEATSARA, fakeTTSSARA
 
 from retico_amq.amq import AMQReader, AMQWriter, AMQBridge
 
@@ -62,13 +62,15 @@ from microphone_ptt import MicrophonePTTModule
 from speaker_interruption import SpeakerInterruptionModule
 
 from coqui_tts_interruption import CoquiTTSInterruptionModule
-from utils import (
+from retico_core.log_utils import (
     filter_has_key,
     filter_does_not_have_key,
     # filter_none_module,
     # filter_not_match_modules,
     filter_value_in_list,
     filter_value_not_in_list,
+    filter_conditions,
+    cases,
     plotting_run,
     plotting_run_2,
 )
@@ -687,7 +689,7 @@ def test_body_3():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     rate = 16000
 
@@ -699,7 +701,6 @@ def test_body_3():
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        log_folder=log_folder,
         frame_length=frame_length,
     )
 
@@ -708,7 +709,6 @@ def test_body_3():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        log_folder=log_folder,
     )
 
     txt_to_beat = TextAnswertoBEATBridge()
@@ -737,9 +737,10 @@ def test_body_3():
 
     # running system
     try:
-        network.run(mic)
+        network.run(mic, log_folder)
         print("Dialog system ready")
-        keyboard.wait("q")
+        # keyboard.wait("q")
+        input()
         network.stop(mic)
         # merge_logs(log_folder)
     except (
@@ -751,6 +752,8 @@ def test_body_3():
     ) as err:
         print(f"Unexpected {err}")
         network.stop(mic)
+    finally:
+        plotting_run_2()
 
 
 def test_body_4():
@@ -774,10 +777,8 @@ def test_body_4():
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     tts_frame_length = 0.2
     rate = 16000
@@ -798,7 +799,6 @@ def test_body_4():
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        log_folder=log_folder,
         frame_length=frame_length,
     )
 
@@ -807,7 +807,6 @@ def test_body_4():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        log_folder=log_folder,
     )
 
     llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
@@ -817,7 +816,6 @@ def test_body_4():
         None,
         system_prompt,
         printing=printing,
-        log_folder=log_folder,
         device=device,
     )
 
@@ -854,9 +852,10 @@ def test_body_4():
 
     # running system
     try:
-        network.run(mic)
+        network.run(mic, log_folder=log_folder)
         print("Dialog system ready")
-        keyboard.wait("q")
+        # keyboard.wait("q")
+        input()
         network.stop(mic)
         # merge_logs(log_folder)
     except (
@@ -868,6 +867,8 @@ def test_body_4():
     ) as err:
         print(f"Unexpected {err}")
         network.stop(mic)
+    finally:
+        plotting_run_2()
 
 
 import importlib
@@ -916,7 +917,7 @@ def test_structlog():
         # network.stop(mic)
 
 
-def main_struct():
+def main_demo_with_plot():
     """
     The `main_demo` function creates and runs a dialog system that is able to have a conversation with the user.
 
@@ -968,7 +969,6 @@ def main_struct():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        # log_folder=log_folder,
     )
 
     llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
@@ -978,7 +978,6 @@ def main_struct():
         None,
         system_prompt,
         printing=printing,
-        # log_folder=log_folder,
         device=device,
     )
 
@@ -986,29 +985,19 @@ def main_struct():
         language="en",
         model=tts_model,
         printing=printing,
-        # log_folder=log_folder,
         frame_duration=tts_frame_length,
         device=device,
     )
 
     speaker = SpeakerInterruptionModule(
-        rate=tts_model_samplerate,  # log_folder=log_folder
+        rate=tts_model_samplerate,
     )
 
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        # log_folder=log_folder,
         frame_length=frame_length,
     )
-
-    # amq = TextAnswertoBEATBridge()
-
-    # mic.subscribe(vad)
-    # vad.subscribe(asr)
-    # asr.subscribe(llama_mem_icr)
-    # asr.subscribe(amq)
-    # llama_mem_icr.subscribe(tts)
 
     # create network
     mic.subscribe(vad)
@@ -1027,16 +1016,20 @@ def main_struct():
     try:
         network.run(mic, log_folder)
         logger.info("Dialog system ready")
-        keyboard.wait("q")
+        # keyboard.wait("q")
+        input()
         network.stop(mic)
     except Exception:
         logger.exception("test")
-        # network.stop(mic)
+        network.stop(mic)
     finally:
         plotting_run_2()
 
 
-def simple_log_test():
+from retico_amq import utils
+
+
+def amq_test_with_ASR():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"
@@ -1050,7 +1043,6 @@ def simple_log_test():
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        log_folder=log_folder,
         frame_length=frame_length,
     )
 
@@ -1059,7 +1051,6 @@ def simple_log_test():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        log_folder=log_folder,
     )
 
     headers = {"header_key_test": "header_value_test"}
@@ -1073,24 +1064,23 @@ def simple_log_test():
     ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
 
     cback = debug.CallbackModule(callback=callback_fun)
-
-    # mic.icribe(cback)
+    cback.callback = partial(utils.callback_text_AMQReader, module=cback)
 
     mic.subscribe(vad)
     vad.subscribe(asr)
     asr.subscribe(bridge)
     bridge.subscribe(aw)
-    aw.subscribe(cback)
+    aw.subscribe(ar)
     ar.subscribe(cback)
 
     # FILTERS FOR LOGGING SYSTEM
     network.LOG_FILTERS = [
-        partial(filter_does_not_have_key, key="module"),
-        partial(
-            filter_value_in_list,
-            key="module",
-            values=["Microphone Module", "VADTurn Module"],
-        ),
+        # partial(filter_does_not_have_key, key="module"),
+        # partial(
+        #     filter_value_in_list,
+        #     key="module",
+        #     values=["Microphone Module", "VADTurn Module"],
+        # ),
         # partial(filter_has_key, key="module"),
         # partial(
         #     filter_value_not_in_list,
@@ -1100,19 +1090,50 @@ def simple_log_test():
         partial(
             filter_value_not_in_list,
             key="event",
-            values=["new iu", "sent", "error", "before sent"],
+            values=[
+                "new iu",
+                "sent",
+                "error",
+                "before sent",
+                "AMQWriter sends a message to ActiveMQ",
+                "AMQReader receives a message from ActiveMQ",
+                "AMQReader creates new iu",
+                "CallbackModule receives a retico IU from AMQReader",
+            ],
         ),
+        # partial(
+        #     cases,
+        #     conditionss=[
+        #         [
+        #             ("module", ["AMQWriter Module"]),
+        #             ("event", ["AMQWriter sends a message to ActiveMQ"]),
+        #         ],
+        #         [
+        #             ("module", ["AMQReader Module"]),
+        #             (
+        #                 "event",
+        #                 [
+        #                     "AMQReader receives a message from ActiveMQ",
+        #                     "AMQReader creates new iu",
+        #                 ],
+        #             ),
+        #         ],
+        #     ],
+        # ),
     ]
 
     # running system
     try:
-        network.run(mic)
+        network.run(mic, log_folder=log_folder)
         print("Dialog system ready")
-        keyboard.wait("q")
+        # keyboard.wait("q")
+        input()
         network.stop(mic)
     except Exception as err:
         print(f"Unexpected {err}")
         network.stop(mic)
+    finally:
+        plotting_run_2()
 
 
 msg = []
@@ -1122,7 +1143,6 @@ if __name__ == "__main__":
     # main_woz()
     # main_demo()
     # main_speaker_interruption()
-    # main_struct()
     # test_structlog()
     # test_cuda()
     # merge_logs("logs/test/16k/Recording (1)/demo_4")
@@ -1131,5 +1151,6 @@ if __name__ == "__main__":
     # test_body_2()
     # test_body_3()
     # test_body_4()
-    # test_amq()
-    simple_log_test()
+
+    amq_test_with_ASR()
+    # main_demo_with_plot()

@@ -14,7 +14,7 @@ import time
 from hashlib import blake2b
 
 import retico_core
-from retico_core.log_utils import device_definition
+from retico_core.utils import device_definition
 import numpy as np
 from TTS.api import TTS, load_config
 import torch

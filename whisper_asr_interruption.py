@@ -30,8 +30,7 @@ import pydub
 import numpy as np
 from faster_whisper import WhisperModel
 
-# from utils import *
-from retico_core.log_utils import device_definition
+from retico_core.utils import device_definition
 
 from additional_IUs import VADTurnAudioIU
 

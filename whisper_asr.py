@@ -14,7 +14,7 @@ import threading
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
-from retico_core.log_utils import device_definition
+from retico_core.utils import device_definition
 import torch
 import transformers
 import pydub
