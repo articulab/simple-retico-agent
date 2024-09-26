@@ -70,7 +70,7 @@ from retico_core.log_utils import (
     filter_value_in_list,
     filter_value_not_in_list,
     filter_conditions,
-    cases,
+    filter_cases,
     plotting_run,
     plotting_run_2,
 )
@@ -1074,55 +1074,50 @@ def amq_test_with_ASR():
     ar.subscribe(cback)
 
     # FILTERS FOR LOGGING SYSTEM
-    network.LOG_FILTERS = [
-        # partial(filter_does_not_have_key, key="module"),
-        # partial(
-        #     filter_value_in_list,
-        #     key="module",
-        #     values=["Microphone Module", "VADTurn Module"],
-        # ),
-        # partial(filter_has_key, key="module"),
-        # partial(
-        #     filter_value_not_in_list,
-        #     key="level",
-        #     values=["error"],
-        # ),
-        partial(
-            filter_value_not_in_list,
-            key="event",
-            values=[
-                "new iu",
-                "sent",
-                "error",
-                "before sent",
-                "AMQWriter sends a message to ActiveMQ",
-                "AMQReader receives a message from ActiveMQ",
-                "AMQReader creates new iu",
-                "CallbackModule receives a retico IU from AMQReader",
-            ],
-        ),
-        # partial(
-        #     cases,
-        #     conditionss=[
-        #         [
-        #             ("module", ["AMQWriter Module"]),
-        #             ("event", ["AMQWriter sends a message to ActiveMQ"]),
-        #         ],
-        #         [
-        #             ("module", ["AMQReader Module"]),
-        #             (
-        #                 "event",
-        #                 [
-        #                     "AMQReader receives a message from ActiveMQ",
-        #                     "AMQReader creates new iu",
-        #                 ],
-        #             ),
-        #         ],
-        #     ],
-        # ),
-    ]
+    # network.LOG_FILTERS = [
+    #     # partial(filter_does_not_have_key, key="module"),
+    #     # partial(
+    #     #     filter_value_in_list,
+    #     #     key="module",
+    #     #     values=["Microphone Module", "VADTurn Module"],
+    #     # ),
+    #     # partial(filter_has_key, key="module"),
+    #     # partial(
+    #     #     filter_value_not_in_list,
+    #     #     key="level",
+    #     #     values=["error"],
+    #     # ),
+    #     # partial(
+    #     #     filter_value_not_in_list,
+    #     #     key="event",
+    #     #     values=[
+    #     #         "new iu",
+    #     #         "sent",
+    #     #         "error",
+    #     #         "before sent",
+    #     #         "AMQWriter sends a message to ActiveMQ",
+    #     #         "AMQReader receives a message from ActiveMQ",
+    #     #         "AMQReader creates new iu",
+    #     #         "CallbackModule receives a retico IU from AMQReader",
+    #     #     ],
+    #     # ),
+    #     partial(
+    #         filter_cases,
+    #         cases=[
+    #             [
+    #                 (
+    #                     "level",
+    #                     [
+    #                         "error",
+    #                     ],
+    #                 ),
+    #             ],
+    #         ],
+    #     ),
+    # ]
 
     # running system
+    l = structlog.get_logger()
     try:
         network.run(mic, log_folder=log_folder)
         print("Dialog system ready")
@@ -1131,6 +1126,7 @@ def amq_test_with_ASR():
         network.stop(mic)
     except Exception as err:
         print(f"Unexpected {err}")
+        l.exception("error")
         network.stop(mic)
     finally:
         plotting_run_2()

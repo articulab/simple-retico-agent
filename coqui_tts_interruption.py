@@ -25,6 +25,7 @@ Outputs : TextAlignedAudioIU
 import datetime
 import threading
 import time
+import traceback
 import retico_core
 import numpy as np
 import torch
@@ -32,6 +33,7 @@ import torch
 from additional_IUs import *
 from TTS.api import TTS
 from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
@@ -433,21 +435,26 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         t1 = time.time()
         while self._tts_thread_active:
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+            try:
+                t2 = t1
+                t1 = time.time()
+                if t1 - t2 < self.frame_duration:
+                    time.sleep(self.frame_duration)
+                else:
+                    time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
-            if self.buffer_pointer >= len(self.iu_buffer):
-                self.buffer_pointer = 0
-                self.iu_buffer = []
-            else:
-                iu = self.iu_buffer[self.buffer_pointer]
-                self.buffer_pointer += 1
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-                self.append(um)
+                if self.buffer_pointer >= len(self.iu_buffer):
+                    self.buffer_pointer = 0
+                    self.iu_buffer = []
+                else:
+                    iu = self.iu_buffer[self.buffer_pointer]
+                    self.buffer_pointer += 1
+                    um = retico_core.UpdateMessage.from_iu(
+                        iu, retico_core.UpdateType.ADD
+                    )
+                    self.append(um)
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def setup(self, **kwargs):
         """

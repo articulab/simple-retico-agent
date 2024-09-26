@@ -23,6 +23,7 @@ import datetime
 import os
 import threading
 import time
+import traceback
 import retico_core
 from retico_core.text import SpeechRecognitionIU
 import transformers
@@ -31,6 +32,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
 
 from additional_IUs import VADTurnAudioIU
 
@@ -229,46 +231,53 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         Using the current output to create the final prediction and COMMIT the full final transcription.
         """
         while self._asr_thread_active:
+            try:
 
-            time.sleep(0.01)
-            prediction = self.recognize()
+                time.sleep(0.01)
+                prediction = self.recognize()
 
-            if len(prediction) != 0:
-                um, new_tokens = retico_core.text.get_text_increment(self, prediction)
-                for i, token in enumerate(new_tokens):
-                    output_iu = self.create_iu(
-                        grounded_in=self.latest_input_iu,
-                        predictions=[prediction],
-                        text=token,
-                        stability=0.0,
-                        confidence=0.99,
-                        final=self.eos and (i == (len(new_tokens) - 1)),
+                if len(prediction) != 0:
+                    um, new_tokens = retico_core.text.get_text_increment(
+                        self, prediction
                     )
-                    # output_iu = self.create_iu(self.latest_input_iu)
-                    # output_iu.set_asr_results(
-                    #     [prediction],
-                    #     token,
-                    #     0.0,
-                    #     0.99,
-                    #     self.eos and (i == (len(new_tokens) - 1)),
-                    # )
-                    self.current_output.append(output_iu)
-                    um.add_iu(output_iu, retico_core.UpdateType.ADD)
+                    for i, token in enumerate(new_tokens):
+                        output_iu = self.create_iu(
+                            grounded_in=self.latest_input_iu,
+                            predictions=[prediction],
+                            text=token,
+                            stability=0.0,
+                            confidence=0.99,
+                            final=self.eos and (i == (len(new_tokens) - 1)),
+                        )
+                        # output_iu = self.create_iu(self.latest_input_iu)
+                        # output_iu.set_asr_results(
+                        #     [prediction],
+                        #     token,
+                        #     0.0,
+                        #     0.99,
+                        #     self.eos and (i == (len(new_tokens) - 1)),
+                        # )
+                        self.current_output.append(output_iu)
+                        um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
-                if self.eos:
-                    for iu in self.current_output:
-                        self.commit(iu)
-                        um.add_iu(iu, retico_core.UpdateType.COMMIT)
+                    if self.eos:
+                        for iu in self.current_output:
+                            self.commit(iu)
+                            um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
-                    self.audio_buffer = []
-                    self.current_output = []
-                    self.eos = False
+                        self.audio_buffer = []
+                        self.current_output = []
+                        self.eos = False
 
-                self.latest_input_iu = None
-                if len(um) != 0:
-                    self.append(um)
-                    if self.printing:
-                        print("WHISPER SEND : ", [(iu.payload, ut) for iu, ut in um])
+                    self.latest_input_iu = None
+                    if len(um) != 0:
+                        self.append(um)
+                        if self.printing:
+                            print(
+                                "WHISPER SEND : ", [(iu.payload, ut) for iu, ut in um]
+                            )
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def _asr_thread_2(self):
         """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.

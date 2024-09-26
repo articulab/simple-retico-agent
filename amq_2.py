@@ -28,6 +28,7 @@ from collections import deque
 import stomp
 import json
 from urllib.parse import unquote
+from retico_core.log_utils import log_exception
 
 
 # class AMQIU(retico_core.IncrementalUnit):
@@ -377,33 +378,36 @@ class TextAnswertoBEATBridge(retico_core.AbstractModule):
             </ssml>
             </act>"""
             # create the decorated IU (cannot use classical create_iu from AbstractModule)
-            beat_iu = retico_core.text.TextIU(
-                creator=self,
-                iuid=f"{hash(self)}:{self.iu_counter}",
-                previous_iu=self._previous_iu,
-                grounded_in=None,
-            )
-            self.iu_counter += 1
-            self._previous_iu = output_iu
-            beat_iu.payload = beat_utterance
-            ssml_iu = retico_core.text.TextIU(
-                creator=self,
-                iuid=f"{hash(self)}:{self.iu_counter}",
-                previous_iu=self._previous_iu,
-                grounded_in=None,
-            )
-            self.iu_counter += 1
-            self._previous_iu = output_iu
-            ssml_iu.payload = ssml_utterance
-            default_scope_iu = retico_core.text.TextIU(
-                creator=self,
-                iuid=f"{hash(self)}:{self.iu_counter}",
-                previous_iu=self._previous_iu,
-                grounded_in=None,
-            )
-            self.iu_counter += 1
-            self._previous_iu = output_iu
-            default_scope_iu.payload = body
+            try:
+                beat_iu = retico_core.text.TextIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=None,
+                )
+                self.iu_counter += 1
+                self._previous_iu = output_iu
+                beat_iu.payload = beat_utterance
+                ssml_iu = retico_core.text.TextIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=None,
+                )
+                self.iu_counter += 1
+                self._previous_iu = output_iu
+                ssml_iu.payload = ssml_utterance
+                default_scope_iu = retico_core.text.TextIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=None,
+                )
+                self.iu_counter += 1
+                self._previous_iu = output_iu
+                default_scope_iu.payload = body
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
             # create AMQIU
             output_iu = self.create_iu(

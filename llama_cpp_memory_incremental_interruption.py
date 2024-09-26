@@ -44,12 +44,14 @@ Child : I am fine, and I can't wait to learn mathematics ! \
 import datetime
 import threading
 import time
+import traceback
 import retico_core
 from llama_cpp import Llama
 from additional_IUs import *
 
 from retico_core.log_utils import *
 from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
@@ -796,12 +798,15 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         if the user starts talking (the reception of an interruption VADTurnAudioIU).
         """
         while self.thread_active:
-            time.sleep(0.01)
-            if self.full_sentence:
-                self.terminal_logger.info("start_process")
-                self.file_logger.info("start_process")
-                self.process_incremental()
-                self.full_sentence = False
+            try:
+                time.sleep(0.01)
+                if self.full_sentence:
+                    self.terminal_logger.info("start_process")
+                    self.file_logger.info("start_process")
+                    self.process_incremental()
+                    self.full_sentence = False
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def setup(self, **kwargs):
         """

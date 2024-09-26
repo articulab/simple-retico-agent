@@ -11,10 +11,12 @@ finished.
 import datetime
 import os
 import threading
+import traceback
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import SpeechRecognitionIU
 from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
 import torch
 import transformers
 import pydub
@@ -386,33 +388,36 @@ class WhisperASRModule(retico_core.AbstractModule):
         """
         # TODO: Add a REVOKE for words that were on previous hypothesis and not on the in the current one
         while self._asr_thread_active:
-            time.sleep(0.01)
-            # # new way of calculating silences and vad activity
-            # prediction, end_of_utterance = self.asr.recognize_3()
-            # old way of calculating silences and vad activity
-            prediction, end_of_utterance = self.asr.recognize()
-            if prediction is None:
-                continue
-            um, new_tokens = retico_core.text.get_text_increment(self, prediction)
+            try:
+                time.sleep(0.01)
+                # # new way of calculating silences and vad activity
+                # prediction, end_of_utterance = self.asr.recognize_3()
+                # old way of calculating silences and vad activity
+                prediction, end_of_utterance = self.asr.recognize()
+                if prediction is None:
+                    continue
+                um, new_tokens = retico_core.text.get_text_increment(self, prediction)
 
-            if len(new_tokens) == 0 and not end_of_utterance:
-                continue
+                if len(new_tokens) == 0 and not end_of_utterance:
+                    continue
 
-            for i, token in enumerate(new_tokens):
-                output_iu = self.create_iu(self.latest_input_iu)
-                eou = i == len(new_tokens) - 1 and end_of_utterance
-                output_iu.set_asr_results([prediction], token, 0.0, 0.99, eou)
-                self.current_output.append(output_iu)
-                um.add_iu(output_iu, retico_core.UpdateType.ADD)
+                for i, token in enumerate(new_tokens):
+                    output_iu = self.create_iu(self.latest_input_iu)
+                    eou = i == len(new_tokens) - 1 and end_of_utterance
+                    output_iu.set_asr_results([prediction], token, 0.0, 0.99, eou)
+                    self.current_output.append(output_iu)
+                    um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
-            if end_of_utterance:
-                for iu in self.current_output:
-                    self.commit(iu)
-                    um.add_iu(iu, retico_core.UpdateType.COMMIT)
-                self.current_output = []
+                if end_of_utterance:
+                    for iu in self.current_output:
+                        self.commit(iu)
+                        um.add_iu(iu, retico_core.UpdateType.COMMIT)
+                    self.current_output = []
 
-            self.latest_input_iu = None
-            self.append(um)
+                self.latest_input_iu = None
+                self.append(um)
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def prepare_run(self):
         """
