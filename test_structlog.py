@@ -1,5 +1,6 @@
 from functools import partial
 import logging
+import sys
 import structlog
 
 from retico_core.log_utils import filter_value_not_in_list, filter_cases, log_exception
@@ -450,7 +451,7 @@ def test_structlog_1():
         retico_core.network.stop(testthread)
 
 
-test_structlog_1()
+# test_structlog_1()
 
 from keyboard import wait
 import matplotlib
@@ -551,3 +552,195 @@ def test_structlog_2():
 #                         ^^^^^^^^^
 # UnboundLocalError: cannot access local variable 'output_iu' where it is not associated with a value
 # """
+
+
+def configurate_logger(log_path):
+    """
+    Configure structlog's logger and set general logging args (timestamps,
+    log level, etc.)
+
+    Args:
+        filename: (str): name of file to write to.
+
+        foldername: (str): name of folder to write to.
+    """
+
+    processors = [
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.dev.ConsoleRenderer(colors=True),
+        # structlog.processors.JSONRenderer(),
+    ]
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        # logger_factory=structlog.stdlib.LoggerFactory(),
+        # wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+        # wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING),
+        cache_logger_on_first_use=True,
+        # cache_logger_on_first_use=False,
+    )
+
+    # Logger pour le terminal
+    terminal_logger = structlog.get_logger("terminal")
+    terminal_logger.info("test terminal logger")
+
+    # self.terminal_logger = self.terminal_logger.bind(module=self.name())
+
+    # logging.basicConfig(
+    #     level=logging.INFO,
+    #     # level=logging.WARNING,
+    #     format="%(message)s",
+    #     force=True,  # <-- HERE BECAUSE IMPORTING SOME LIBS LIKE COQUITTS WAS BLOCKING THE LOGGINGS SYSTEM
+    #     # force=False,  # <-- HERE BECAUSE IMPORTING SOME LIBS LIKE COQUITTS WAS BLOCKING THE LOGGINGS SYSTEM
+    # )
+
+    # Configuration du logger pour le fichier
+    # file_handler = logging.FileHandler(log_path, mode="a", encoding="UTF-8")
+    # file_handler.setLevel(logging.INFO)
+
+    # # Créer un logger standard sans handlers pour éviter la duplication des logs dans le terminal
+    # file_only_logger = logging.getLogger("file_logger")
+    # file_only_logger.addHandler(file_handler)
+    # file_only_logger.propagate = (
+    #     False  # Empêche la propagation des logs vers les loggers parents
+    #     # True  # Empêche la propagation des logs vers les loggers parents
+    # )
+
+    # # Encapsuler ce logger avec structlog
+    # file_logger = structlog.wrap_logger(
+    #     file_only_logger,
+    #     processors=[
+    #         structlog.processors.TimeStamper(fmt="iso"),
+    #         structlog.processors.add_log_level,
+    #         # structlog.processors.dict_tracebacks,
+    #         structlog.processors.JSONRenderer(),  # Format JSON pour le fichier
+    #     ],
+    # )
+    # # self.file_logger = self.file_logger.bind(module=self.name())
+    # # file_logger = structlog.get_logger("file")
+
+    # structlog.reset_defaults()
+    # structlog.configure(
+    #     processors=[
+    #         structlog.contextvars.merge_contextvars,
+    #         structlog.processors.add_log_level,
+    #         structlog.processors.TimeStamper(fmt="iso"),
+    #         structlog.processors.JSONRenderer(),
+    #     ],
+    #     logger_factory=structlog.WriteLoggerFactory(file=Path(log_path).open("wt")),
+    #     # cache_logger_on_first_use=True,
+    # )
+    structlog.configure(
+        processors=[
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.ExceptionRenderer(),
+            structlog.processors.JSONRenderer(),
+        ],
+        # wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.WriteLoggerFactory(file=Path(log_path).open("wt")),
+        cache_logger_on_first_use=True,
+    )
+    file_logger = structlog.get_logger("file_logger")
+    file_logger.info("test file logger")
+
+    return terminal_logger, file_logger
+
+
+log_folder = retico_core.log_utils.create_new_log_folder("logs/run")
+print(log_folder)
+t, f = configurate_logger(log_folder)
+
+t.info("test terminal logger")
+f.info("test file logger")
+
+try:
+    0 / 0
+except Exception as e:
+    t.exception("err")
+    f.exception("err")
+
+
+# def singleton(class_):
+#     instances = {}
+
+#     def getinstance(*args, **kwargs):
+#         if class_ not in instances:
+#             instances[class_] = class_(*args, **kwargs)
+#         return instances[class_]
+
+#     return getinstance
+
+
+# class BaseClass:
+
+#     def __init__(self, a="lala"):
+#         self.a = a
+
+
+# @singleton
+# class MyClass(BaseClass):
+#     pass
+
+
+# a = MyClass("lolo")
+# b = MyClass("lili")
+# print(a.a)
+# print(b.a)
+# a.a = "e"
+# print(a.a)
+# print(b.a)
+
+
+# class MyClass3(BaseClass):
+#     def __new__(cls, a):
+#         if not hasattr(cls, "instance"):
+#             # cls.instance = super(TerminalLogger, cls).__new__(cls)
+#             cls.instance = BaseClass(a)
+#         return cls.instance
+
+
+# a = MyClass3("lolo")
+# b = MyClass3("lili")
+# print(a.a)
+# print(b.a)
+# a.a = "e"
+# print(a.a)
+# print(b.a)
+
+# structlog.reset_defaults()
+# structlog.configure(
+#     processors=[
+#         structlog.contextvars.merge_contextvars,
+#         structlog.processors.add_log_level,
+#         # structlog.processors.StackInfoRenderer(),
+#         # structlog.dev.set_exc_info,
+#         # structlog.processors.format_exc_info,
+#         # structlog.processors.dict_tracebacks,
+#         # structlog.tracebacks.ExceptionDictTransformer(),
+#         structlog.processors.ExceptionRenderer(),
+#         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
+#         structlog.processors.JSONRenderer(),
+#     ],
+#     wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+#     context_class=dict,
+#     logger_factory=structlog.PrintLoggerFactory(),
+#     cache_logger_on_first_use=False,
+# )
+# log = structlog.get_logger()
+# log.info("test")
+
+# try:
+#     0 / 0
+# except Exception as e:
+#     log.exception("err")
+#     log.exception("err", exc_info=e)
+#     log.exception("err", exc_info=sys.exc_info())
+#     log.exception(
+#         "The module encountered the following exception while running :",
+#         tarcebacks=[
+#             tb.replace('"', "'") for tb in traceback.format_tb(e.__traceback__)
+#         ],
+#     )

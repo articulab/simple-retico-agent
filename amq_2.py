@@ -9,60 +9,21 @@ information revceived over the ZeroMQ bridge.
 
 # retico
 import os
-from pathlib import Path
-import random
-import subprocess
-import sys
-import numpy as np
-import retico_core
-from retico_core.abstract import *
-
-# zeromq & supporting libraries
-import retico_core.abstract
 import json
-import threading
-import datetime
-import time
 from collections import deque
-
 import stomp
 import json
 from urllib.parse import unquote
+
+
+import retico_core
+import retico_core.abstract
+from retico_core.abstract import *
 from retico_core.log_utils import log_exception
 
 
-# class AMQIU(retico_core.IncrementalUnit):
-#     """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters.
-
-#     Args:
-#         retico_core (_type_): _description_
-#     """
-
-#     def __init__(self, decorated_iu=None, headers=None, destination=None, **kwargs):
-#         super().__init__(**kwargs)
-#         self.decorated_iu = decorated_iu
-#         self.headers = headers
-#         self.destination = destination
-
-#     @staticmethod
-#     def type():
-#         return "AMQ IU"
-
-#     def get_deco_iu(self):
-#         return self.decorated_iu
-
-#     def set_amq(self, decorated_iu, headers, destination):
-#         self.decorated_iu = decorated_iu
-#         self.headers = headers
-#         self.destination = destination
-
-
 class AMQIU(retico_core.IncrementalUnit):
-    """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters.
-
-    Args:
-        retico_core (_type_): _description_
-    """
+    """Decorator class for IncrementalUnit that will be sent through ActiveMQ. Adding headers and destination parameters."""
 
     def __init__(
         self,
@@ -90,15 +51,32 @@ class AMQIU(retico_core.IncrementalUnit):
         return "AMQ IU"
 
     def get_deco_iu(self):
+        """returns the decorated IU.
+
+        Returns:
+            IncrementalUnit: decorated IU.
+        """
         return self.decorated_iu
 
     def set_amq(self, decorated_iu, headers, destination):
+        """Sets AMQ IU's parameters.
+
+        Args:
+            decorated_iu (IncrementalUnit): decorated IU
+            headers (dict): ActiveMQ headers
+            destination (str): ActiveMQ destination (topic, queue, etc)
+        """
         self.decorated_iu = decorated_iu
         self.headers = headers
         self.destination = destination
 
 
 class AMQReader(retico_core.AbstractProducingModule):
+    """
+    Module providing a retico system with ActiveMQ message reception.
+    The module can subscribe to different ActiveMQ destinations, each will correspond to a desired IU type.
+    At each message reception from one of the destinations, the module transforms the ActiveMQ message to an IncrementalUnit of the corresponding IU type.
+    """
 
     @staticmethod
     def name():
@@ -106,7 +84,7 @@ class AMQReader(retico_core.AbstractProducingModule):
 
     @staticmethod
     def description():
-        return "A Module providing reading onto a ActiveMQ bus"
+        return "A Module providing a retico system with ActiveMQ message reception"
 
     @staticmethod
     def output_iu():
@@ -115,8 +93,9 @@ class AMQReader(retico_core.AbstractProducingModule):
     def __init__(self, ip, port, **kwargs):
         """Initializes the ActiveMQReader.
 
-        Args: topic(str): the topic/scope where the information will be read.
-
+        Args:
+            ip (str): the IP of the computer.
+            port (str): the port corresponding to ActiveMQ
         """
         super().__init__(**kwargs)
         hosts = [(ip, port)]
@@ -126,6 +105,8 @@ class AMQReader(retico_core.AbstractProducingModule):
         self.target_iu_types = dict()
 
     class Listener(stomp.ConnectionListener):
+        """Listener that triggers ANQReader's `on_message` function every time a message is unqueued in one of the subscribed destination."""
+
         def __init__(self, module):
             super().__init__()
             # in order to use methods of activeMQ we create its instance
@@ -141,10 +122,22 @@ class AMQReader(retico_core.AbstractProducingModule):
             self.module.on_message(frame)
 
     def add(self, destination, target_iu_type):
+        """Subscribe to a new ActiveMQ destination, and stores the desired corresponding IU type in `target_iu_type`.
+
+        Args:
+            destination (_type_): the ActiveMQ destination to subscribe to.
+            target_iu_type (dict): dictionary of all destination-IU type associations.
+        """
         self.conn.subscribe(destination=destination, id=1, ack="auto")
         self.target_iu_types[destination] = target_iu_type
 
     def on_message(self, frame):
+        """The function that is triggered every time a message (= `frame`)is unqueued in one of the subscribed destination.
+        The message is then processed an transformed into an IU of the corresponding type.
+
+        Args:
+            frame (stomp.frame): the received ActiveMQ message.
+        """
 
         message = frame.body
         destination = frame.headers["destination"]
@@ -199,6 +192,10 @@ class AMQReader(retico_core.AbstractProducingModule):
 
 
 class AMQWriter(retico_core.AbstractModule):
+    """
+    Module providing a retico system with ActiveMQ message sending.
+    The module will transform the AMQIU received into ActiveMQ messages, and send them to ActiveMQ following the AMQIU's `destination` and `headers` parameters.
+    """
 
     @staticmethod
     def name():
@@ -206,7 +203,7 @@ class AMQWriter(retico_core.AbstractModule):
 
     @staticmethod
     def description():
-        return "A Module providing writing onto a ActiveMQ bus"
+        return "A Module providing a retico system with ActiveMQ message sending"
 
     @staticmethod
     def output_iu():
@@ -219,14 +216,15 @@ class AMQWriter(retico_core.AbstractModule):
     def __init__(self, ip, port, **kwargs):
         """Initializes the ActiveMQWriter.
 
-        Args: topic(str): the topic/scope where the information will be read.
+        Args:
+            ip (str): the IP of the computer.
+            port (str): the port corresponding to ActiveMQ
 
         """
         super().__init__(**kwargs)
         hosts = [(ip, port)]
         self.conn = stomp.Connection(host_and_ports=hosts, auto_content_length=False)
         self.conn.connect("admin", "admin", wait=True)
-        # self.socket.bind("tcp://*:5555")
 
     def process_update(self, update_message):
         """

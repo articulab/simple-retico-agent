@@ -44,14 +44,13 @@ Child : I am fine, and I can't wait to learn mathematics ! \
 import datetime
 import threading
 import time
-import traceback
-import retico_core
 from llama_cpp import Llama
-from additional_IUs import *
 
-from retico_core.log_utils import *
+import retico_core
+from retico_core.text import SpeechRecognitionIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
+from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU, TurnTextIU
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
@@ -91,7 +90,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     @staticmethod
     def input_ius():
         return [
-            retico_core.text.SpeechRecognitionIU,
+            SpeechRecognitionIU,
             VADTurnAudioIU,
             TextAlignedAudioIU,
         ]
@@ -600,7 +599,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
         """
         # Construct UM and IU
-        next_um = retico_core.abstract.UpdateMessage()
+        next_um = retico_core.UpdateMessage()
         # if len(self.current_input) > 0:
         #     output_iu = self.create_iu(self.current_input[-1])
         # else:
@@ -679,7 +678,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence()
 
-        next_um = retico_core.abstract.UpdateMessage()
+        next_um = retico_core.UpdateMessage()
 
         if self.which_stop_criteria == "interruption":
             # REVOKE every word in interrupted clause (every IU in current_output)
@@ -751,7 +750,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             return None
         msg = []
         for iu, ut in update_message:
-            if isinstance(iu, retico_core.text.SpeechRecognitionIU):
+            if isinstance(iu, SpeechRecognitionIU):
                 if ut == retico_core.UpdateType.ADD:
                     continue
                 elif ut == retico_core.UpdateType.REVOKE:

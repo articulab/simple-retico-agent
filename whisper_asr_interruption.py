@@ -23,17 +23,15 @@ import datetime
 import os
 import threading
 import time
-import traceback
-import retico_core
-from retico_core.text import SpeechRecognitionIU
-import transformers
 import pydub
 import numpy as np
+import transformers
 from faster_whisper import WhisperModel
 
+import retico_core
+from retico_core.text import SpeechRecognitionIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-
 from additional_IUs import VADTurnAudioIU
 
 transformers.logging.set_verbosity_error()
@@ -85,8 +83,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         channels=1,
         sample_width=2,
         printing=False,
-        # log_file="asr.csv",
-        # log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
         """
@@ -115,7 +111,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         self.printing = printing
         self.first_time = True
         self.first_time_stop = False
-        # self.log_file = manage_log_folder(log_folder, log_file)
         self.time_logs_buffer = []
         self._asr_thread_active = False
         self.latest_input_iu = None
@@ -176,7 +171,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         audio_np = (
             np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
         )
-        segments, info = self.model.transcribe(audio_np)  # the segments can be streamed
+        segments, _ = self.model.transcribe(audio_np)  # the segments can be streamed
         segments = list(segments)
         transcription = "".join([s.text for s in segments])
 
@@ -205,7 +200,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                 continue
             elif iu.vad_state == "user_turn":
                 if self.input_framerate != iu.rate:
-                    raise Exception("input framerate differs from iu framerate")
+                    raise ValueError("input framerate differs from iu framerate")
                 if self.start_process:
                     self.terminal_logger.info("start_process")
                     self.file_logger.info("start_process")
@@ -327,8 +322,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                         confidence=0.99,
                         final=False,
                     )
-                    # output_iu = self.create_iu(self.latest_input_iu)
-                    # output_iu.set_asr_results([prediction], token, 0.0, 0.99, False)
                     self.current_output.append(output_iu)
                     um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
@@ -342,12 +335,10 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         super().prepare_run()
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
-        print("ASR started")
 
     def shutdown(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
         super().shutdown()
-        # write_logs(self.log_path, self.time_logs_buffer)
         self._asr_thread_active = False

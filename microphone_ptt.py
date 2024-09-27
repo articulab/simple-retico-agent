@@ -9,11 +9,9 @@ which captures audio signal from the microphone and chunks the audio signal into
 import queue
 import keyboard
 import pyaudio
+
 import retico_core
-
 from retico_core.audio import MicrophoneModule
-
-from additional_IUs import *
 
 
 class MicrophonePTTModule(MicrophoneModule):

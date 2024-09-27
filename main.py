@@ -1,72 +1,30 @@
-# import keyboard
-# import retico_core.abstract
-# import torch
-
-# from retico_core import *
-
-# from amq import (
-#     AMQReader,
-#     AMQWriter,
-#     AMQWriterOpening,
-#     TextAnswertoBEATBridge,
-#     fakeBEATSARA,
-#     fakeTTSSARA,
-# )
-# from vad_turn import VADTurnModule
-# from whisper_asr_interruption import WhisperASRInterruptionModule
-# from llama_cpp_memory_incremental_interruption import (
-#     LlamaCppMemoryIncrementalInterruptionModule,
-# )
-# from coqui_tts_interruption import CoquiTTSInterruptionModule
-# from speaker_interruption import SpeakerInterruptionModule
-
-# from whisper_asr import WhisperASRModule
-# from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
-# from coqui_tts import CoquiTTSModule
-# from speaker_2 import SpeakerModule_2
-# from microphone_ptt import MicrophonePTTModule
-
-# from utils import *
-# from woz_audio.WozMicrophone_multiple_files import WozMicrophoneModule_multiple_file
-# from woz_audio.WozMicrophone_one_file import WozMicrophoneModule_one_file
-# from woz_audio.WozMicrophone_one_file_allinone import (
-#     WozMicrophoneModule_one_file_allinone,
-# )
-# from woz_audio.WaveModule import WaveModule
-# from woz_audio.WozAsrModule import WozAsrModule
-
-# from retico_zmq.retico_zmq.zmq import WriterSingleton, ZeroMQWriter, ReaderSingleton
-# from retico_core.log_utils import *
-
 import keyboard
-from retico_core import *
-from retico_core.abstract import *
-from retico_core.text import *
-from retico_core.utils import *
-import structlog
+import retico_core
+from retico_core import network, audio, debug, text
 from functools import partial
 import torch
 
-from additional_IUs import TurnTextIU
-from amq_2 import TextAnswertoBEATBridge, fakeBEATSARA, fakeTTSSARA
+from whisper_asr import WhisperASRModule
+from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
+from coqui_tts import CoquiTTSModule
+from speaker_2 import SpeakerModule_2
+from microphone_ptt import MicrophonePTTModule
 
+from amq_2 import TextAnswertoBEATBridge, fakeBEATSARA, fakeTTSSARA, AMQWriterOpening
 from retico_amq.amq import AMQReader, AMQWriter, AMQBridge
-
-# from amq import TextAnswertoBEATBridge
 
 from llama_cpp_memory_incremental_interruption import (
     LlamaCppMemoryIncrementalInterruptionModule,
 )
-
 from microphone_ptt import MicrophonePTTModule
 from speaker_interruption import SpeakerInterruptionModule
-
 from coqui_tts_interruption import CoquiTTSInterruptionModule
+from vad_turn import VADTurnModule
+from whisper_asr_interruption import WhisperASRInterruptionModule
+
 from retico_core.log_utils import (
     filter_has_key,
     filter_does_not_have_key,
-    # filter_none_module,
-    # filter_not_match_modules,
     filter_value_in_list,
     filter_value_not_in_list,
     filter_conditions,
@@ -74,178 +32,176 @@ from retico_core.log_utils import (
     plotting_run,
     plotting_run_2,
 )
-from vad_turn import VADTurnModule
-from whisper_asr_interruption import WhisperASRInterruptionModule
 
 
-def callback(update_msg):
-    global msg
-    for x, ut in update_msg:
-        if ut == UpdateType.ADD:
-            msg.append(x)
-        if ut == UpdateType.REVOKE:
-            msg.remove(x)
-    txt = ""
-    committed = False
-    for x in msg:
-        # if x.final:
-        #     print("final commited" + str(x.committed))
-        txt += x.text + " "
-        committed = committed or x.committed
-    print(" " * 80, end="\r")
-    print(f"{txt}", end="\r")
-    if committed:
-        msg = []
-        print("")
+# def callback(update_msg):
+#     global msg
+#     for x, ut in update_msg:
+#         if ut == UpdateType.ADD:
+#             msg.append(x)
+#         if ut == UpdateType.REVOKE:
+#             msg.remove(x)
+#     txt = ""
+#     committed = False
+#     for x in msg:
+#         # if x.final:
+#         #     print("final commited" + str(x.committed))
+#         txt += x.text + " "
+#         committed = committed or x.committed
+#     print(" " * 80, end="\r")
+#     print(f"{txt}", end="\r")
+#     if committed:
+#         msg = []
+#         print("")
 
 
-def main_woz():
-    """
-    The `main_woz` function sets up a spoken dialog scenario between a teacher and an 8-year-old student
-    for teaching mathematics using various modules for audio input, speech recognition, memory
-    processing, text-to-speech, and audio output.
+# def main_woz():
+#     """
+#     The `main_woz` function sets up a spoken dialog scenario between a teacher and an 8-year-old student
+#     for teaching mathematics using various modules for audio input, speech recognition, memory
+#     processing, text-to-speech, and audio output.
 
-    It uses a WozMicrophoneModule which plays previously recorded wav files as if it was audio captured by a microphone in real time.
-    It is used to test the latency of the system with fixed audio inputs.
-    """
+#     It uses a WozMicrophoneModule which plays previously recorded wav files as if it was audio captured by a microphone in real time.
+#     It is used to test the latency of the system with fixed audio inputs.
+#     """
 
-    # LLM info
-    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+#     # LLM info
+#     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
 
-    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
-        The teacher is teaching mathemathics to the child student.\
-        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
-        You play the role of a teacher. Here is the beginning of the conversation :"
+#     system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+#         The teacher is teaching mathemathics to the child student.\
+#         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+#         You play the role of a teacher. Here is the beginning of the conversation :"
 
-    printing = True
-    # rate = 96000
-    rate = 16000
-    # rate = 32000
+#     printing = True
+#     # rate = 96000
+#     rate = 16000
+#     # rate = 32000
 
-    # create log folder
-    log_folder = create_new_log_folder("logs/test/16k/Recording (1)/demo")
+#     # create log folder
+#     log_folder = "logs/test/16k/Recording (1)/demo"
 
-    # assert chunk_size = frame_rate * frame_length * nb_channels  <= 960
+#     # assert chunk_size = frame_rate * frame_length * nb_channels  <= 960
 
-    # creating modules
-    # mic = WozMicrophoneModule(folder_path="audios/8k/", rate=rate * 2)
-    # mic = WozMicrophoneModule_2(folder_path="audios/stereo/48k/", rate=rate * 2)
-    # mic = WozMicrophoneModule_one_file(
-    #     file="audios/stereo/48k/Recording (5).wav", frame_length=0.02
-    # )
+#     # creating modules
+#     # mic = WozMicrophoneModule(folder_path="audios/8k/", rate=rate * 2)
+#     # mic = WozMicrophoneModule_2(folder_path="audios/stereo/48k/", rate=rate * 2)
+#     # mic = WozMicrophoneModule_one_file(
+#     #     file="audios/stereo/48k/Recording (5).wav", frame_length=0.02
+#     # )
 
-    # mic = WozMicrophoneModule_multiple_file(
-    #     folder_path="audios/stereo/48k/", frame_length=0.015
-    # )
-    # UM ASR LEN =  5760
-    # self.framerate =  96000
-    # IF =  960
+#     # mic = WozMicrophoneModule_multiple_file(
+#     #     folder_path="audios/stereo/48k/", frame_length=0.015
+#     # )
+#     # UM ASR LEN =  5760
+#     # self.framerate =  96000
+#     # IF =  960
 
-    # mic = WozMicrophoneModule_multiple_file(
-    #     folder_path="audios/stereo/8k/", frame_length=0.015
-    # )
-    # UM ASR LEN =  960
-    # self.framerate =  16000
+#     # mic = WozMicrophoneModule_multiple_file(
+#     #     folder_path="audios/stereo/8k/", frame_length=0.015
+#     # )
+#     # UM ASR LEN =  960
+#     # self.framerate =  16000
 
-    # mic = WozMicrophoneModule_multiple_file(
-    #     folder_path="audios/stereo/16k/", frame_length=0.015
-    # )
-    # UM ASR LEN =  1920
-    # self.framerate =  32000
-    # IF =  960
+#     # mic = WozMicrophoneModule_multiple_file(
+#     #     folder_path="audios/stereo/16k/", frame_length=0.015
+#     # )
+#     # UM ASR LEN =  1920
+#     # self.framerate =  32000
+#     # IF =  960
 
-    # mic = WozMicrophoneModule_multiple_file(
-    #     folder_path="audios/mono/44k/", frame_length=0.02
-    # )
-    # UM ASR LEN =  1764
-    # self.framerate =  44100
-    # IF =  640
+#     # mic = WozMicrophoneModule_multiple_file(
+#     #     folder_path="audios/mono/44k/", frame_length=0.02
+#     # )
+#     # UM ASR LEN =  1764
+#     # self.framerate =  44100
+#     # IF =  640
 
-    # mic = MicrophoneModule(rate=16000, frame_length=0.02)
-    # UM ASR LEN =  1764
-    # self.framerate =  44100
-    # IF =  640
+#     # mic = MicrophoneModule(rate=16000, frame_length=0.02)
+#     # UM ASR LEN =  1764
+#     # self.framerate =  44100
+#     # IF =  640
 
-    # mic = WozMicrophoneModule_one_file(frame_length=0.02, log_folder=log_folder)
-    mic = WozMicrophoneModule_one_file_allinone(
-        frame_length=0.02, log_folder=log_folder
-    )
-    # UM ASR LEN =  1764
-    # self.framerate =  44100
-    # IF =  640
-    # speaker = SpeakerModule_2(rate=rate, log_folder=log_folder)
-    # mic.subscribe(speaker)
+#     # mic = WozMicrophoneModule_one_file(frame_length=0.02, log_folder=log_folder)
+#     mic = WozMicrophoneModule_one_file_allinone(
+#         frame_length=0.02, log_folder=log_folder
+#     )
+#     # UM ASR LEN =  1764
+#     # self.framerate =  44100
+#     # IF =  640
+#     # speaker = SpeakerModule_2(rate=rate, log_folder=log_folder)
+#     # mic.subscribe(speaker)
 
-    # mic = MicrophoneModule_PTT(rate=16000, frame_length=0.02)
+#     # mic = MicrophoneModule_PTT(rate=16000, frame_length=0.02)
 
-    # print("MIC RATE =", mic.rate)
-    asr = WhisperASRModule(
-        printing=printing,
-        full_sentences=True,
-        input_framerate=16000,
-        log_folder=log_folder,
-    )
-    cback = debug.CallbackModule(callback=callback)
-    # llama_mem_icr = LlamaCppMemoryIncrementalModule(
-    #     model_path,
-    #     None,
-    #     None,
-    #     None,
-    #     system_prompt,
-    #     printing=printing,
-    #     log_folder=log_folder,
-    # )
-    # # tts = SpeechBrainTTSModule("en", printing=printing)
-    # tts = CoquiTTSModule(
-    #     language="en", model="vits_neon", printing=printing, log_folder=log_folder
-    # )
+#     # print("MIC RATE =", mic.rate)
+#     asr = WhisperASRModule(
+#         printing=printing,
+#         full_sentences=True,
+#         input_framerate=16000,
+#         log_folder=log_folder,
+#     )
+#     cback = debug.CallbackModule(callback=callback)
+#     # llama_mem_icr = LlamaCppMemoryIncrementalModule(
+#     #     model_path,
+#     #     None,
+#     #     None,
+#     #     None,
+#     #     system_prompt,
+#     #     printing=printing,
+#     #     log_folder=log_folder,
+#     # )
+#     # # tts = SpeechBrainTTSModule("en", printing=printing)
+#     # tts = CoquiTTSModule(
+#     #     language="en", model="vits_neon", printing=printing, log_folder=log_folder
+#     # )
 
-    # audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
-    # speaker = audio.SpeakerModule(rate=rate)
-    # print("TTS SAMPLERATE = ", tts.samplerate)
-    # speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
+#     # audio_dispatcher = audio.AudioDispatcherModule(rate=rate)
+#     # speaker = audio.SpeakerModule(rate=rate)
+#     # print("TTS SAMPLERATE = ", tts.samplerate)
+#     # speaker = SpeakerModule_2(rate=tts.samplerate, log_folder=log_folder)
 
-    # # creating network
-    # mic.subscribe(speaker)
+#     # # creating network
+#     # mic.subscribe(speaker)
 
-    # tts.subscribe(mic)
-    mic.subscribe(asr)
-    asr.subscribe(cback)
+#     # tts.subscribe(mic)
+#     mic.subscribe(asr)
+#     asr.subscribe(cback)
 
-    # mic.subscribe(audio_dispatcher)
-    # audio_dispatcher.subscribe(asr)
+#     # mic.subscribe(audio_dispatcher)
+#     # audio_dispatcher.subscribe(asr)
 
-    # asr.subscribe(cback)
-    # asr.subscribe(llama_mem_icr)
-    # llama_mem_icr.subscribe(tts)
-    # tts.subscribe(speaker)
+#     # asr.subscribe(cback)
+#     # asr.subscribe(llama_mem_icr)
+#     # llama_mem_icr.subscribe(tts)
+#     # tts.subscribe(speaker)
 
-    # running system
-    try:
-        network.run(mic)
-        print("woz Running")
-        input()
-        network.stop(mic)
-        merge_logs(log_folder)
-    except Exception as err:
-        print(f"Unexpected {err=}, {type(err)=}")
-        network.stop(mic)
+#     # running system
+#     try:
+#         network.run(mic)
+#         print("woz Running")
+#         input()
+#         network.stop(mic)
+#         merge_logs(log_folder)
+#     except Exception as err:
+#         print(f"Unexpected {err=}, {type(err)=}")
+#         network.stop(mic)
 
-    # running system Push To Talk
-    # try:
-    #     network.run(mic)
-    #     print("woz Running")
-    #     quit_key = False
-    #     while not quit_key:
-    #         if keyboard.is_pressed("q"):
-    #             quit_key = True
-    #         time.sleep(1)
-    #     # input()
-    #     network.stop(mic)
-    #     merge_logs(log_folder)
-    # except Exception as err:
-    #     print(f"Unexpected {err=}, {type(err)=}")
-    #     network.stop(mic)
+#     # running system Push To Talk
+#     # try:
+#     #     network.run(mic)
+#     #     print("woz Running")
+#     #     quit_key = False
+#     #     while not quit_key:
+#     #         if keyboard.is_pressed("q"):
+#     #             quit_key = True
+#     #         time.sleep(1)
+#     #     # input()
+#     #     network.stop(mic)
+#     #     merge_logs(log_folder)
+#     # except Exception as err:
+#     #     print(f"Unexpected {err=}, {type(err)=}")
+#     #     network.stop(mic)
 
 
 def main_demo():
@@ -276,10 +232,8 @@ def main_demo():
 
     # parameters definition
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     rate = 16000
     tts_model_samplerate = 22050
@@ -290,6 +244,9 @@ def main_demo():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
+
     # create modules
     mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     asr = WhisperASRModule(
@@ -297,7 +254,6 @@ def main_demo():
         printing=printing,
         full_sentences=True,
         input_framerate=rate,
-        log_folder=log_folder,
     )
     llama_mem_icr = LlamaCppMemoryIncrementalModule(
         model_path,
@@ -306,7 +262,6 @@ def main_demo():
         None,
         system_prompt,
         printing=printing,
-        log_folder=log_folder,
         device=device,
     )
     tts = CoquiTTSModule(
@@ -317,7 +272,7 @@ def main_demo():
         device=device,
     )
 
-    speaker = SpeakerModule_2(rate=tts_model_samplerate, log_folder=log_folder)
+    speaker = SpeakerModule_2(rate=tts_model_samplerate)
 
     # create network
     mic.subscribe(asr)
@@ -325,15 +280,14 @@ def main_demo():
     llama_mem_icr.subscribe(tts)
     tts.subscribe(speaker)
 
-    # running network with the Push To Talk system
+    # running system
     try:
         network.run(mic)
-        print("Dialog system ready")
-        keyboard.wait("q")
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        input()
         network.stop(mic)
-        merge_logs(log_folder)
-    except Exception as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
 
 
@@ -365,10 +319,7 @@ def main_speaker_interruption():
 
     # parameters definition
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    # log_folder = create_new_log_folder("logs/run")
     log_folder = "logs/run"
     frame_length = 0.02
     tts_frame_length = 0.2
@@ -381,6 +332,9 @@ def main_speaker_interruption():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -401,7 +355,6 @@ def main_speaker_interruption():
         None,
         system_prompt,
         printing=printing,
-        # log_folder=log_folder,
         device=device,
     )
 
@@ -409,28 +362,19 @@ def main_speaker_interruption():
         language="en",
         model=tts_model,
         printing=printing,
-        # log_folder=log_folder,
         frame_duration=tts_frame_length,
         device=device,
     )
 
     speaker = SpeakerInterruptionModule(
-        rate=tts_model_samplerate,  # log_folder=log_folder
+        rate=tts_model_samplerate,
     )
 
     vad = VADTurnModule(
         printing=printing,
         input_framerate=rate,
-        # log_folder=log_folder,
         frame_length=frame_length,
     )
-
-    # speakers = audio.SpeakerModule()
-    # amq = TextAnswertoBEATBridge()
-
-    # mic.subscribe(vad)
-    # vad.subscribe(asr)
-    # asr.subscribe(amq)
 
     # create network
     mic.subscribe(vad)
@@ -447,38 +391,29 @@ def main_speaker_interruption():
 
     # running system
     try:
-        network.run(mic, log_folder)
-        print("Dialog system ready")
-        keyboard.wait("q")
+        network.run(mic)
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        input()
         network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
 
 
 def test_cuda():
     # parameters definition
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
-    frame_length = 0.02
-    rate = 16000
-    tts_model_samplerate = 22050
-    tts_model = "vits_neon"
+    log_folder = "logs/run"
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
     system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
+
     llama_mem_icr = LlamaCppMemoryIncrementalInterruptionModule(
         model_path,
         None,
@@ -489,15 +424,15 @@ def test_cuda():
         log_folder=log_folder,
         device=device,
     )
-    # running network with the Push To Talk system
+
+    # running system
     try:
         network.run(llama_mem_icr)
-        print("Dialog system ready")
-        keyboard.wait("q")
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        input()
         network.stop(llama_mem_icr)
-        merge_logs(log_folder)
-    except Exception as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(llama_mem_icr)
 
 
@@ -531,10 +466,8 @@ def test_body():
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     rate = 16000
 
@@ -542,6 +475,9 @@ def test_body():
     # ip = "127.0.0.1"
     ip = "localhost"
     port = "61613"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -582,18 +518,11 @@ def test_body():
     # running system
     try:
         network.run(mic)
-        print("Dialog system ready")
-        keyboard.wait("q")
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        input()
         network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
 
 
@@ -609,15 +538,16 @@ def test_body_2():
     """
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    # device = "cuda"
-    # device = "cpu"
     printing = False
-    log_folder = create_new_log_folder("logs/run")
+    log_folder = "logs/run"
     frame_length = 0.02
     rate = 16000
 
     ip = "localhost"
     port = "61613"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -657,18 +587,11 @@ def test_body_2():
     # running system
     try:
         network.run(mic)
-        print("Dialog system ready")
-        keyboard.wait("q")
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        input()
         network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
 
 
@@ -695,6 +618,9 @@ def test_body_3():
 
     ip = "localhost"
     port = "61613"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -737,20 +663,12 @@ def test_body_3():
 
     # running system
     try:
-        network.run(mic, log_folder)
-        print("Dialog system ready")
-        # keyboard.wait("q")
+        network.run(mic)
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
         input()
         network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -789,9 +707,11 @@ def test_body_4():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
-
     ip = "localhost"
     port = "61613"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     # mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
     mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -852,69 +772,15 @@ def test_body_4():
 
     # running system
     try:
-        network.run(mic, log_folder=log_folder)
-        print("Dialog system ready")
-        # keyboard.wait("q")
+        network.run(mic)
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
         input()
         network.stop(mic)
-        # merge_logs(log_folder)
-    except (
-        Exception,
-        NotImplementedError,
-        ValueError,
-        AttributeError,
-        AssertionError,
-    ) as err:
-        print(f"Unexpected {err}")
+    except Exception:
+        terminal_logger.exception("test")
         network.stop(mic)
     finally:
         plotting_run_2()
-
-
-import importlib
-import structlog
-
-
-def test_structlog():
-    logger = structlog.get_logger()
-    # log_folder = create_new_log_folder("logs/run")
-    log_folder = "logs/run"
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    printing = False
-    frame_length = 0.02
-    rate = 16000
-
-    mic = audio.MicrophoneModule()
-    asr = WhisperASRInterruptionModule(
-        device=device,
-        printing=False,
-        full_sentences=True,
-        input_framerate=16000,
-        # log_folder=log_folder,
-    )
-    vad = VADTurnModule(
-        printing=printing,
-        input_framerate=rate,
-        # log_folder=log_folder,
-        frame_length=frame_length,
-    )
-
-    # speakers = audio.SpeakerModule()
-    amq = TextAnswertoBEATBridge()
-
-    mic.subscribe(vad)
-    vad.subscribe(asr)
-    asr.subscribe(amq)
-
-    # running system
-    try:
-        network.run(mic, log_folder)
-        logger.info("Dialog system ready")
-        keyboard.wait("q")
-        network.stop(mic)
-    except Exception:
-        logger.exception("test")
-        # network.stop(mic)
 
 
 def main_demo_with_plot():
@@ -944,7 +810,6 @@ def main_demo_with_plot():
     """
 
     # parameters definition
-    logger = structlog.get_logger("main")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"
@@ -958,6 +823,9 @@ def main_demo_with_plot():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -1014,13 +882,12 @@ def main_demo_with_plot():
 
     # running system
     try:
-        network.run(mic, log_folder)
-        logger.info("Dialog system ready")
-        # keyboard.wait("q")
+        network.run(mic)
+        terminal_logger.info("Dialog system running until ENTER key is pressed")
         input()
         network.stop(mic)
     except Exception:
-        logger.exception("test")
+        terminal_logger.exception("test")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -1037,6 +904,9 @@ def amq_test_with_ASR():
     rate = 16000
     ip = "localhost"
     port = "61613"
+
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
     mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
 
@@ -1061,7 +931,7 @@ def amq_test_with_ASR():
     aw = AMQWriter(ip=ip, port=port)
 
     ar = AMQReader(ip=ip, port=port)
-    ar.add(destination=destination, target_iu_type=SpeechRecognitionIU)
+    ar.add(destination=destination, target_iu_type=text.SpeechRecognitionIU)
 
     cback = debug.CallbackModule(callback=callback_fun)
     cback.callback = partial(utils.callback_text_AMQReader, module=cback)
@@ -1073,60 +943,14 @@ def amq_test_with_ASR():
     aw.subscribe(ar)
     ar.subscribe(cback)
 
-    # FILTERS FOR LOGGING SYSTEM
-    # network.LOG_FILTERS = [
-    #     # partial(filter_does_not_have_key, key="module"),
-    #     # partial(
-    #     #     filter_value_in_list,
-    #     #     key="module",
-    #     #     values=["Microphone Module", "VADTurn Module"],
-    #     # ),
-    #     # partial(filter_has_key, key="module"),
-    #     # partial(
-    #     #     filter_value_not_in_list,
-    #     #     key="level",
-    #     #     values=["error"],
-    #     # ),
-    #     # partial(
-    #     #     filter_value_not_in_list,
-    #     #     key="event",
-    #     #     values=[
-    #     #         "new iu",
-    #     #         "sent",
-    #     #         "error",
-    #     #         "before sent",
-    #     #         "AMQWriter sends a message to ActiveMQ",
-    #     #         "AMQReader receives a message from ActiveMQ",
-    #     #         "AMQReader creates new iu",
-    #     #         "CallbackModule receives a retico IU from AMQReader",
-    #     #     ],
-    #     # ),
-    #     partial(
-    #         filter_cases,
-    #         cases=[
-    #             [
-    #                 (
-    #                     "level",
-    #                     [
-    #                         "error",
-    #                     ],
-    #                 ),
-    #             ],
-    #         ],
-    #     ),
-    # ]
-
     # running system
-    l = structlog.get_logger()
     try:
-        network.run(mic, log_folder=log_folder)
-        print("Dialog system ready")
-        # keyboard.wait("q")
+        network.run(mic)
+        print("Dialog system running until ENTER key is pressed")
         input()
         network.stop(mic)
-    except Exception as err:
-        print(f"Unexpected {err}")
-        l.exception("error")
+    except Exception:
+        terminal_logger.exception("error in main")
         network.stop(mic)
     finally:
         plotting_run_2()

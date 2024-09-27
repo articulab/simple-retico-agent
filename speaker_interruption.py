@@ -22,13 +22,12 @@ Inputs : TextAlignedAudioIU, VADTurnAudioIU
 Outputs : TextAlignedAudioIU
 """
 
-import datetime
 import platform
 import pyaudio
+
 import retico_core
 import retico_core.abstract
-
-from additional_IUs import *
+from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
@@ -76,44 +75,29 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         sample_width=2,
         use_speaker="both",
         device_index=None,
-        # log_file="speaker_interruption.csv",
-        # log_folder="logs/test/16k/Recording (1)/demo",
         **kwargs,
     ):
         """
         Initializes the SpeakerInterruption Module.
 
         Args:
-            whisper_model (string): name of the desired model, has to correspond to a model in the faster_whisper library.
-            device (string): wether the model will be executed on cpu or gpu (using "cuda").
-            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
             rate (int): framerate of the played audio chunks.
             frame_length (float): duration of the played audio chunks.
             channels (int): number of channels (1=mono, 2=stereo) of the received VADTurnAudioIUs.
             sample_width (int):sample width (number of bits used to encode each frame) of the received VADTurnAudioIUs.
             use_speaker (string): wether the audio should be played in the right, left or both speakers.
             device_index(string):
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
         self.rate = rate
         self.sample_width = sample_width
         self.use_speaker = use_speaker
-
+        self.channels = channels
         self._p = pyaudio.PyAudio()
-
         if device_index is None:
             device_index = self._p.get_default_output_device_info()["index"]
         self.device_index = device_index
-
         self.stream = None
-        self.time = None
-
-        self.channels = channels
-        # self.log_file = manage_log_folder(log_folder, log_file)
-        self.time_logs_buffer = []
-        self.first_time = True
 
         # interruptions parameters
         self.audio_iu_buffer = []
@@ -126,16 +110,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
         overrides SpeakerModule's process_update to save logs.
         """
-        # TODO: replace this method by an actual way of knowing what is the starting and ending time where the speaker is active (actually outputs time, and not receive messages).
-        if self.first_time:
-            self.time_logs_buffer.append(
-                ["Start", datetime.datetime.now().strftime("%T.%f")[:-3]]
-            )
-            self.first_time = False
-        else:
-            self.time_logs_buffer.append(
-                ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
-            )
         for iu, ut in update_message:
             if isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
@@ -202,7 +176,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             return (silence_bytes, pyaudio.paContinue)
 
         iu = self.audio_iu_buffer.pop(0)
-        #
         if iu.final:
             self.terminal_logger.info("agent_EOT")
             self.file_logger.info("agent_EOT")
@@ -218,7 +191,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             return (data, pyaudio.paContinue)
 
     def prepare_run(self):
-        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L288"""
+        """Open the stream to enable sound outputting through speakers"""
         super().prepare_run()
         p = self._p
 
@@ -249,11 +222,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self.stream.start_stream()
 
     def shutdown(self):
-        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L312
-
-        Write logs and close the audio stream."""
+        """Close the audio stream."""
         super().shutdown()
-        # write_logs(self.log_file, self.time_logs_buffer)
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None
