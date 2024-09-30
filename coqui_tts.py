@@ -12,14 +12,15 @@ import os
 import threading
 import time
 from hashlib import blake2b
+import traceback
 
 import retico_core
+from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
 import numpy as np
 from TTS.api import TTS, load_config
 import torch
-from utils import *
-
-from utils import *
+from additional_IUs import *
 
 
 class CoquiTTS:
@@ -44,7 +45,7 @@ class CoquiTTS:
         self.speaker_wav = speaker_wav
         self.is_multilingual = is_multilingual
 
-    def setup(self):
+    def setup(self, **kwargs):
         """Init chosen TTS model."""
         self.tts = TTS(self.model).to(self.device)
 
@@ -135,15 +136,15 @@ class CoquiTTSModule(retico_core.AbstractModule):
         dispatch_on_finish=True,
         frame_duration=0.2,
         printing=False,
-        log_file="tts.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="tts.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         **kwargs
     ):
         super().__init__(**kwargs)
 
         # logs
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
 
         self.printing = printing
 
@@ -194,36 +195,41 @@ class CoquiTTSModule(retico_core.AbstractModule):
         """
         t1 = time.time()
         while self._tts_thread_active:
-            # this sleep time calculation is complicated and useless
-            # if we don't send silence when there is no audio outputted by the tts model
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+            try:
+                # this sleep time calculation is complicated and useless
+                # if we don't send silence when there is no audio outputted by the tts model
+                t2 = t1
+                t1 = time.time()
+                if t1 - t2 < self.frame_duration:
+                    time.sleep(self.frame_duration)
+                else:
+                    time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
-            if self.audio_pointer >= len(self.audio_buffer):
-                if self.clear_after_finish:
-                    self.audio_pointer = 0
-                    self.audio_buffer = []
-                    self.clear_after_finish = False
+                if self.audio_pointer >= len(self.audio_buffer):
+                    if self.clear_after_finish:
+                        self.audio_pointer = 0
+                        self.audio_buffer = []
+                        self.clear_after_finish = False
 
-                    # for WOZ : send commit when finished turn
+                        # for WOZ : send commit when finished turn
+                        iu = self.create_iu(self.latest_input_iu)
+                        um = retico_core.UpdateMessage.from_iu(
+                            iu, retico_core.UpdateType.COMMIT
+                        )
+                        self.append(um)
+                else:
+                    raw_audio = self.audio_buffer[self.audio_pointer]
+                    self.audio_pointer += 1
+
+                    # Only send data to speaker when there is actual data and do not send silence ?
                     iu = self.create_iu(self.latest_input_iu)
+                    iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
                     um = retico_core.UpdateMessage.from_iu(
-                        iu, retico_core.UpdateType.COMMIT
+                        iu, retico_core.UpdateType.ADD
                     )
                     self.append(um)
-            else:
-                raw_audio = self.audio_buffer[self.audio_pointer]
-                self.audio_pointer += 1
-
-                # Only send data to speaker when there is actual data and do not send silence ?
-                iu = self.create_iu(self.latest_input_iu)
-                iu.set_audio(raw_audio, 1, self.samplerate, self.samplewidth)
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-                self.append(um)
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def process_update(self, update_message):
         """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
@@ -288,7 +294,7 @@ class CoquiTTSModule(retico_core.AbstractModule):
             self.clear_after_finish = True
             self.current_input = []
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
@@ -312,4 +318,4 @@ class CoquiTTSModule(retico_core.AbstractModule):
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
         self._tts_thread_active = False
-        write_logs(self.log_file, self.time_logs_buffer)
+        # write_logs(self.log_file, self.time_logs_buffer)

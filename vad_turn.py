@@ -36,12 +36,12 @@ Inputs : AudioIU, TextAlignedAudioIU
 Outputs : VADTurnAudioIU
 """
 
-import retico_core
-from retico_core.audio import AudioIU
 import pydub
 import webrtcvad
 
-from utils import *
+import retico_core
+from retico_core.audio import AudioIU
+from additional_IUs import TextAlignedAudioIU, VADTurnAudioIU
 
 
 class VADTurnModule(retico_core.AbstractModule):
@@ -81,7 +81,7 @@ class VADTurnModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "VAD Turn Module"
+        return "VADTurn Module"
 
     @staticmethod
     def description():
@@ -100,8 +100,6 @@ class VADTurnModule(retico_core.AbstractModule):
     def __init__(
         self,
         printing=False,
-        log_file="vad.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
         target_framerate=16000,
         input_framerate=44100,
         channels=1,
@@ -115,8 +113,6 @@ class VADTurnModule(retico_core.AbstractModule):
     ):
         super().__init__(**kwargs)
         self.printing = printing
-        self.log_file = manage_log_folder(log_folder, log_file)
-        self.time_logs_buffer = []
 
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
@@ -135,10 +131,6 @@ class VADTurnModule(retico_core.AbstractModule):
         self.user_turn_text = "no speaker"
         self.audio_buffer = []
         self.buffer_pointer = 0
-
-        # latency logs params
-        self.first_time = True
-        self.first_time_stop = False
 
     def resample_audio(self, audio):
         """Resample the audio's frame_rate to correspond to self.target_framerate.
@@ -215,33 +207,6 @@ class VADTurnModule(retico_core.AbstractModule):
 
         _n_sil_audio_chunks = self.get_n_sil_audio_chunks()
         if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
-            # print("silence 0")
-            return True
-        _n_sil_audio_chunks = int(_n_sil_audio_chunks)
-        silence_counter = sum(
-            1
-            for a in self.audio_buffer[-_n_sil_audio_chunks:]
-            if not self.vad.is_speech(a, self.target_framerate)
-        )
-        if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
-            # print("silence 1")
-            return True
-        # print("silence 2")
-        return False
-
-    def recognize_silence_2(self):
-        """Function that will calculate if the ASR consider that there is a silence long enough to be a user EOS.
-        Example :
-        if self.silence_threshold==0.75 (percentage) and self.silence_dur==1 (seconds),
-        It returns True if, across the frames corresponding to the last 1 second of audio, more than 75% are considered as silence by the vad.
-
-        Returns:
-            boolean : the user EOS prediction
-        """
-
-        _n_sil_audio_chunks = self.get_n_sil_audio_chunks()
-        if not _n_sil_audio_chunks or len(self.audio_buffer) < _n_sil_audio_chunks:
-            # print("silence 0")
             return False
         _n_sil_audio_chunks = int(_n_sil_audio_chunks)
         silence_counter = sum(
@@ -250,9 +215,7 @@ class VADTurnModule(retico_core.AbstractModule):
             if not self.vad.is_speech(a, self.target_framerate)
         )
         if silence_counter >= int(self.silence_threshold * _n_sil_audio_chunks):
-            # print("silence 1")
             return True
-        # print("silence 2")
         return False
 
     def recognize_bot(self):
@@ -290,24 +253,19 @@ class VADTurnModule(retico_core.AbstractModule):
             if isinstance(iu, TextAlignedAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.final:
-                        # print("VADTURN : agent stopped talking")
-                        # self.user_turn = True
                         self.user_turn_text = "no speaker"
             elif isinstance(iu, AudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if self.input_framerate != iu.rate:
-                        raise Exception("input framerate differs from iu framerate")
+                        raise ValueError("input framerate differs from iu framerate")
                     self.add_audio(iu.raw_audio)
                     lastest_iu = iu
 
-        # if not self.user_turn:
         if self.user_turn_text == "agent":
             # It is not a user turn, The agent could be speaking, or it could have finished speaking.
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
-                if self.printing:
-                    print("VAD INTERRUPTION")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
@@ -321,15 +279,14 @@ class VADTurnModule(retico_core.AbstractModule):
                 # ]
                 # print("BOT remove from audio buffer")
 
-                output_iu = self.create_iu(lastest_iu)
-                output_iu.set_data(vad_state="interruption")
-                # output_iu.set_data(
-                #     audio=audio,
-                #     chunk_size=self.chunk_size,
-                #     rate=self.rate,
-                #     sample_width=self.sample_width,
-                #     vad_state="interruption",
-                # )
+                # output_iu = self.create_iu(lastest_iu)
+                # output_iu.set_data(vad_state="interruption")
+                output_iu = self.create_iu(
+                    grounded_in=lastest_iu,
+                    vad_state="interruption",
+                )
+                self.terminal_logger.info("interruption")
+                self.file_logger.info("interruption")
 
                 return retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
@@ -347,7 +304,7 @@ class VADTurnModule(retico_core.AbstractModule):
         # else:
         elif self.user_turn_text == "user":
             # It is user turn, we are listenning for a long enough silence, which would be analyzed as a user EOT.
-            silence = self.recognize_silence_2()
+            silence = self.recognize_silence()
             if not silence:
                 # print("TALKING")
                 # User was talking, and is still talking
@@ -361,8 +318,16 @@ class VADTurnModule(retico_core.AbstractModule):
                 # print("new self.buffer_pointer = ", self.buffer_pointer)
                 ius = []
                 for audio in new_audio:
-                    output_iu = self.create_iu(lastest_iu)
-                    output_iu.set_data(
+                    # output_iu = self.create_iu(lastest_iu)
+                    # output_iu.set_data(
+                    #     audio=audio,
+                    #     chunk_size=self.chunk_size,
+                    #     rate=self.target_framerate,
+                    #     sample_width=self.sample_width,
+                    #     vad_state="user_turn",
+                    # )
+                    output_iu = self.create_iu(
+                        grounded_in=lastest_iu,
                         audio=audio,
                         chunk_size=self.chunk_size,
                         rate=self.target_framerate,
@@ -375,8 +340,8 @@ class VADTurnModule(retico_core.AbstractModule):
                 return um
 
             else:
-                if self.printing:
-                    print("VAD EOT")
+                self.terminal_logger.info("user_EOT")
+                self.file_logger.info("user_EOT")
                 # User was talking, but is not talking anymore (a >700ms silence has been observed)
                 # a user EOT has been predicted, we'll :
                 # - ADD additional IUs if there is some (sould not happen)
@@ -388,9 +353,17 @@ class VADTurnModule(retico_core.AbstractModule):
                 # Add the last AudioIU if there is additional audio since last update_message (should not happen)
                 if self.buffer_pointer != len(self.audio_buffer) - 1:
                     for audio in self.audio_buffer[-self.buffer_pointer :]:
-                        output_iu = self.create_iu(lastest_iu)
-                        # output_iu.set_data(audio=audio, vad_state="user_turn")
-                        output_iu.set_data(
+                        # output_iu = self.create_iu(lastest_iu)
+                        # # output_iu.set_data(audio=audio, vad_state="user_turn")
+                        # output_iu.set_data(
+                        #     audio=audio,
+                        #     chunk_size=self.chunk_size,
+                        #     rate=self.target_framerate,
+                        #     sample_width=self.sample_width,
+                        #     vad_state="user_turn",
+                        # )
+                        output_iu = self.create_iu(
+                            grounded_in=lastest_iu,
                             audio=audio,
                             chunk_size=self.chunk_size,
                             rate=self.target_framerate,
@@ -401,9 +374,17 @@ class VADTurnModule(retico_core.AbstractModule):
                         ius.append((retico_core.UpdateType.ADD, output_iu))
 
                 for audio in self.audio_buffer:
-                    output_iu = self.create_iu(lastest_iu)
-                    # output_iu.set_data(audio=audio, vad_state="user_turn")
-                    output_iu.set_data(
+                    # output_iu = self.create_iu(lastest_iu)
+                    # # output_iu.set_data(audio=audio, vad_state="user_turn")
+                    # output_iu.set_data(
+                    #     audio=audio,
+                    #     chunk_size=self.chunk_size,
+                    #     rate=self.target_framerate,
+                    #     sample_width=self.sample_width,
+                    #     vad_state="user_turn",
+                    # )
+                    output_iu = self.create_iu(
+                        grounded_in=lastest_iu,
                         audio=audio,
                         chunk_size=self.chunk_size,
                         rate=self.target_framerate,
@@ -426,8 +407,8 @@ class VADTurnModule(retico_core.AbstractModule):
             # We are listenning for potential user beginning of turn (bot).
             bot = self.recognize_bot()
             if bot:
-                if self.printing:
-                    print("VAD BOT")
+                self.terminal_logger.info("user_BOT")
+                self.file_logger.info("user_BOT")
                 # user wasn't talking, but he starts talking
                 # A bot has been detected, we'll :
                 # - set the user_turn parameter as True
@@ -443,3 +424,6 @@ class VADTurnModule(retico_core.AbstractModule):
                 self.audio_buffer = self.audio_buffer[
                     -int(self.get_n_bot_audio_chunks()) :
                 ]
+
+    # def setup(self, log_folder=None):
+    #     super().setup(log_folder)

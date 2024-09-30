@@ -44,9 +44,13 @@ Child : I am fine, and I can't wait to learn mathematics ! \
 import datetime
 import threading
 import time
-import retico_core
 from llama_cpp import Llama
-from utils import *
+
+import retico_core
+from retico_core.text import SpeechRecognitionIU
+from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
+from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU, TurnTextIU
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
@@ -77,7 +81,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "LlamaCppMemoryIncremental Interruption Module"
+        return "LlamaCppMemoryIncremental Module"
 
     @staticmethod
     def description():
@@ -86,7 +90,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     @staticmethod
     def input_ius():
         return [
-            retico_core.text.SpeechRecognitionIU,
+            SpeechRecognitionIU,
             VADTurnAudioIU,
             TextAlignedAudioIU,
         ]
@@ -103,8 +107,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         initial_prompt,
         system_prompt,
         printing=False,
-        log_file="llm.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
+        # log_file="llm.csv",
+        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         context_size=2000,
         short_memory_context_size=500,
@@ -140,7 +144,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # general
         self.printing = printing
         self.time_logs_buffer = []
-        self.log_file = manage_log_folder(log_folder, log_file)
+        # self.log_file = manage_log_folder(log_folder, log_file)
         self.thread_active = False
         self.full_sentence = False
         self.interruption = False
@@ -570,7 +574,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         sentence = ""
         for iu in msg:
-            sentence += iu.get_text() + " "
+            # sentence += iu.get_text() + " "
+            sentence += iu.payload + " "
         return sentence
 
     def incremental_iu_sending(
@@ -594,12 +599,22 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
         """
         # Construct UM and IU
-        next_um = retico_core.abstract.UpdateMessage()
+        next_um = retico_core.UpdateMessage()
+        # if len(self.current_input) > 0:
+        #     output_iu = self.create_iu(self.current_input[-1])
+        # else:
+        #     output_iu = self.create_iu()
+        # output_iu.set_data(
+        #     text=payload,
+        #     turn_id=len(self.utterances),
+        #     clause_id=self.nb_clauses,
+        # )
+        last_iu = None
         if len(self.current_input) > 0:
-            output_iu = self.create_iu(self.current_input[-1])
-        else:
-            output_iu = self.create_iu()
-        output_iu.set_data(
+            last_iu = self.current_input[-1]
+        # print("last_iu = ", last_iu)
+        output_iu = self.create_iu(
+            grounded_in=last_iu,
             text=payload,
             turn_id=len(self.utterances),
             clause_id=self.nb_clauses,
@@ -659,10 +674,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         user_sentence = self.recreate_sentence_from_um(self.current_input)
         self.new_user_sentence(user_sentence)
         self.prepare_dialogue_history()
+        last_processed_iu = self.current_input[-1]
 
         agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence()
 
-        next_um = retico_core.abstract.UpdateMessage()
+        next_um = retico_core.UpdateMessage()
 
         if self.which_stop_criteria == "interruption":
             # REVOKE every word in interrupted clause (every IU in current_output)
@@ -687,8 +703,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 iu.revoked = True
                 next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
             # add an IU significating that the agent turn is complete (EOT)
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            # iu = self.create_iu()
+            # iu.set_data(final=True)
+            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -698,8 +715,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         elif self.which_stop_criteria == "stop_token":
             # add an IU significating that the agent turn is complete (EOT)
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            # iu = self.create_iu()
+            # iu.set_data(final=True)
+            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -732,7 +750,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             return None
         msg = []
         for iu, ut in update_message:
-            if isinstance(iu, retico_core.text.SpeechRecognitionIU):
+            if isinstance(iu, SpeechRecognitionIU):
                 if ut == retico_core.UpdateType.ADD:
                     continue
                 elif ut == retico_core.UpdateType.REVOKE:
@@ -779,12 +797,17 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         if the user starts talking (the reception of an interruption VADTurnAudioIU).
         """
         while self.thread_active:
-            time.sleep(0.01)
-            if self.full_sentence:
-                self.process_incremental()
-                self.full_sentence = False
+            try:
+                time.sleep(0.01)
+                if self.full_sentence:
+                    self.terminal_logger.info("start_process")
+                    self.file_logger.info("start_process")
+                    self.process_incremental()
+                    self.full_sentence = False
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
-    def setup(self):
+    def setup(self, **kwargs):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
 
@@ -792,6 +815,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Init the prompt with the initialize_prompt function.
         Calculates the stopping with the init_stop_criteria function.
         """
+        super().setup(**kwargs)
 
         if self.model_path is not None:
             self.model = Llama(
@@ -823,13 +847,15 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
+        super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
-        print("LLM started")
+        # print("LLM started")
 
     def shutdown(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(self.log_file, self.time_logs_buffer)
+        super().shutdown()
+        # write_logs(self.log_file, self.time_logs_buffer)
         self.thread_active = False

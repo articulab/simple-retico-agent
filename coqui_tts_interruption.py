@@ -25,11 +25,13 @@ Outputs : TextAlignedAudioIU
 import datetime
 import threading
 import time
-import retico_core
 import numpy as np
-import torch
-from utils import *
 from TTS.api import TTS
+
+import retico_core
+from retico_core.utils import device_definition
+from retico_core.log_utils import log_exception
+from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
@@ -55,7 +57,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "coqui-ai TTS Interruption Module"
+        return "CoquiTTS Module"
 
     @staticmethod
     def description():
@@ -92,8 +94,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         speaker_wav="TTS/wav_files/tts_api/tts_models_en_jenny_jenny/long_2.wav",
         frame_duration=0.2,
         printing=False,
-        log_file="tts.csv",
-        log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         **kwargs,
     ):
@@ -139,13 +139,13 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
         # general
         self.printing = printing
-        self.log_file = manage_log_folder(log_folder, log_file)
         self._tts_thread_active = False
         self.iu_buffer = []
         self.buffer_pointer = 0
-        self.time_logs_buffer = []
         self.interrupted_turn = -1
         self.current_turn_id = -1
+
+        self.first_clause = True
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
@@ -226,9 +226,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         end_of_turn = False
         for iu, ut in update_message:
             if isinstance(iu, TurnTextIU):
-                # print(
-                #     f"self.interrupted_turn vs iu.turn_id = {self.interrupted_turn, iu.turn_id}"
-                # )
                 if iu.turn_id != self.interrupted_turn:
                     if ut == retico_core.UpdateType.ADD:
                         continue
@@ -240,14 +237,13 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         else:
                             self.current_input.append(iu)
                             end_of_clause = True
-                # else:
-                #     print("TTS do not process iu")
             elif isinstance(iu, VADTurnAudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.vad_state == "interruption":
                         self.interrupted_turn = self.current_turn_id
                         end_of_clause = False
                         end_of_turn = False
+                        self.first_clause = True
                         self.current_input = []
                         self.iu_buffer = []
                         self.buffer_pointer = 0
@@ -257,8 +253,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                     continue
 
         if end_of_clause:
+            if self.first_clause:
+                self.terminal_logger.info("start_process")
+                self.file_logger.info("start_process")
+                self.first_clause = False
             self.current_turn_id = self.current_input[-1].turn_id
-            # print("TTS : EOC")
             start_time = time.time()
             start_date = datetime.datetime.now()
 
@@ -277,17 +276,12 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 print("TTS : before process ", start_date.strftime("%T.%f")[:-3])
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
 
-            self.time_logs_buffer.append(["Start", start_date.strftime("%T.%f")[:-3]])
-            self.time_logs_buffer.append(["Stop", end_date.strftime("%T.%f")[:-3]])
-
         if end_of_turn:
-            # print("TTS : EOT")
-            iu = self.create_iu()
-            iu.set_data(final=True)
+            self.first_clause = True
+            iu = self.create_iu(grounded_in=self.iu_buffer[-1].grounded_in, final=True)
             self.iu_buffer.append(iu)
 
         if end_of_turn and end_of_clause:
-            # print("TTS : EOT & EOC")
             pass
 
     def get_new_iu_buffer_from_text_input(self):
@@ -313,9 +307,9 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         )
                     else:
                         pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
-        except IndexError:
-            print(f"INDEX ERROR : {words, pre_pro_words}")
-            raise IndexError
+        except IndexError as e:
+            log_exception(self, e)
+            raise IndexError from e
 
         pre_pro_words.pop(0)
         pre_pro_words.append(len(words) - 1)
@@ -386,8 +380,20 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 char_id = sum(len_words) - 1
 
                 i += self.chunk_size
-                iu = self.create_iu(grounded_iu)
-                iu.set_data(
+                # iu = self.create_iu(grounded_iu)
+                # iu.set_data(
+                #     audio=chunk,
+                #     chunk_size=self.chunk_size,
+                #     rate=self.samplerate,
+                #     sample_width=self.samplewidth,
+                #     grounded_word=temp_word,
+                #     word_id=word_id,
+                #     char_id=char_id,
+                #     turn_id=grounded_iu.turn_id,
+                #     clause_id=grounded_iu.clause_id,
+                # )
+                iu = self.create_iu(
+                    grounded_in=grounded_iu,
                     audio=chunk,
                     chunk_size=self.chunk_size,
                     rate=self.samplerate,
@@ -403,33 +409,39 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         return new_buffer
 
     def _tts_thread(self):
-        # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
-        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
         """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
         it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
         """
+        # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
+        # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
         t1 = time.time()
         while self._tts_thread_active:
-            t2 = t1
-            t1 = time.time()
-            if t1 - t2 < self.frame_duration:
-                time.sleep(self.frame_duration)
-            else:
-                time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
+            try:
+                t2 = t1
+                t1 = time.time()
+                if t1 - t2 < self.frame_duration:
+                    time.sleep(self.frame_duration)
+                else:
+                    time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
 
-            if self.buffer_pointer >= len(self.iu_buffer):
-                self.buffer_pointer = 0
-                self.iu_buffer = []
-            else:
-                iu = self.iu_buffer[self.buffer_pointer]
-                self.buffer_pointer += 1
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
-                self.append(um)
+                if self.buffer_pointer >= len(self.iu_buffer):
+                    self.buffer_pointer = 0
+                    self.iu_buffer = []
+                else:
+                    iu = self.iu_buffer[self.buffer_pointer]
+                    self.buffer_pointer += 1
+                    um = retico_core.UpdateMessage.from_iu(
+                        iu, retico_core.UpdateType.ADD
+                    )
+                    self.append(um)
+            except Exception as e:
+                log_exception(module=self, exception=e)
 
     def setup(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
         """
+        super().setup()
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
@@ -439,6 +451,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
         """
+        super().prepare_run()
         self.buffer_pointer = 0
         self.iu_buffer = []
         self._tts_thread_active = True
@@ -448,5 +461,5 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
-        write_logs(self.log_file, self.time_logs_buffer)
+        super().shutdown()
         self._tts_thread_active = False
