@@ -824,14 +824,22 @@ def main_demo_with_plot():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
 
-    # # filters
+    # filters
     # filters = [
     #     partial(
     #         filter_cases,
-    #         cases=[[("debug", [True])], [("level", ["warning", "error"])]],
+    #         cases=[
+    #             [("debug", [True]), ("module", ["WhisperASR Module"])],
+    #             [("level", ["warning", "error"])],
+    #         ],
+    #         # cases=[
+    #         #     [("debug", [True])],
+    #         #     [("level", ["warning", "error"])],
+    #         # ],
     #     )
     # ]
-    # # configurate logger
+    # filters = []
+    # configurate logger
     # terminal_logger, _ = retico_core.log_utils.configurate_logger(
     #     log_folder, filters=filters
     # )

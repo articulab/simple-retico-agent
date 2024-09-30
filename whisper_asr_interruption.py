@@ -116,6 +116,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         self.latest_input_iu = None
         self.eos = False
         self.audio_buffer = []
+        self.vad_state = "no speaker"
 
         # audio
         self.target_framerate = target_framerate
@@ -163,25 +164,32 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             (list[string], boolean): the list of words transcribed by the asr and the VAD state.
         """
 
-        start_date = datetime.datetime.now()
-        start_time = time.time()
+        if self.vad_state == "user_turn":
+            print("recognize")
 
-        # faster whisper
-        full_audio = b"".join(self.audio_buffer)
-        audio_np = (
-            np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
-        )
-        segments, _ = self.model.transcribe(audio_np)  # the segments can be streamed
-        segments = list(segments)
-        transcription = "".join([s.text for s in segments])
+            start_date = datetime.datetime.now()
+            start_time = time.time()
 
-        end_date = datetime.datetime.now()
-        end_time = time.time()
+            # faster whisper
+            full_audio = b"".join(self.audio_buffer)
+            audio_np = (
+                np.frombuffer(full_audio, dtype=np.int16).astype(np.float32) / 32768.0
+            )
+            segments, _ = self.model.transcribe(
+                audio_np
+            )  # the segments can be streamed
+            segments = list(segments)
+            transcription = "".join([s.text for s in segments])
 
-        if self.printing:
-            print("execution time = " + str(round(end_time - start_time, 3)) + "s")
-            print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
-            print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
+            end_date = datetime.datetime.now()
+            end_time = time.time()
+
+            if self.printing:
+                print("execution time = " + str(round(end_time - start_time, 3)) + "s")
+                print("ASR : before process ", start_date.strftime("%T.%f")[:-3])
+                print("ASR : after process ", end_date.strftime("%T.%f")[:-3])
+        else:
+            return []
 
         return transcription
 
@@ -197,8 +205,10 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         for iu, ut in update_message:
             if iu.vad_state == "interruption":
                 self.start_process = True
+                self.vad_state = "user_turn"
                 continue
             elif iu.vad_state == "user_turn":
+                self.vad_state = "user_turn"
                 if self.input_framerate != iu.rate:
                     raise ValueError("input framerate differs from iu framerate")
                 if self.start_process:
@@ -216,6 +226,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                     # generate the final hypothesis here instead of in _asr_thead ?
                     eos = True
                     self.start_process = True
+                    self.vad_state = "agent_turn"
         self.eos = eos
 
     def _asr_thread(self):
@@ -230,7 +241,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
 
                 time.sleep(0.01)
                 prediction = self.recognize()
-
                 if len(prediction) != 0:
                     um, new_tokens = retico_core.text.get_text_increment(
                         self, prediction

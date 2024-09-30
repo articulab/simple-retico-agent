@@ -272,8 +272,8 @@ class VADTurnModule(retico_core.AbstractModule):
                 # - Take only the end of the audio_buffer, to remove the useless audio
                 # - Send a INTERRUPTION IU to all modules to make them stop generating new data (if the agent is talking, he gets interrupted by the user)
                 # self.user_turn = True
-                self.user_turn_text = "user"
-
+                self.user_turn_text = "user_turn"
+                self.buffer_pointer = 0
                 # self.audio_buffer = self.audio_buffer[
                 #     -int(self.get_n_bot_audio_chunks()) :
                 # ]
@@ -291,6 +291,7 @@ class VADTurnModule(retico_core.AbstractModule):
                 return retico_core.UpdateMessage.from_iu(
                     output_iu, retico_core.UpdateType.ADD
                 )
+
             else:
                 # print("SILENCE")
                 # user wasn't talkin, and stays quiet
@@ -302,7 +303,7 @@ class VADTurnModule(retico_core.AbstractModule):
                 # print("remove from audio buffer")
 
         # else:
-        elif self.user_turn_text == "user":
+        elif self.user_turn_text == "user_turn":
             # It is user turn, we are listenning for a long enough silence, which would be analyzed as a user EOT.
             silence = self.recognize_silence()
             if not silence:
@@ -399,6 +400,7 @@ class VADTurnModule(retico_core.AbstractModule):
                 # self.user_turn = False
                 self.user_turn_text = "agent"
                 self.audio_buffer = []
+                self.buffer_pointer = 0
                 # print("reset audio buffer")
                 return um
 
@@ -415,7 +417,7 @@ class VADTurnModule(retico_core.AbstractModule):
                 # - Take only the end of the audio_buffer, to remove the useless audio
                 # - Send a INTERRUPTION IU to all modules to make them stop generating new data (if the agent is talking, he gets interrupted by the user)
                 # self.user_turn = True
-                self.user_turn_text = "user"
+                self.user_turn_text = "user_turn"
             else:
                 # print("SILENCE")
                 # user wasn't talkin, and stays quiet
