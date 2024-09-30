@@ -287,7 +287,7 @@ def main_demo():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
 
 
@@ -396,7 +396,7 @@ def main_speaker_interruption():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
 
 
@@ -522,7 +522,7 @@ def test_body():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
 
 
@@ -591,7 +591,7 @@ def test_body_2():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
 
 
@@ -668,7 +668,7 @@ def test_body_3():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -777,7 +777,7 @@ def test_body_4():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -883,11 +883,12 @@ def main_demo_with_plot():
     # running system
     try:
         network.run(mic)
-        terminal_logger.info("Dialog system running until ENTER key is pressed")
+        # terminal_logger.info("Dialog system running until ENTER key is pressed")
+        print("Dialog system running until ENTER key is pressed")
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("test")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -950,7 +951,7 @@ def amq_test_with_ASR():
         input()
         network.stop(mic)
     except Exception:
-        terminal_logger.exception("error in main")
+        terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
         plotting_run_2()
@@ -972,5 +973,5 @@ if __name__ == "__main__":
     # test_body_3()
     # test_body_4()
 
-    amq_test_with_ASR()
-    # main_demo_with_plot()
+    # amq_test_with_ASR()
+    main_demo_with_plot()

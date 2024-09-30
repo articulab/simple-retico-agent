@@ -850,7 +850,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
-        print("LLM started")
+        # print("LLM started")
 
     def shutdown(self):
         """

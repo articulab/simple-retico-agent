@@ -137,7 +137,13 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             self.audio_iu_buffer = []
                             self.latest_processed_iu = None
                         else:
-                            print("SPEAKER : self.latest_processed_iu = None")
+                            # print("SPEAKER : self.latest_processed_iu = None")
+                            self.terminal_logger.info(
+                                "speaker interruption but no outputted audio yet"
+                            )
+                            self.file_logger.info(
+                                "speaker interruption but no outputted audio yet"
+                            )
 
             elif isinstance(iu, TextAlignedAudioIU):
                 if ut == retico_core.UpdateType.ADD:
