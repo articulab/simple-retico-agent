@@ -403,7 +403,7 @@ def main_speaker_interruption():
 def test_cuda():
     # parameters definition
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    printing = False
+    printing = True
     log_folder = "logs/run"
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
     system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
@@ -823,6 +823,18 @@ def main_demo_with_plot():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+
+    # # filters
+    # filters = [
+    #     partial(
+    #         filter_cases,
+    #         cases=[[("debug", [True])], [("level", ["warning", "error"])]],
+    #     )
+    # ]
+    # # configurate logger
+    # terminal_logger, _ = retico_core.log_utils.configurate_logger(
+    #     log_folder, filters=filters
+    # )
 
     # configurate logger
     terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)

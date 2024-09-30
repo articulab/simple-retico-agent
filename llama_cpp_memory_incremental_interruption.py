@@ -107,8 +107,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         initial_prompt,
         system_prompt,
         printing=False,
-        # log_file="llm.csv",
-        # log_folder="logs/test/16k/Recording (1)/demo",
         device=None,
         context_size=2000,
         short_memory_context_size=500,
@@ -144,7 +142,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # general
         self.printing = printing
         self.time_logs_buffer = []
-        # self.log_file = manage_log_folder(log_folder, log_file)
         self.thread_active = False
         self.full_sentence = False
         self.interruption = False
@@ -703,9 +700,10 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 iu.revoked = True
                 next_um.add_iu(iu, retico_core.UpdateType.REVOKE)
             # add an IU significating that the agent turn is complete (EOT)
-            # iu = self.create_iu()
-            # iu.set_data(final=True)
-            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
+            iu = self.create_iu(
+                grounded_in=last_processed_iu, final=True, turn_id=len(self.utterances)
+            )
+
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -715,9 +713,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         elif self.which_stop_criteria == "stop_token":
             # add an IU significating that the agent turn is complete (EOT)
-            # iu = self.create_iu()
-            # iu.set_data(final=True)
-            iu = self.create_iu(grounded_in=last_processed_iu, final=True)
+            iu = self.create_iu(
+                grounded_in=last_processed_iu,
+                final=True,
+                turn_id=len(self.utterances),
+            )
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
 
             # add updated agent sentence to dialogue history
@@ -850,12 +850,10 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
-        # print("LLM started")
 
     def shutdown(self):
         """
         overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
         """
         super().shutdown()
-        # write_logs(self.log_file, self.time_logs_buffer)
         self.thread_active = False
