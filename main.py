@@ -823,6 +823,10 @@ def main_demo_with_plot():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+    plot_live = True
+
+    # configurate plot
+    retico_core.log_utils.configurate_plot(plot_live)
 
     # filters
     # filters = [
