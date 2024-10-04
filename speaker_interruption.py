@@ -28,6 +28,7 @@ import pyaudio
 import retico_core
 import retico_core.abstract
 from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU
+from vad_turn_2 import DMIU
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
@@ -61,7 +62,11 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [TextAlignedAudioIU, VADTurnAudioIU]
+        return [
+            TextAlignedAudioIU,
+            VADTurnAudioIU,
+            DMIU,
+        ]
 
     @staticmethod
     def output_iu():
@@ -111,9 +116,9 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         overrides SpeakerModule's process_update to save logs.
         """
         for iu, ut in update_message:
-            if isinstance(iu, VADTurnAudioIU):
+            if isinstance(iu, DMIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.vad_state == "interruption":
+                    if iu.action == "system_interruption":
                         self.terminal_logger.info("interruption")
                         self.file_logger.info("interruption")
                         if self.latest_processed_iu is not None:
@@ -156,7 +161,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                         self.audio_iu_buffer.append(iu)
 
             else:
-                raise TypeError("Unknown IU type " + iu)
+                raise TypeError("Unknown IU type " + type(iu))
 
         return None
 
@@ -182,6 +187,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             return (silence_bytes, pyaudio.paContinue)
 
         iu = self.audio_iu_buffer.pop(0)
+        # if it is the last IU from TTS for this agent turn, which corresponds to an agent EOT.
         if iu.final:
             self.terminal_logger.info("agent_EOT")
             self.file_logger.info("agent_EOT")
@@ -190,6 +196,17 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
         else:
+            # if it is the first IU from new agent turn, which corresponds to the official agent BOT
+            if (
+                self.latest_processed_iu.turn_id is not None
+                and iu.turn_id is not None
+                and self.latest_processed_iu.turn_id != iu.turn_id
+            ):
+                self.terminal_logger.info("agent_BOT")
+                self.file_logger.info("agent_BOT")
+                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                self.append(um)
+
             self.terminal_logger.info("output_audio")
             self.file_logger.info("output_audio")
             data = bytes(iu.raw_audio)

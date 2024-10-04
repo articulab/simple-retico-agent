@@ -32,6 +32,7 @@ import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
 from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU
+from vad_turn_2 import DMIU
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
@@ -67,7 +68,11 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [TurnTextIU, VADTurnAudioIU]
+        return [
+            TurnTextIU,
+            VADTurnAudioIU,
+            DMIU,
+        ]
 
     @staticmethod
     def output_iu():
@@ -237,9 +242,9 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         else:
                             self.current_input.append(iu)
                             end_of_clause = True
-            elif isinstance(iu, VADTurnAudioIU):
+            elif isinstance(iu, DMIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.vad_state == "interruption":
+                    if iu.action == "system_interruption":
                         self.interrupted_turn = self.current_turn_id
                         end_of_clause = False
                         end_of_turn = False

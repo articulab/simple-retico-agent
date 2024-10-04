@@ -179,7 +179,7 @@ class VADTurnAudioIU(retico_core.audio.AudioIU):
         self.vad_state = vad_state
 
     def set_data(
-        self, vad_state=None, audio=None, chunk_size=None, rate=None, sample_width=None
+        self, vad_state=None, audio=None, nframes=None, rate=None, sample_width=None
     ):
         """Sets AudioIU parameters and vad_state"""
         # vad_state
@@ -188,7 +188,7 @@ class VADTurnAudioIU(retico_core.audio.AudioIU):
         self.payload = audio
         self.raw_audio = audio
         self.rate = rate
-        self.nframes = chunk_size
+        self.nframes = nframes
         self.sample_width = sample_width
 
 
