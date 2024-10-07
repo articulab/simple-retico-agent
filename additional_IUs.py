@@ -6,6 +6,125 @@ import torch
 import retico_core
 
 
+class DMIU(retico_core.audio.AudioIU):
+
+    @staticmethod
+    def type():
+        return "DM IU"
+
+    def __init__(
+        self,
+        action=None,
+        event=None,
+        turn_id=None,
+        word_id=None,
+        char_id=None,
+        clause_id=None,
+        grounded_word=None,
+        final=None,
+        **kwargs,
+    ):
+        super().__init__(
+            **kwargs,
+        )
+        self.action = action
+        self.event = event
+        self.turn_id = turn_id
+        self.word_id = word_id
+        self.char_id = char_id
+        self.clause_id = clause_id
+        self.grounded_word = grounded_word
+        self.final = final
+
+
+class VADIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced by VADModule with VA for both user and agent
+
+    Attributes:
+        va_user (bool): user VA activation, True means voice recognized, False means no voice recognized.
+        va_agent (bool): agent VA activation, True means audio outputted by the agent, False means no audio outputted by the agent.
+    """
+
+    @staticmethod
+    def type():
+        return "VAD IU"
+
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        audio=None,
+        rate=None,
+        nframes=None,
+        sample_width=None,
+        va_user=None,
+        va_agent=None,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+            payload=audio,
+            raw_audio=audio,
+            rate=rate,
+            nframes=nframes,
+            sample_width=sample_width,
+        )
+        self.va_user = va_user
+        self.va_agent = va_agent
+
+
+class SpeakerAlignementIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
+
+    Attributes:
+        - grounded_word : the word corresponding to the audio.
+        - turn_id (int) : The index of the dialogue's turn the IU is part of.
+        - clause_id (int) : The index of the clause the IU is part of, in the current turn.
+        - word_id (int) : The index of the word that corresponds to the end of the IU].
+        - char_id (int) : The index of the last character from the grounded_word.
+        - final (bool) : Wether the IU is an EOT.
+    """
+
+    @staticmethod
+    def type():
+        return "SpeakerAlignement IU"
+
+    def __init__(
+        self,
+        creator=None,
+        iuid=0,
+        previous_iu=None,
+        grounded_in=None,
+        grounded_word=None,
+        word_id=None,
+        char_id=None,
+        turn_id=None,
+        clause_id=None,
+        event=None,
+        final=None,
+        **kwargs,
+    ):
+        super().__init__(
+            creator=creator,
+            iuid=iuid,
+            previous_iu=previous_iu,
+            grounded_in=grounded_in,
+            **kwargs,
+        )
+        self.grounded_word = grounded_word
+        self.word_id = word_id
+        self.char_id = char_id
+        self.turn_id = turn_id
+        self.clause_id = clause_id
+        self.event = event
+        self.final = final
+
+
 class TextAlignedAudioIU(retico_core.audio.AudioIU):
     """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
 

@@ -27,8 +27,7 @@ import pyaudio
 
 import retico_core
 import retico_core.abstract
-from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU
-from vad_turn_2 import DMIU
+from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU, DMIU, SpeakerAlignementIU
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
@@ -70,7 +69,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def output_iu():
-        return TextAlignedAudioIU
+        # return TextAlignedAudioIU
+        return SpeakerAlignementIU
 
     def __init__(
         self,
@@ -132,15 +132,31 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             # print(
                             #     f"PARAMS INTER SENT TO LLM = {word, word_id, char_id, turn_id, clause_id}"
                             # )
-
-                            um = retico_core.UpdateMessage.from_iu(
-                                self.latest_processed_iu, retico_core.UpdateType.ADD
+                            iu = self.create_iu(
+                                grounded_word=self.latest_processed_iu.grounded_word,
+                                word_id=self.latest_processed_iu.word_id,
+                                char_id=self.latest_processed_iu.char_id,
+                                clause_id=self.latest_processed_iu.clause_id,
+                                turn_id=self.latest_processed_iu.turn_id,
+                                final=iu.final,
+                                event="interruption",
                             )
+                            um = retico_core.UpdateMessage()
+                            um.add_ius(
+                                [
+                                    (retico_core.UpdateType.ADD, um_iu)
+                                    for um_iu in self.current_output + [iu]
+                                ]
+                            )
+                            # um = retico_core.UpdateMessage.from_iu(
+                            #     iu, retico_core.UpdateType.ADD
+                            # )
                             self.append(um)
-                            self.interrupted_iu = self.latest_processed_iu
+                            self.interrupted_iu = iu
                             # remove all audio in audio_buffer
                             self.audio_iu_buffer = []
-                            self.latest_processed_iu = None
+                            self.current_output = []
+                            # self.latest_processed_iu = None
                         else:
                             # print("SPEAKER : self.latest_processed_iu = None")
                             self.terminal_logger.info(
@@ -149,6 +165,9 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             self.file_logger.info(
                                 "speaker interruption but no outputted audio yet"
                             )
+                    elif iu.action == "repeat_last_turn":
+                        self.terminal_logger.info("repeat ius received", debug=True)
+                        self.audio_iu_buffer.append(iu)
 
             elif isinstance(iu, TextAlignedAudioIU):
                 if ut == retico_core.UpdateType.ADD:
@@ -188,29 +207,71 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
         iu = self.audio_iu_buffer.pop(0)
         # if it is the last IU from TTS for this agent turn, which corresponds to an agent EOT.
-        if iu.final:
+        if hasattr(iu, "final") and iu.final:
             self.terminal_logger.info("agent_EOT")
             self.file_logger.info("agent_EOT")
-            um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+            output_iu = self.create_iu(
+                grounded_word=iu.grounded_word,
+                word_id=iu.word_id,
+                char_id=iu.char_id,
+                clause_id=iu.clause_id,
+                turn_id=iu.turn_id,
+                final=iu.final,
+                event="agent_EOT",
+            )
+
+            um = retico_core.UpdateMessage()
+            um.add_ius(
+                [
+                    (retico_core.UpdateType.ADD, um_iu)
+                    for um_iu in self.current_output + [output_iu]
+                ]
+            )
+            self.current_output = []
             self.append(um)
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
         else:
             # if it is the first IU from new agent turn, which corresponds to the official agent BOT
-            if (
+            if self.latest_processed_iu is None or (
                 self.latest_processed_iu.turn_id is not None
                 and iu.turn_id is not None
                 and self.latest_processed_iu.turn_id != iu.turn_id
             ):
                 self.terminal_logger.info("agent_BOT")
                 self.file_logger.info("agent_BOT")
-                um = retico_core.UpdateMessage.from_iu(iu, retico_core.UpdateType.ADD)
+                output_iu = self.create_iu(
+                    grounded_word=iu.grounded_word,
+                    word_id=iu.word_id,
+                    char_id=iu.char_id,
+                    clause_id=iu.clause_id,
+                    turn_id=iu.turn_id,
+                    final=iu.final,
+                    event="agent_BOT",
+                )
+                um = retico_core.UpdateMessage.from_iu(
+                    output_iu, retico_core.UpdateType.ADD
+                )
                 self.append(um)
 
             self.terminal_logger.info("output_audio")
             self.file_logger.info("output_audio")
             data = bytes(iu.raw_audio)
             self.latest_processed_iu = iu
+            stored_iu = self.create_iu(
+                raw_audio=iu.raw_audio,
+                nframes=iu.nframes,
+                rate=iu.rate,
+                sample_width=iu.sample_width,
+                grounded_word=iu.grounded_word,
+                word_id=iu.word_id,
+                char_id=iu.char_id,
+                clause_id=iu.clause_id,
+                turn_id=iu.turn_id,
+                final=iu.final,
+                event="ius_from_last_turn",
+            )
+            self.current_output.append(stored_iu)
             return (data, pyaudio.paContinue)
 
     def prepare_run(self):

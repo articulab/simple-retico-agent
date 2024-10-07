@@ -29,11 +29,9 @@ import transformers
 from faster_whisper import WhisperModel
 
 import retico_core
-from retico_core.text import SpeechRecognitionIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import VADTurnAudioIU
-from vad_turn_2 import DMIU
+from additional_IUs import DMIU
 
 transformers.logging.set_verbosity_error()
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"

@@ -43,48 +43,12 @@ import webrtcvad
 
 import retico_core
 from retico_core.audio import AudioIU
-from additional_IUs import TextAlignedAudioIU, VADTurnAudioIU
-
-
-class VADIU(retico_core.audio.AudioIU):
-    """AudioIU enhanced by VADModule with VA for both user and agent
-
-    Attributes:
-        va_user (bool): user VA activation, True means voice recognized, False means no voice recognized.
-        va_agent (bool): agent VA activation, True means audio outputted by the agent, False means no audio outputted by the agent.
-    """
-
-    @staticmethod
-    def type():
-        return "VAD IU"
-
-    def __init__(
-        self,
-        creator=None,
-        iuid=0,
-        previous_iu=None,
-        grounded_in=None,
-        audio=None,
-        rate=None,
-        nframes=None,
-        sample_width=None,
-        va_user=None,
-        va_agent=None,
-        **kwargs,
-    ):
-        super().__init__(
-            creator=creator,
-            iuid=iuid,
-            previous_iu=previous_iu,
-            grounded_in=grounded_in,
-            payload=audio,
-            raw_audio=audio,
-            rate=rate,
-            nframes=nframes,
-            sample_width=sample_width,
-        )
-        self.va_user = va_user
-        self.va_agent = va_agent
+from additional_IUs import (
+    VADTurnAudioIU,
+    DMIU,
+    VADIU,
+    SpeakerAlignementIU,
+)
 
 
 class VADModule(retico_core.AbstractModule):
@@ -98,7 +62,7 @@ class VADModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [AudioIU, TextAlignedAudioIU]
+        return [AudioIU, SpeakerAlignementIU]
 
     @staticmethod
     def output_iu():
@@ -153,13 +117,13 @@ class VADModule(retico_core.AbstractModule):
         """
         for iu, ut in update_message:
             # IUs from SpeakerModule, can be either agent BOT or EOT
-            if isinstance(iu, TextAlignedAudioIU):
+            if isinstance(iu, SpeakerAlignementIU):
                 if ut == retico_core.UpdateType.ADD:
                     # agent EOT
-                    if iu.final:
+                    if iu.event == "agent_EOT":
                         self.VA_agent = False
                     # agent BOT
-                    else:
+                    elif iu.event == "agent_BOT":
                         self.VA_agent = True
             elif isinstance(iu, AudioIU):
                 if ut == retico_core.UpdateType.ADD:
@@ -472,27 +436,6 @@ class VADTurnModule2(retico_core.AbstractModule):
                 ]
 
 
-class DMIU(retico_core.audio.AudioIU):
-
-    @staticmethod
-    def type():
-        return "DM IU"
-
-    def __init__(
-        self,
-        action=None,
-        event=None,
-        turn_id=None,
-        **kwargs,
-    ):
-        super().__init__(
-            **kwargs,
-        )
-        self.action = action
-        self.event = event
-        self.turn_id = turn_id
-
-
 class DialogueManagerModule(retico_core.AbstractModule):
     """
 
@@ -511,7 +454,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [VADIU]
+        return [VADIU, SpeakerAlignementIU]
 
     @staticmethod
     def output_iu():
@@ -540,34 +483,52 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.buffer_pointer = 0
         self.dialogue_state = "opening"
         self.turn_id = 0
-        self.repeat_timer = None
+        self.repeat_timer = float("inf")
+        self.audio_ius_agent_last_turn = []
 
         self.policies = {
             "user_speaking": {
                 "silence_after_user": [
                     partial(self.send_action, action="start_answer_generation"),
-                    # partial(self.reset_repeat_timer),
                 ],
-                "agent_overlaps_user": partial(self.send_action, "system_interruption"),
+                "agent_overlaps_user": [
+                    partial(self.send_action, "system_interruption")
+                ],
             },
             "agent_speaking": {
-                "user_overlaps_agent": partial(self.send_action, "system_interruption"),
+                "user_overlaps_agent": [
+                    partial(self.send_action, "system_interruption"),
+                ],
+                "silence_after_agent": [
+                    partial(self.set_repeat_timer, 3),
+                ],
             },
             "silence_after_agent": {
-                # "silence_after_agent": partial(self.check_repeat_timer, 5),
-                "mutual_overlap": partial(self.send_action, "system_interruption"),
+                "silence_after_agent": [
+                    self.check_repeat_timer,
+                ],
+                "mutual_overlap": [
+                    partial(self.send_action, "system_interruption"),
+                ],
             },
             "silence_after_user": {
-                # "silence_after_user": partial(self.check_repeat_timer, 5),
-                "mutual_overlap": partial(self.send_action, "system_interruption"),
+                "mutual_overlap": [
+                    partial(self.send_action, "system_interruption"),
+                ],
             },
-            # "mutual_overlap": {"silence_after_agent": partial(self.reset_repeat_timer)},
-            # "agent_overlaps_user": {
-            #     "silence_after_user": partial(self.reset_repeat_timer),
-            # },
-            # "user_overlaps_agent": {
-            #     "silence_after_agent": partial(self.reset_repeat_timer),
-            # },
+            "mutual_overlap": {
+                "silence_after_agent": [partial(self.reset_repeat_timer, 3)]
+            },
+            "agent_overlaps_user": {
+                "silence_after_user": [
+                    partial(self.reset_repeat_timer, 3),
+                ],
+            },
+            "user_overlaps_agent": {
+                "silence_after_agent": [
+                    partial(self.reset_repeat_timer, 3),
+                ],
+            },
         }
 
     def get_n_audio_chunks(self, param_name, duration):
@@ -658,10 +619,30 @@ class DialogueManagerModule(retico_core.AbstractModule):
         um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
         self.append(um)
 
+    def send_audio_ius_last_turn(self):
+        um = retico_core.UpdateMessage()
+        for iu in self.audio_ius_agent_last_turn:
+            output_iu = self.create_iu(
+                grounded_in=iu.grounded_in,
+                raw_audio=iu.payload,
+                nframes=self.nframes,
+                rate=self.input_framerate,
+                sample_width=self.sample_width,
+                char_id=iu.char_id,
+                clause_id=iu.clause_id,
+                grounded_word=iu.grounded_word,
+                word_id=iu.word_id,
+                final=iu.final,
+                turn_id=self.turn_id,
+                action="repeat_last_turn",
+            )
+            um.add_iu(output_iu, retico_core.UpdateType.ADD)
+        self.append(um)
+
     def send_audio_ius(self, final=False):
-        self.terminal_logger.info(
-            "action = process_audio", debug=True, turn_id=self.turn_id, final=final
-        )
+        # self.terminal_logger.info(
+        #     "action = process_audio", debug=True, turn_id=self.turn_id, final=final
+        # )
         new_ius = self.current_input[self.buffer_pointer :]
         self.buffer_pointer = len(self.current_input)
         um = retico_core.UpdateMessage()
@@ -706,21 +687,32 @@ class DialogueManagerModule(retico_core.AbstractModule):
         ]
 
     def state_transition(self, source_state, destination_state):
-        self.terminal_logger.info(
-            f"switch state {source_state} -> {destination_state}", debug=True
-        )
+        if source_state != destination_state:
+            self.terminal_logger.info(
+                f"switch state {source_state} -> {destination_state}", debug=True
+            )
         if source_state in self.policies:
             if destination_state in self.policies[source_state]:
                 for action in self.policies[source_state][destination_state]:
+                    # self.terminal_logger.info(
+                    #     f"action : {action}", debug=True
+                    # )
                     action()
         self.dialogue_state = destination_state
+
+    def set_repeat_timer(self, offset=3):
+        self.repeat_timer = time.time() + offset
 
     def reset_repeat_timer(self):
         self.repeat_timer = time.time()
 
-    def check_repeat_timer(self, threshold_time=10):
-        if self.repeat_timer - time.time() >= threshold_time:
-            self.send_action("repeat")
+    def check_repeat_timer(self):
+        if self.repeat_timer < time.time():
+            self.terminal_logger.info(
+                "repeat timer exceeded, send repeat action :", debug=True
+            )
+            self.send_audio_ius_last_turn()
+            self.repeat_timer = float("inf")
 
     def process_update(self, update_message):
         """
@@ -739,6 +731,15 @@ class DialogueManagerModule(retico_core.AbstractModule):
                             f"input framerate differs from iu framerate : {self.input_framerate} vs {iu.rate}"
                         )
                     self.current_input.append(iu)
+            if isinstance(iu, SpeakerAlignementIU):
+                if iu.event == "ius_from_last_turn":
+                    if len(self.audio_ius_agent_last_turn) != 0:
+                        if self.audio_ius_agent_last_turn[0].turn_id != iu.turn_id:
+                            self.audio_ius_agent_last_turn = [iu]
+                        else:
+                            self.audio_ius_agent_last_turn.append(iu)
+                    else:
+                        self.audio_ius_agent_last_turn = [iu]
 
         if self.dialogue_state == "opening":
             # 2 choices : let user engage conversation, or generate an introduction, like "hello, my name is Sara !"
@@ -758,7 +759,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     self.state_transition("user_speaking", "agent_overlaps_user")
                     self.send_event("agent_starts_overlaping_user")
                 else:  # stay on state "user_speaking"
-                    pass
+                    self.state_transition("user_speaking", "user_speaking")
 
         elif self.dialogue_state == "agent_speaking":
             agent_EOT = self.recognize_agent_EOT()
@@ -774,7 +775,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     # choice 1 : trigger "interruption" event
                     # choice 2 : let Turn taking handle user barge-in
                 else:  # stay on state "agent_speaking"
-                    pass
+                    self.state_transition("agent_speaking", "agent_speaking")
 
         elif self.dialogue_state == "silence_after_user":
             user_BOT = self.recognize_user_BOT()
@@ -792,7 +793,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     self.state_transition("silence_after_user", "agent_speaking")
                     self.send_event("agent_BOT_new_turn")
                 else:  # stay on state "silence_after_user"
-                    pass
+                    self.state_transition("silence_after_user", "silence_after_user")
 
         elif self.dialogue_state == "silence_after_agent":
             user_BOT = self.recognize_user_BOT()
@@ -811,7 +812,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     self.state_transition("silence_after_agent", "agent_speaking")
                     self.send_event("agent_BOT_same_turn")
                 else:  # stay on state "silence_after_user"
-                    pass
+                    self.state_transition("silence_after_agent", "silence_after_agent")
 
         elif self.dialogue_state == "user_overlaps_agent":
             user_EOT = self.recognize_user_EOT()
@@ -827,7 +828,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 if agent_EOT:
                     self.state_transition("user_overlaps_agent", "user_speaking")
                 else:  # stay on state "user_overlaps_agent"
-                    pass
+                    self.state_transition("user_overlaps_agent", "user_overlaps_agent")
 
         elif self.dialogue_state == "agent_overlaps_user":
             user_EOT = self.recognize_user_EOT()
@@ -843,7 +844,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 if agent_EOT:
                     self.state_transition("agent_overlaps_user", "user_speaking")
                 else:  # stay on state "agent_overlaps_user"
-                    pass
+                    self.state_transition("agent_overlaps_user", "agent_overlaps_user")
 
         elif self.dialogue_state == "mutual_overlap":
             user_EOT = self.recognize_user_EOT()
@@ -859,7 +860,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 if agent_EOT:
                     self.state_transition("mutual_overlap", "user_speaking")
                 else:  # stay on state "mutual_overlap"
-                    pass
+                    self.state_transition("mutual_overlap", "mutual_overlap")
 
     ########## PIPELINE TO ALWAYS SEND VOICE TO ASR, NOT DEPENDING ON VAD_STATE
     # but to be as simple as that, it needs the BOT and EOT detection to be the same...

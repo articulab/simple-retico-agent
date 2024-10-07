@@ -31,8 +31,7 @@ from TTS.api import TTS
 import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU
-from vad_turn_2 import DMIU
+from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU, DMIU
 
 
 class CoquiTTSInterruptionModule(retico_core.AbstractModule):
@@ -282,6 +281,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
 
         if end_of_turn:
+            self.terminal_logger.info("EOT TTS", debug=True)
             self.first_clause = True
             iu = self.create_iu(grounded_in=self.iu_buffer[-1].grounded_in, final=True)
             self.iu_buffer.append(iu)

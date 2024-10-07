@@ -1024,7 +1024,8 @@ def main_DM():
         partial(
             filter_cases,
             cases=[
-                [("debug", [True]), ("module", ["DialogueManager Module"])],
+                [("debug", [True])],
+                # [("debug", [True]), ("module", ["DialogueManager Module"])],
                 [("level", ["warning", "error"])],
             ],
             # cases=[
@@ -1104,6 +1105,7 @@ def main_DM():
     tts.subscribe(speaker)
     speaker.subscribe(llm)
     speaker.subscribe(vad)
+    speaker.subscribe(dm)
 
     # running system
     try:

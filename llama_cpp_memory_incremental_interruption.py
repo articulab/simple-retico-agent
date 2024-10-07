@@ -50,8 +50,13 @@ import retico_core
 from retico_core.text import SpeechRecognitionIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU, TurnTextIU
-from vad_turn_2 import DMIU
+from additional_IUs import (
+    VADTurnAudioIU,
+    TextAlignedAudioIU,
+    TurnTextIU,
+    DMIU,
+    SpeakerAlignementIU,
+)
 
 
 class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
@@ -94,6 +99,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             SpeechRecognitionIU,
             VADTurnAudioIU,
             TextAlignedAudioIU,
+            SpeakerAlignementIU,
             DMIU,
         ]
 
@@ -683,6 +689,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         next_um = retico_core.UpdateMessage()
 
         if self.which_stop_criteria == "interruption":
+            self.terminal_logger.info("interruption", debug=True)
             # REVOKE every word in interrupted clause (every IU in current_output)
             for iu in self.current_output:
                 self.revoke(iu, remove_revoked=False)
@@ -690,6 +697,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
             # align dialogue history with last word spoken by speaker module
             if self.interrupted_speaker_iu is not None:
+
                 self.interruption_alignment_new_agent_sentence(agent_sentence)
 
         elif self.which_stop_criteria.startswith("stop_pattern"):
@@ -712,6 +720,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             )
 
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
+            self.terminal_logger.info("stop_pattern", debug=True)
 
             # add updated agent sentence to dialogue history
             self.new_agent_sentence(
@@ -726,6 +735,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 turn_id=last_processed_iu.turn_id,
             )
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
+            self.terminal_logger.info("stop_token", debug=True)
 
             # add updated agent sentence to dialogue history
             self.new_agent_sentence(agent_sentence, agent_sentence_nb_tokens)
@@ -768,21 +778,10 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.action == "system_interruption":
                         self.interruption = True
-            elif isinstance(iu, TextAlignedAudioIU):
+            elif isinstance(iu, SpeakerAlignementIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.final:
-                        # print(
-                        #     "LLM : iu final, no interrupt, agent just stopped talking, ignore iu."
-                        # )
-                        pass
-                    else:
-                        # print(
-                        #     f"len turns = {len(self.model_wrapper.utterances), iu.turn_id}"
-                        # )
-                        # print(f"utterances = {self.model_wrapper.utterances}")
-                        # print(
-                        #     f"grounded_word, word_id, iu.char_id, iu.turn_id, iu.clause.id = {iu.grounded_word, iu.word_id, iu.char_id, iu.turn_id, iu.clause_id}"
-                        # )
+                    if iu.event == "interruption":
+                        self.terminal_logger.info("LLM interruption", debug=True)
                         self.interruption_alignment_last_agent_sentence(iu)
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
