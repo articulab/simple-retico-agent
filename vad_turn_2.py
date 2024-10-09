@@ -37,6 +37,7 @@ Outputs : VADTurnAudioIU
 """
 
 from functools import partial
+import json
 import time
 import pydub
 import webrtcvad
@@ -121,6 +122,8 @@ class VADModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     # agent EOT
                     if iu.event == "agent_EOT":
+                        self.VA_agent = False
+                    if iu.event == "interruption":
                         self.VA_agent = False
                     # agent BOT
                     elif iu.event == "agent_BOT":
@@ -484,6 +487,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.dialogue_state = "opening"
         self.turn_id = 0
         self.repeat_timer = float("inf")
+        self.overlap_timer = -float("inf")
+        self.turn_beginning_timer = -float("inf")
         self.audio_ius_agent_last_turn = []
 
         self.policies = {
@@ -492,15 +497,18 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     partial(self.send_action, action="start_answer_generation"),
                 ],
                 "agent_overlaps_user": [
-                    partial(self.send_action, "system_interruption")
+                    partial(self.send_action, "system_interruption"),
+                    # self.check_turn_beginning_timer,
                 ],
             },
             "agent_speaking": {
                 "user_overlaps_agent": [
                     partial(self.send_action, "system_interruption"),
+                    self.increment_turn_id,
+                    # self.check_turn_beginning_timer,
                 ],
                 "silence_after_agent": [
-                    partial(self.set_repeat_timer, 3),
+                    partial(self.set_repeat_timer, 5),
                 ],
             },
             "silence_after_agent": {
@@ -510,23 +518,31 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 "mutual_overlap": [
                     partial(self.send_action, "system_interruption"),
                 ],
+                "user_speaking": [
+                    self.increment_turn_id,
+                    # self.set_turn_beginning_timer,
+                ],
             },
             "silence_after_user": {
                 "mutual_overlap": [
                     partial(self.send_action, "system_interruption"),
                 ],
+                "user_speaking": [
+                    self.increment_turn_id,
+                    # self.set_turn_beginning_timer,
+                ],
             },
             "mutual_overlap": {
-                "silence_after_agent": [partial(self.reset_repeat_timer, 3)]
+                "silence_after_agent": [partial(self.reset_repeat_timer, 5)]
             },
             "agent_overlaps_user": {
                 "silence_after_user": [
-                    partial(self.reset_repeat_timer, 3),
+                    partial(self.reset_repeat_timer, 5),
                 ],
             },
             "user_overlaps_agent": {
                 "silence_after_agent": [
-                    partial(self.reset_repeat_timer, 3),
+                    partial(self.reset_repeat_timer, 5),
                 ],
             },
         }
@@ -689,7 +705,9 @@ class DialogueManagerModule(retico_core.AbstractModule):
     def state_transition(self, source_state, destination_state):
         if source_state != destination_state:
             self.terminal_logger.info(
-                f"switch state {source_state} -> {destination_state}", debug=True
+                f"switch state {source_state} -> {destination_state}",
+                debug=True,
+                turn_id=self.turn_id,
             )
         if source_state in self.policies:
             if destination_state in self.policies[source_state]:
@@ -700,6 +718,34 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     action()
         self.dialogue_state = destination_state
 
+    def increment_turn_id(self):
+        self.turn_id += 1
+
+    def set_turn_beginning_timer(self):
+        self.turn_beginning_timer = time.time()
+
+    def check_turn_beginning_timer(self, duration_threshold=0.5):
+        # if it is the beginning of the turn, set_overlap_timer
+        if self.turn_beginning_timer + duration_threshold >= time.time():
+            self.terminal_logger.info(
+                "it is the beginning of the turn, set_overlap_timer",
+                debug=True,
+            )
+            self.set_overlap_timer()
+            self.turn_beginning_timer = -float("inf")
+
+    def set_overlap_timer(self):
+        self.overlap_timer = time.time()
+
+    def check_overlap_timer(self, duration_threshold=1):
+        if self.overlap_timer + duration_threshold >= time.time():
+            self.terminal_logger.info(
+                "overlap failed because both user and agent stopped talking, send repeat action to speaker module:",
+                debug=True,
+            )
+            self.send_audio_ius_last_turn()
+            self.overlap_timer = -float("inf")
+
     def set_repeat_timer(self, offset=3):
         self.repeat_timer = time.time() + offset
 
@@ -708,8 +754,11 @@ class DialogueManagerModule(retico_core.AbstractModule):
 
     def check_repeat_timer(self):
         if self.repeat_timer < time.time():
+            self.increment_turn_id()
             self.terminal_logger.info(
-                "repeat timer exceeded, send repeat action :", debug=True
+                "repeat timer exceeded, send repeat action :",
+                debug=True,
+                turn_id=self.turn_id,
             )
             self.send_audio_ius_last_turn()
             self.repeat_timer = float("inf")
@@ -805,7 +854,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 else:
                     self.state_transition("silence_after_agent", "user_speaking")
                     self.send_event("user_BOT_new_turn")
-                    self.turn_id += 1
             else:
                 self.update_current_input()
                 if agent_BOT:
@@ -896,3 +944,168 @@ class DialogueManagerModule(retico_core.AbstractModule):
     #     um.add_ius(ius)
     #     return um
     ########################################
+
+
+class DialogueHistory:
+
+    def __init__(
+        self,
+        prompt_format_config_file,
+        terminal_logger=None,
+        file_logger=None,
+        initial_system_prompt="",
+        context_size=2000,
+    ):
+        self.terminal_logger = terminal_logger
+        self.file_logger = file_logger
+        with open(prompt_format_config_file, "r", encoding="utf-8") as config:
+            self.prompt_format_config = json.load(config)
+        self.initial_system_prompt = initial_system_prompt
+        self.current_system_prompt = initial_system_prompt
+        self.dialogue_history = [
+            {
+                "turn_id": -1,
+                "speaker": "system_prompt",
+                "text": initial_system_prompt,
+            }
+        ]
+        self.cpt_0 = 1
+        self.context_size = context_size
+
+    # Formatters
+
+    def format(self, config_id, text):
+        return (
+            self.prompt_format_config[config_id]["pre"]
+            + self.format_role(config_id)
+            + text
+            + self.prompt_format_config[config_id]["suf"]
+        )
+
+    def format_system_prompt(self, system_prompt):
+        return self.format(config_id="system_prompt", text=system_prompt)
+
+    def format_sentence(self, utterance):
+        return self.format(config_id=utterance["speaker"], text=utterance["text"])
+
+    def format_role(self, config_id):
+        if "role" in self.prompt_format_config[config_id]:
+            return (
+                self.prompt_format_config[config_id]["role"]
+                + " "
+                + self.prompt_format_config[config_id]["role_sep"]
+                + " "
+            )
+        else:
+            return ""
+
+    # Setters
+
+    def append_utterance(self, utterance):
+        assert set(("turn_id", "speaker", "text")) <= set(utterance)
+        self.dialogue_history.append(utterance)
+
+    def change_system_prompt(self, system_prompt):
+        self.current_system_prompt = system_prompt
+        self.dialogue_history[0]["text"] = system_prompt
+
+    def prepare_dialogue_history(self, fun_tokenize):
+        """Calculate if the current dialogue history is bigger than the size threshold (short_memory_context_size).
+        If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the threshold.
+        """
+
+        prompt = self.get_prompt_cpt(self.cpt_0)
+        nb_tokens = len(fun_tokenize(bytes(prompt, "utf-8")))
+        while nb_tokens > self.context_size:
+            self.cpt_0 += 1
+            prompt = self.get_prompt_cpt(self.cpt_0)
+        return prompt
+
+    def interruption_alignment_new_agent_sentence(
+        self, utterance, punctuation_ids, interrupted_speaker_iu
+    ):
+        """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
+
+        This function is triggered if the interrupted speaker IU has been received before the module has stored the new agent sentence in the dialogue history.
+        If that is not the case, the function interruption_alignment_last_agent_sentence is triggered instead.
+
+        With the informations stored in self.interrupted_speaker_iu, this function will shorten the new_agent_sentence to be aligned with the last words spoken by the agent.
+
+        Args:
+            new_agent_sentence (string): the utterance generated by the LLM, that has been interrupted by the user and needs to be aligned.
+        """
+        new_agent_sentence = self.format_sentence(utterance)
+        self.terminal_logger.info(
+            f"interruption alignement func {utterance} {new_agent_sentence}",
+            debug=True,
+        )
+        # remove role
+        new_agent_sentence = new_agent_sentence[
+            len(self.format_role("agent")) : len(new_agent_sentence)
+        ]
+
+        # split the sentence into clauses
+        sentence_clauses = []
+        old_i = 0
+        for i, c in enumerate(new_agent_sentence):
+            if c in punctuation_ids or i == len(new_agent_sentence) - 1:
+                sentence_clauses.append(new_agent_sentence[old_i : i + 1])
+                old_i = i + 1
+
+        # remove all clauses after clause_id (the interrupted clause)
+        sentence_clauses = sentence_clauses[: interrupted_speaker_iu.clause_id + 1]
+
+        # Shorten the last agent utterance until the last char outputted by the speakermodule before the interruption
+        sentence_clauses[-1] = sentence_clauses[-1][
+            : interrupted_speaker_iu.char_id + 1
+        ]
+
+        # Merge the clauses back together
+        new_agent_sentence = "".join(sentence_clauses)
+
+        # Add interruption suf
+        new_agent_sentence += self.prompt_format_config["interruption"]["suf"]
+
+        # format the sentence again with prefix, role and suffix
+        new_agent_sentence = self.format("agent", new_agent_sentence)
+
+        print("INTERRUPTED AGENT SENTENCE : ", new_agent_sentence.decode("utf-8"))
+
+    # Getters
+
+    def get_dialogue_history(self):
+        return self.dialogue_history
+
+    def get_prompt(self):
+        prompt = ""
+        for utterance in self.dialogue_history:
+            prompt += self.format_sentence(utterance)
+        return self.format("prompt", prompt)
+
+    def get_prompt_cpt(self, start=1, end=None):
+        if end is None:
+            end = len(self.dialogue_history)
+        assert start > 0
+        assert end >= start
+        prompt = self.format_system_prompt(self.dialogue_history[0]["text"])
+        for utterance in self.dialogue_history[start:end]:
+            prompt += self.format_sentence(utterance)
+        return self.format("prompt", prompt)
+
+    def get_prompt_with_specific_system_prompt(self, system_prompt):
+        prompt = self.format_system_prompt(system_prompt)
+        for utterance in self.dialogue_history[1:]:
+            prompt += self.format_sentence(utterance)
+        return self.format("prompt", prompt)
+
+    def get_stop_patterns(self):
+        c = self.prompt_format_config
+        user_stop_pat = (
+            c["user"]["role"] + " " + c["user"]["role_sep"],
+            c["user"]["role"] + "" + c["user"]["role_sep"],
+        )
+        agent_stop_pat = (
+            c["agent"]["role"] + " " + c["agent"]["role_sep"],
+            c["agent"]["role"] + "" + c["agent"]["role_sep"],
+        )
+        return (user_stop_pat, agent_stop_pat)

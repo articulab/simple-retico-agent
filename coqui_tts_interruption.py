@@ -251,12 +251,15 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         self.current_input = []
                         self.iu_buffer = []
                         self.buffer_pointer = 0
+                    if iu.event == "user_BOT_same_turn":
+                        self.interrupted_turn = None
                 elif ut == retico_core.UpdateType.REVOKE:
                     continue
                 elif ut == retico_core.UpdateType.COMMIT:
                     continue
 
         if end_of_clause:
+            self.terminal_logger.info("EOC TTS", debug=True)
             if self.first_clause:
                 self.terminal_logger.info("start_process")
                 self.file_logger.info("start_process")

@@ -114,6 +114,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         model_name,
         initial_prompt,
         system_prompt,
+        dialogue_history,
         printing=False,
         device=None,
         context_size=2000,
@@ -157,38 +158,16 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         self.interrupted_speaker_iu = None
         self.which_stop_criteria = None
 
-        # prompts attributes
-        self.initial_prompt = initial_prompt
-        self.system_prompt = system_prompt
-        self.prompt = None
-        self.utterances = []
-        self.utterances_length = []
-        self.utterances_turn_id = []
-        self.short_memory_context_size = short_memory_context_size
-        self.start_prompt = b"[INST] "
-        self.end_prompt = b" [/INST]"
-        self.nb_tokens_end_prompt = 0
-        self.sys_pre = b"<<SYS>>"
-        self.sys_suf = b"<</SYS>>"
-        self.user_pre = b""
-        self.user_suf = b"\n\n"
-        self.agent_pre = b""
-        self.agent_suf = b"\n\n"
-        self.user_role = b"Child :"
-        self.agent_role = b"Teacher :"
+        # dialogue history
+        self.dialogue_history = dialogue_history
+
+        # stop generation conditions
         self.stop_token_ids = []
         self.stop_token_patterns = []
-        self.stop_token_text_patterns = [b"Child:", b"Child :"]
+        self.stop_token_text_patterns = []
         self.role_token_patterns = []
-        self.role_token_text_patterns = [
-            b"Teacher:",
-            b"Teacher :",
-            b" Teacher:",
-            b" Teacher :",
-        ]
-        self.max_role_pattern_length = max(
-            [len(p) for p in self.role_token_text_patterns]
-        )
+        self.role_token_text_patterns = []
+        self.max_role_pattern_length = None
         self.punctuation_text = [b".", b",", b";", b":", b"!", b"?", b"..."]
         self.punctuation_ids = [b[0] for b in self.punctuation_text]
 
@@ -203,33 +182,16 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
     def init_stop_criteria(self):
         """Calculates the stopping token patterns using the instantiated model tokenizer."""
         self.stop_token_ids.append(self.model.token_eos())
+        self.stop_token_text_patterns, self.role_token_text_patterns = (
+            self.dialogue_history.get_stop_patterns()
+        )
+        self.max_role_pattern_length = max(
+            [len(p) for p in self.role_token_text_patterns]
+        )
         for pat in self.stop_token_text_patterns:
             self.stop_token_patterns.append(self.model.tokenize(pat, add_bos=False))
         for pat in self.role_token_text_patterns:
             self.role_token_patterns.append(self.model.tokenize(pat, add_bos=False))
-
-    def initialize_prompt(self):
-        """Init and format the prompt with the system prompt (dialogue scenario) and the corresponding prompt suffixes and prefixes."""
-        self.nb_tokens_end_prompt = len(
-            self.model.tokenize(self.end_prompt, add_bos=False)
-        )
-        if self.initial_prompt is None:
-            if self.system_prompt is None:
-                pass
-            else:
-                complete_system_prompt = (
-                    self.start_prompt + self.sys_pre + self.system_prompt + self.sys_suf
-                )
-                self.prompt = complete_system_prompt
-                self.utterances = [complete_system_prompt]
-                self.utterances_length = [
-                    len(self.model.tokenize(complete_system_prompt))
-                ]
-                self.utterances_turn_id = [-1]
-        else:
-            raise NotImplementedError(
-                "for now, only support starting from system prompt"
-            )
 
     def new_user_sentence(self, user_sentence):
         """Function called to register a new user sentence into the dialogue history (utterances attribute).
@@ -238,29 +200,15 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Args:
             user_sentence (string): the new user sentence to register.
         """
-        user_sentence_complete = (
-            self.user_pre
-            + self.user_role
-            + bytes(user_sentence, "utf-8")
-            + self.user_suf
+        self.dialogue_history.append_utterance(
+            {
+                "turn_id": self.current_input[-1].turn_id,
+                "speaker": "user",
+                "text": bytes(user_sentence, "utf-8"),
+            }
         )
-        user_sentence_complete_nb_tokens = len(
-            self.model.tokenize(user_sentence_complete)
-        )
-        self.utterances.append(user_sentence_complete)
-        self.utterances_length.append(user_sentence_complete_nb_tokens)
-        self.utterances_turn_id.append(self.current_input[-1].turn_id)
-        self.prompt += user_sentence_complete
-        self.terminal_logger.info(
-            "new user sentence",
-            turn_id_0=self.current_input[0].turn_id,
-            turn_id_minus1=self.current_input[-1].turn_id,
-            turn_ids_sentences=self.utterances_turn_id,
-            debug=True,
-        )
-        print(self.user_role.decode("utf-8") + user_sentence + "\n\n")
 
-    def new_agent_sentence(self, agent_sentence, agent_sentence_nb_tokens, turn_id):
+    def new_agent_sentence(self, agent_sentence, turn_id):
         """Function called to register a new agent sentence into the dialogue history (utterances attribute).
         Calculates the exact token number added to the dialogue history (with template prefixes and suffixes).
 
@@ -268,45 +216,13 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             agent_sentence (string): the new agent sentence to register.
             agent_sentence_nb_tokens (int): the number of token corresponding to the agent sentence (without template prefixes and suffixes).
         """
-        agent_sentence_complete = self.agent_pre + agent_sentence + self.agent_suf
-        # TODO: do that in prepare_run() method so that it is not compute every user EOT
-        nb_token_added = len(self.model.tokenize(self.agent_pre, add_bos=False)) + len(
-            self.model.tokenize(self.agent_suf, add_bos=False)
+        self.dialogue_history.append_utterance(
+            {
+                "turn_id": turn_id,
+                "speaker": "agent",
+                "text": bytes(agent_sentence, "utf-8"),
+            }
         )
-        agent_sentence_complete_nb_tokens = agent_sentence_nb_tokens + nb_token_added
-
-        self.terminal_logger.info(
-            "adding new agent sentence",
-            utterances=self.utterances,
-            turn_ids=self.utterances_turn_id,
-            debug=True,
-        )
-
-        if self.utterances_turn_id.count(turn_id) < 2:
-            self.utterances.append(agent_sentence_complete)
-            self.utterances_length.append(agent_sentence_complete_nb_tokens)
-            self.utterances_turn_id.append(turn_id)
-            self.prompt += agent_sentence_complete
-        else:
-            # it should always be the last utterance ? so just take utterance[-1] ?
-            index_turn_to_continue = self.utterances_turn_id.index(
-                turn_id, self.utterances_turn_id.index(turn_id) + 1
-            )  # 2nd occurence of the turn
-            modified_sentence = self.utterances[index_turn_to_continue]
-            modified_sentence = modified_sentence[: len(self.agent_suf)]
-            modified_sentence += agent_sentence + self.agent_suf
-            nb_tokens = self.utterances[index_turn_to_continue] + agent_sentence
-            self.utterances[index_turn_to_continue] = modified_sentence
-            self.utterances_length[index_turn_to_continue] = nb_tokens
-            self.terminal_logger.info(
-                "continued new agent sentence",
-                utterances=self.utterances,
-                turn_ids=self.utterances_turn_id,
-                debug=True,
-            )
-        # not adding the agent role because it is already generated by the model.
-        # TODO : change this by placing the role directly on the prompt?
-        # print(agent_sentence_complete.decode("utf-8"))
 
     def interruption_alignment_new_agent_sentence(self, new_agent_sentence):
         """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
@@ -319,65 +235,14 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Args:
             new_agent_sentence (string): the utterance generated by the LLM, that has been interrupted by the user and needs to be aligned.
         """
-        self.terminal_logger.info(
-            f"interruption alignement func {new_agent_sentence}",
-            debug=True,
+        utterance = {
+            "turn_id": self.interrupted_speaker_iu.turn_id,
+            "speaker": "agent",
+            "text": bytes(new_agent_sentence, "utf-8"),
+        }
+        self.dialogue_history.interruption_alignment_new_agent_sentence(
+            self, utterance, self.punctuation_ids, self.interrupted_speaker_iu
         )
-        # remove role
-        new_agent_sentence = new_agent_sentence[
-            len(self.agent_role) : len(new_agent_sentence)
-        ]
-
-        # split the sentence into clauses
-        sentence_clauses = []
-        old_i = 0
-        for i, c in enumerate(new_agent_sentence):
-            if c in self.punctuation_ids or i == len(new_agent_sentence) - 1:
-                sentence_clauses.append(new_agent_sentence[old_i : i + 1])
-                old_i = i + 1
-
-        # remove all clauses after clause_id (the interrupted clause)
-        sentence_clauses = sentence_clauses[: self.interrupted_speaker_iu.clause_id + 1]
-
-        # Shorten the last agent utterance until the last char outputted by the speakermodule before the interruption
-        sentence_clauses[-1] = sentence_clauses[-1][
-            : self.interrupted_speaker_iu.char_id + 1
-        ]
-
-        # Merge the clauses back together
-        new_agent_sentence = b"".join(sentence_clauses)
-
-        # Add the prefix and sufix back
-        new_agent_sentence = (
-            self.agent_pre
-            + self.agent_role
-            + new_agent_sentence
-            + b"..."  # interruption suffix ?
-            + self.agent_suf
-        )
-
-        # Calculate the number of tokens contained in the sentence
-        nb_tokens = len(self.model.tokenize(new_agent_sentence))
-
-        # Add it to the prompt and utterances
-        self.utterances.insert(
-            self.utterances_turn_id.index(self.interrupted_speaker_iu.turn_id) + 1,
-            new_agent_sentence,
-        )
-        self.utterances_length.insert(
-            self.utterances_turn_id.index(self.interrupted_speaker_iu.turn_id) + 1,
-            nb_tokens,
-        )
-        self.utterances_turn_id.insert(
-            self.utterances_turn_id.index(self.interrupted_speaker_iu.turn_id) + 1,
-            self.interrupted_speaker_iu.turn_id,
-        )
-        self.prompt = b"".join(self.utterances)
-        # not adding the agent role because it is already generated by the model.
-        # TODO : change this by placing the role directly on the prompt?
-        print("INTERRUPTED AGENT SENTENCE : ", new_agent_sentence.decode("utf-8"))
-        # print("NEW PROMPT : ", self.prompt.decode("utf-8"))
-        self.interrupted_speaker_iu = None
 
     def interruption_alignment_last_agent_sentence(self, iu):
         """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
@@ -389,30 +254,20 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         Args:
             iu (AudioTurnIU): The IU received from the Speaker module, that correspond to the last IU that has been outputted through the speakers.
         """
+        # it could be the DM that has that function, because the DM receives the IUs from speaker module too
         self.interrupted_speaker_iu = iu
         self.terminal_logger.info(
-            f"interruption alignement LLM {self.utterances}",
+            "interruption alignement LLM",
             debug=True,
             interrupted_iu_turn_id=iu.turn_id,
             last_turn_id=self.last_turn_agent_sentence_turn_id,
-            utterances_turn_ids=self.utterances_turn_id,
         )
+        # check if the sentence we want to align has been stored in self.last_turn_agent_sentence
         if self.last_turn_agent_sentence_turn_id:
             if self.last_turn_agent_sentence_turn_id == iu.turn_id:
                 self.interruption_alignment_new_agent_sentence(
                     self.last_turn_agent_sentence
                 )
-        # if both user and agent turn are in dialogue history
-        # if self.utterances_turn_id.count(iu.turn_id) == 2:
-
-        #     # get interrupted agent sentence and remove it from the prompt and utterances
-        #     index_interrupted_turn = self.utterances_turn_id.index(
-        #         iu.turn_id, self.utterances_turn_id.index(iu.turn_id) + 1
-        #     )  # 2nd occurence of the turn
-        #     self.utterances_length.pop(index_interrupted_turn)
-        #     new_agent_sentence = self.utterances.pop(index_interrupted_turn)
-        #     self.utterances_turn_id.pop(index_interrupted_turn)
-        #     self.interruption_alignment_new_agent_sentence(new_agent_sentence)
 
     def remove_stop_patterns(self, sentence, pattern_id):
         """Function called when a stopping token pattern has been encountered during the sentence generation.
@@ -425,11 +280,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             string: Agent new generated sentence without the stopping token pattern encountered.
             int: nb tokens removed (from the stopping token pattern).
         """
-        # print("patttern_id = ", pattern_id)
-        # print(
-        #     "self.stop_token_text_patterns[pattern_id] = ",
-        #     self.stop_token_text_patterns[pattern_id],
-        # )
         sentence = sentence[: -len(self.stop_token_text_patterns[pattern_id])]
         nb_token_removed = len(self.stop_token_patterns[pattern_id])
         while sentence[-1:] == b"\n":
@@ -482,19 +332,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """Calculate if the current dialogue history is bigger than the size threshold (short_memory_context_size).
         If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the threshold.
         """
-        nb_tokens = sum(self.utterances_length)
-        if nb_tokens + self.nb_tokens_end_prompt >= self.short_memory_context_size:
-            nb_tokens_removed = 0
-            nb_tokens_to_remove = (
-                nb_tokens + self.nb_tokens_end_prompt - self.short_memory_context_size
-            )
-            while nb_tokens_to_remove >= nb_tokens_removed:
-                self.utterances.pop(
-                    1
-                )  # pop oldest non system utterance. do not pop the system prompt (= the dialogue scenario)
-                nb_tokens_removed += self.utterances_length.pop(1)
-                self.utterances_turn_id.pop(1)
-            self.prompt = b"".join(self.utterances)
+        self.prompt = self.dialogue_history.prepare_dialogue_history(
+            self.model.tokenize
+        )
 
     def is_punctuation(self, word):
         """Returns True if the token correspond to a punctuation.
@@ -591,9 +431,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             return self.which_stop_criteria is not None
 
         # Define the parameters
-        final_prompt = self.prompt + self.end_prompt
-        print("final_prompt = ", final_prompt)
-        tokens = self.model.tokenize(final_prompt, special=True)
+        print("final_prompt = ", self.prompt)
+        tokens = self.model.tokenize(self.prompt, special=True)
 
         last_sentence = b""
         last_sentence_nb_tokens = 0
@@ -655,7 +494,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         sentence = ""
         for iu in msg:
-            # sentence += iu.get_text() + " "
             sentence += iu.payload + " "
         return sentence
 
@@ -681,19 +519,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         # Construct UM and IU
         next_um = retico_core.UpdateMessage()
-        # if len(self.current_input) > 0:
-        #     output_iu = self.create_iu(self.current_input[-1])
-        # else:
-        #     output_iu = self.create_iu()
-        # output_iu.set_data(
-        #     text=payload,
-        #     turn_id=len(self.utterances),
-        #     clause_id=self.nb_clauses,
-        # )
         last_iu = None
         if len(self.current_input) > 0:
             last_iu = self.current_input[-1]
-        # print("last_iu = ", last_iu)
         output_iu = self.create_iu(
             grounded_in=last_iu,
             text=payload,
@@ -727,9 +555,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     "LLM : send sentence after punctuation ",
                     datetime.datetime.now().strftime("%T.%f")[:-3],
                 )
-            self.time_logs_buffer.append(
-                ["Stop", datetime.datetime.now().strftime("%T.%f")[:-3]]
-            )
             self.current_output = []
         self.append(next_um)
 
@@ -795,17 +620,11 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
             self.terminal_logger.info("stop_pattern", debug=True)
 
-            # add updated agent sentence to dialogue history
-            # self.new_agent_sentence(
-            #     agent_sentence_reduced, agent_sentence_nb_tokens - nb_token_removed
-            # )
-
             self.last_turn_agent_sentence = agent_sentence_reduced
             self.last_turn_agent_sentence_nb_token = (
                 agent_sentence_nb_tokens - nb_token_removed
             )
             self.last_turn_agent_sentence_turn_id = last_processed_iu.turn_id
-            print((self.agent_pre + agent_sentence + self.agent_suf).decode("utf-8"))
 
         elif self.which_stop_criteria == "stop_token":
             # add an IU significating that the agent turn is complete (EOT)
@@ -817,13 +636,9 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
             self.terminal_logger.info("stop_token", debug=True)
 
-            # add updated agent sentence to dialogue history
-            # self.new_agent_sentence(agent_sentence, agent_sentence_nb_tokens)
-
             self.last_turn_agent_sentence = agent_sentence
             self.last_turn_agent_sentence_nb_token = agent_sentence_nb_tokens
             self.last_turn_agent_sentence_turn_id = last_processed_iu.turn_id
-            print((self.agent_pre + agent_sentence + self.agent_suf).decode("utf-8"))
 
         else:
             raise NotImplementedError(
@@ -833,8 +648,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         self.append(next_um)
 
         # reset because it is end of sentence
+        # TODO : loop over these 2 list and remove only IUs with the same turn_id as current_turn ? to be sure to keep IUs from next turn ?
         self.current_output = []
-        # reset current_input ?? It could erase new IU from the next turn ?
         self.current_input = []
 
     def process_update(self, update_message):
@@ -884,7 +699,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                         )
                         self.new_agent_sentence(
                             self.last_turn_agent_sentence,
-                            self.last_turn_agent_sentence_nb_token,
                             iu.turn_id,
                         )
                     if iu.event == "ius_from_last_turn":
@@ -948,7 +762,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                 "Please, when creating the module, you must give a model_path or model_repo and model_name"
             )
 
-        self.initialize_prompt()
         self.init_stop_criteria()
 
     def prepare_run(self):

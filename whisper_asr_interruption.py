@@ -258,6 +258,11 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                         um.add_iu(output_iu, retico_core.UpdateType.ADD)
 
                     if self.eos:
+                        self.terminal_logger.info(
+                            "ASR COMMIT text ius",
+                            turn_id=self.current_output[-1].turn_id,
+                            debug=True,
+                        )
                         for iu in self.current_output:
                             self.commit(iu)
                             um.add_iu(iu, retico_core.UpdateType.COMMIT)
