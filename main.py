@@ -31,6 +31,8 @@ from retico_core.log_utils import (
     filter_cases,
     plotting_run,
     plotting_run_2,
+    plotting_run_3,
+    configurate_plot,
 )
 
 
@@ -813,6 +815,7 @@ def main_demo_with_plot():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"
+    plot_config = "plot_config_2.json"
     frame_length = 0.02
     tts_frame_length = 0.2
     rate = 16000
@@ -846,6 +849,12 @@ def main_demo_with_plot():
 
     # configurate logger
     terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
+
+    configurate_plot(
+        plot_live=True,
+        refreshing_time=1,
+        plot_config=plot_config,
+    )
 
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -911,7 +920,7 @@ def main_demo_with_plot():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_2()
+        plotting_run_3(plot_config=plot_config)
 
 
 from retico_amq import utils

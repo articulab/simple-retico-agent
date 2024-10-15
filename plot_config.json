@@ -1,0 +1,66 @@
+{
+    "any_module": {
+        "events": {
+            "create_iu": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 12
+                }
+            },
+            "append UM": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "deepskyblue",
+                    "marker_size": 8
+                }
+            },
+            "process_update": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 4
+                }
+            },
+            "interruption": {
+                "plot_settings": {
+                    "marker": "x",
+                    "marker_color": "r",
+                    "marker_size": 10
+                }
+            },
+            "output_silence": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "darkgray",
+                    "marker_size": 8
+                }
+            },
+            "output_audio": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "seagreen",
+                    "marker_size": 12
+                }
+            },
+            "agent_EOT": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "r",
+                    "marker_size": 15
+                }
+            }
+        }
+    },
+    "VADTurn": {
+        "events": {
+            "any_event": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "black",
+                    "marker_size": 16
+                }
+            }
+        }
+    }
+}
