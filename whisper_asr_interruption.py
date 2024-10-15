@@ -165,7 +165,6 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
 
         if self.vad_state == "user_turn":
-            print("recognize")
 
             start_date = datetime.datetime.now()
             start_time = time.time()
