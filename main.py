@@ -32,6 +32,8 @@ from retico_core.log_utils import (
     filter_cases,
     plotting_run,
     plotting_run_2,
+    plotting_run_3,
+    configurate_plot,
 )
 
 
@@ -848,6 +850,8 @@ def main_demo_with_plot():
     # configurate logger
     terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
+    configurate_plot(plot_live=True, refreshing_time=1)
+
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     # mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
@@ -912,7 +916,7 @@ def main_demo_with_plot():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_2()
+        plotting_run_3()
 
 
 from retico_amq import utils
@@ -1138,6 +1142,6 @@ if __name__ == "__main__":
     # test_body_4()
 
     # amq_test_with_ASR()
-    # main_demo_with_plot()
+    main_demo_with_plot()
 
-    main_DM()
+    # main_DM()
