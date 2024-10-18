@@ -3,7 +3,7 @@ import time
 import torch
 from llama_cpp import Llama
 
-from vad_turn_2 import DialogueHistory
+from dialogue_manager import DialogueHistory
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 

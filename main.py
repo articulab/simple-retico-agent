@@ -4,7 +4,7 @@ from retico_core import network, audio, debug, text
 from functools import partial
 import torch
 
-from vad_turn_2 import DialogueManagerModule, VADModule
+from dialogue_manager import DialogueManagerModule, VADModule
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
