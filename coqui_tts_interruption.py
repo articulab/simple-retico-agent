@@ -315,13 +315,14 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         )
                     else:
                         pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+
+            pre_pro_words.pop(0)
+            pre_pro_words.append(len(words) - 1)
+            pre_pro_words_distinct.pop(0)
         except IndexError as e:
             log_exception(self, e)
             raise IndexError from e
 
-        pre_pro_words.pop(0)
-        pre_pro_words.append(len(words) - 1)
-        pre_pro_words_distinct.pop(0)
         if len(pre_pro_words) >= 2:
             pre_pro_words_distinct.append(
                 words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]

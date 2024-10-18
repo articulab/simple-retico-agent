@@ -816,6 +816,7 @@ def main_demo_with_plot():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"
+    plot_config = "plot_config_2.json"
     frame_length = 0.02
     tts_frame_length = 0.2
     rate = 16000
@@ -826,6 +827,7 @@ def main_demo_with_plot():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+    plot_live = True
 
     # filters
     # filters = [
@@ -850,7 +852,11 @@ def main_demo_with_plot():
     # configurate logger
     terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
-    configurate_plot(plot_live=True, refreshing_time=1)
+    configurate_plot(
+        plot_live=plot_live,
+        refreshing_time=1,
+        plot_config=plot_config,
+    )
 
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -916,7 +922,7 @@ def main_demo_with_plot():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_3()
+        plotting_run_3(plot_config=plot_config)
 
 
 from retico_amq import utils
@@ -1022,6 +1028,17 @@ def main_DM():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
+    plot_config = "plot_config_2.json"
+    plot_live = True
+    module_order = [
+        "Microphone",
+        "VAD",
+        "DialogueManager",
+        "WhisperASR",
+        "LlamaCppMemoryIncremental",
+        "CoquiTTS",
+        "Speaker",
+    ]
 
     # filters
     filters = [
@@ -1046,6 +1063,14 @@ def main_DM():
 
     # configurate logger
     # terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
+
+    # configure plot
+    configurate_plot(
+        plot_live=plot_live,
+        refreshing_time=1,
+        plot_config=plot_config,
+        module_order=module_order,
+    )
 
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
@@ -1122,7 +1147,10 @@ def main_DM():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_2()
+        plotting_run_3(
+            plot_config=plot_config,
+            module_order=module_order,
+        )
 
 
 msg = []
@@ -1142,6 +1170,6 @@ if __name__ == "__main__":
     # test_body_4()
 
     # amq_test_with_ASR()
-    main_demo_with_plot()
+    # main_demo_with_plot()
 
-    # main_DM()
+    main_DM()
