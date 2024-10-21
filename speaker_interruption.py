@@ -235,17 +235,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             silence_bytes = b"\x00" * frame_count * self.channels * self.sample_width
             return (silence_bytes, pyaudio.paContinue)
         else:
-            self.terminal_logger.info(
-                "speaker audio IU",
-                lastest_iu=self.latest_processed_iu,
-                lastest_iu_turn_id=(
-                    self.latest_processed_iu.turn_id
-                    if self.latest_processed_iu is not None
-                    else None
-                ),
-                iu_turn_id=iu.turn_id,
-                debug=True,
-            )
             # if it is the first IU from new agent turn, which corresponds to the official agent BOT
             if self.latest_processed_iu is None or (
                 self.latest_processed_iu.turn_id is not None

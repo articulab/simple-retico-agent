@@ -4,7 +4,8 @@ from retico_core import network, audio, debug, text
 from functools import partial
 import torch
 
-from dialogue_manager import DialogueManagerModule, VADModule
+from LLM_DM import LlmDmModule
+from dialogue_manager import DialogueHistory, DialogueManagerModule, VADModule
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
@@ -1024,7 +1025,7 @@ def main_DM():
     tts_model_samplerate = 22050
     tts_model = "vits_vctk"
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
-    system_prompt = b"This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+    system_prompt = "This is a spoken dialog scenario between a teacher and a 8 years old child student.\
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
@@ -1039,6 +1040,8 @@ def main_DM():
         "CoquiTTS",
         "Speaker",
     ]
+    prompt_format_config = "prompt_format_config.json"
+    context_size = 2000
 
     # filters
     filters = [
@@ -1072,6 +1075,12 @@ def main_DM():
         module_order=module_order,
     )
 
+    dialogue_history = DialogueHistory(
+        prompt_format_config,
+        initial_system_prompt=system_prompt,
+        context_size=context_size,
+    )
+
     # create modules
     # mic = MicrophonePTTModule(rate=rate, frame_length=frame_length)
     # mic = audio.MicrophoneModule(rate=rate, frame_length=frame_length)
@@ -1083,6 +1092,7 @@ def main_DM():
     )
 
     dm = DialogueManagerModule(
+        dialogue_history=dialogue_history,
         input_framerate=rate,
         frame_length=frame_length,
     )
@@ -1094,12 +1104,22 @@ def main_DM():
         input_framerate=rate,
     )
 
-    llm = LlamaCppMemoryIncrementalInterruptionModule(
+    # llm = LlamaCppMemoryIncrementalInterruptionModule(
+    #     model_path,
+    #     None,
+    #     None,
+    #     None,
+    #     system_prompt,
+    #     printing=printing,
+    #     device=device,
+    #     context_size=context_size,
+    # )
+
+    llm = LlmDmModule(
         model_path,
         None,
         None,
-        None,
-        system_prompt,
+        dialogue_history=dialogue_history,
         printing=printing,
         device=device,
     )

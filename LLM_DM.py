@@ -59,7 +59,7 @@ from additional_IUs import (
 )
 
 
-class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
+class LlmDmModule(retico_core.AbstractModule):
     """A retico module that provides Natural Language Generation (NLG) using a Large Language Model
     (LLM), and handles user interruption.
 
@@ -112,13 +112,10 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         model_path,
         model_repo,
         model_name,
-        initial_prompt,
-        system_prompt,
         dialogue_history,
         printing=False,
         device=None,
         context_size=2000,
-        short_memory_context_size=500,
         n_gpu_layers=100,
         **kwargs,
     ):
@@ -189,9 +186,13 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             [len(p) for p in self.role_token_text_patterns]
         )
         for pat in self.stop_token_text_patterns:
-            self.stop_token_patterns.append(self.model.tokenize(pat, add_bos=False))
+            self.stop_token_patterns.append(
+                self.model.tokenize(bytes(pat, encoding="utf-8"), add_bos=False)
+            )
         for pat in self.role_token_text_patterns:
-            self.role_token_patterns.append(self.model.tokenize(pat, add_bos=False))
+            self.role_token_patterns.append(
+                self.model.tokenize(bytes(pat, encoding="utf-8"), add_bos=False)
+            )
 
     def new_user_sentence(self, user_sentence):
         """Function called to register a new user sentence into the dialogue history (utterances attribute).
@@ -204,7 +205,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             {
                 "turn_id": self.current_input[-1].turn_id,
                 "speaker": "user",
-                "text": bytes(user_sentence, "utf-8"),
+                "text": user_sentence,
             }
         )
 
@@ -220,7 +221,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
             {
                 "turn_id": turn_id,
                 "speaker": "agent",
-                "text": bytes(agent_sentence, "utf-8"),
+                "text": agent_sentence,
             }
         )
 
@@ -238,7 +239,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         utterance = {
             "turn_id": self.interrupted_speaker_iu.turn_id,
             "speaker": "agent",
-            "text": bytes(new_agent_sentence, "utf-8"),
+            "text": new_agent_sentence,
         }
         self.dialogue_history.interruption_alignment_new_agent_sentence(
             self, utterance, self.punctuation_ids, self.interrupted_speaker_iu
@@ -332,8 +333,8 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """Calculate if the current dialogue history is bigger than the size threshold (short_memory_context_size).
         If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the threshold.
         """
-        self.prompt = self.dialogue_history.prepare_dialogue_history(
-            self.model.tokenize
+        self.prompt, self.prompt_tokens = (
+            self.dialogue_history.prepare_dialogue_history(self.model.tokenize)
         )
 
     def is_punctuation(self, word):
@@ -432,7 +433,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
 
         # Define the parameters
         print("final_prompt = ", self.prompt)
-        tokens = self.model.tokenize(self.prompt, special=True)
+        # tokens = self.model.tokenize(self.prompt, special=True)
 
         last_sentence = b""
         last_sentence_nb_tokens = 0
@@ -442,7 +443,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         # IMPORTANT : the stop crit is executed after the body of the for loop,
         # which means token here is seen inside the loop before being accessible in stop crit funct
         for token in self.model.generate(
-            tokens,
+            self.prompt_tokens,
             stopping_criteria=stop_function,
             top_k=top_k,
             top_p=top_p,
@@ -698,7 +699,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                             grounded_word=last_turn_last_iu.grounded_word,
                         )
                         self.new_agent_sentence(
-                            self.last_turn_agent_sentence,
+                            self.last_turn_agent_sentence.decode("utf-8"),
                             iu.turn_id,
                         )
                     if iu.event == "ius_from_last_turn":
