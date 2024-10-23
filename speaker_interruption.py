@@ -108,6 +108,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self.audio_iu_buffer = []
         self.latest_processed_iu = None
         self.interrupted_iu = None
+        self.soft_interrupted_iu = None
+        self.interrupted_turn_iu_buffer = []
         self.frame_length = frame_length
 
     def process_update(self, update_message):
@@ -118,21 +120,62 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         for iu, ut in update_message:
             if isinstance(iu, DMIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.action == "system_interruption":
-                        self.terminal_logger.info("interruption")
-                        self.file_logger.info("interruption")
+                    if iu.action == "continue":
+                        self.terminal_logger.info("continue")
+                        self.file_logger.info("continue")
+                        output_iu = self.create_iu(
+                            event="continue",
+                        )
+                        um = retico_core.UpdateMessage.from_iu(
+                            output_iu, retico_core.UpdateType.ADD
+                        )
+                        self.append(um)
+                        self.audio_iu_buffer = self.interrupted_turn_iu_buffer
+                        self.soft_interrupted_iu = None
+                    if iu.action == "soft_interruption":
+                        self.terminal_logger.info(
+                            "soft_interruption",
+                            debug=True,
+                            grounded_word=self.latest_processed_iu.grounded_word,
+                            word_id=self.latest_processed_iu.word_id,
+                            char_id=self.latest_processed_iu.char_id,
+                            clause_id=self.latest_processed_iu.clause_id,
+                            turn_id=self.latest_processed_iu.turn_id,
+                            final=iu.final,
+                        )
+                        self.file_logger.info("soft_interruption")
+                        # if some iu was outputted, send to LLM module for alignement
                         if self.latest_processed_iu is not None:
-                            # word, word_id, char_id, turn_id, clause_id = (
-                            #     self.latest_processed_iu.grounded_word,
-                            #     self.latest_processed_iu.word_id,
-                            #     self.latest_processed_iu.char_id,
-                            #     self.latest_processed_iu.turn_id,
-                            #     self.latest_processed_iu.clause_id,
-                            # )
-                            # print(
-                            #     f"PARAMS INTER SENT TO LLM = {word, word_id, char_id, turn_id, clause_id}"
-                            # )
-                            iu = self.create_iu(
+                            output_iu = self.create_iu(
+                                grounded_word=self.latest_processed_iu.grounded_word,
+                                word_id=self.latest_processed_iu.word_id,
+                                char_id=self.latest_processed_iu.char_id,
+                                clause_id=self.latest_processed_iu.clause_id,
+                                turn_id=self.latest_processed_iu.turn_id,
+                                final=iu.final,
+                                event="interruption",
+                            )
+                            um = retico_core.UpdateMessage.from_iu(
+                                output_iu, retico_core.UpdateType.ADD
+                            )
+                            self.append(um)
+                            self.soft_interrupted_iu = output_iu
+                            self.interrupted_turn_iu_buffer = self.audio_iu_buffer
+                            self.audio_iu_buffer = []
+                            self.current_output = []
+                        else:
+                            self.terminal_logger.info(
+                                "speaker soft interruption but no outputted audio yet"
+                            )
+                            self.file_logger.info(
+                                "speaker soft interruption but no outputted audio yet"
+                            )
+                    elif iu.action == "hard_interruption":
+                        self.terminal_logger.info("hard_interruption")
+                        self.file_logger.info("hard_interruption")
+                        # if some iu was outputted, send to LLM module for alignement
+                        if self.latest_processed_iu is not None:
+                            output_iu = self.create_iu(
                                 grounded_word=self.latest_processed_iu.grounded_word,
                                 word_id=self.latest_processed_iu.word_id,
                                 char_id=self.latest_processed_iu.char_id,
@@ -145,20 +188,16 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             um.add_ius(
                                 [
                                     (retico_core.UpdateType.ADD, um_iu)
-                                    for um_iu in self.current_output + [iu]
+                                    for um_iu in self.current_output + [output_iu]
                                 ]
                             )
-                            # um = retico_core.UpdateMessage.from_iu(
-                            #     iu, retico_core.UpdateType.ADD
-                            # )
                             self.append(um)
-                            self.interrupted_iu = iu
+                            self.interrupted_iu = output_iu
                             # remove all audio in audio_buffer
                             self.audio_iu_buffer = []
                             self.current_output = []
                             # self.latest_processed_iu = None
                         else:
-                            # print("SPEAKER : self.latest_processed_iu = None")
                             self.terminal_logger.info(
                                 "speaker interruption but no outputted audio yet"
                             )
@@ -179,6 +218,23 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                         if not iu.final and self.interrupted_iu.turn_id != iu.turn_id:
                             self.interrupted_iu = None
                             self.audio_iu_buffer.append(iu)
+                    elif self.soft_interrupted_iu is not None:
+                        self.terminal_logger.info(
+                            "IU received during soft interruption",
+                            debug=True,
+                            soft_inter_iu_turn=self.soft_interrupted_iu.turn_id,
+                            TTS_iu_turn=iu.turn_id,
+                            iu_final=iu.final,
+                        )
+                        if (
+                            not iu.final
+                            and self.soft_interrupted_iu.turn_id != iu.turn_id
+                        ):
+                            self.soft_interrupted_iu = None
+                            self.audio_iu_buffer.append(iu)
+                            self.interrupted_turn_iu_buffer = []
+                        else:
+                            self.interrupted_turn_iu_buffer.append(iu)
                     else:
                         self.audio_iu_buffer.append(iu)
 

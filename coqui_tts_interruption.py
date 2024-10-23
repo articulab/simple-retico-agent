@@ -243,7 +243,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                             end_of_clause = True
             elif isinstance(iu, DMIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.action == "system_interruption":
+                    if iu.action == "hard_interruption":
                         self.interrupted_turn = self.current_turn_id
                         end_of_clause = False
                         end_of_turn = False
@@ -251,6 +251,21 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         self.current_input = []
                         self.iu_buffer = []
                         self.buffer_pointer = 0
+                    if iu.action == "stop_turn_id_generation":
+                        self.terminal_logger.info(
+                            "STOP TURN ID",
+                            debug=True,
+                            iu_turn=iu.turn_id,
+                            curr=self.current_turn_id,
+                        )
+                        if iu.turn_id > self.current_turn_id:
+                            end_of_clause = False
+                        end_of_turn = False
+                        self.first_clause = True
+                        self.current_input = []
+                        self.iu_buffer = []
+                        self.buffer_pointer = 0
+                        # more than this, ban all IUs from this turn
                     if iu.event == "user_BOT_same_turn":
                         self.interrupted_turn = None
                 elif ut == retico_core.UpdateType.REVOKE:
@@ -259,7 +274,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                     continue
 
         if end_of_clause:
-            self.terminal_logger.info("EOC TTS", debug=True)
+            self.terminal_logger.info("EOC TTS")
             if self.first_clause:
                 self.terminal_logger.info("start_process")
                 self.file_logger.info("start_process")
@@ -284,7 +299,7 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 print("TTS : after process ", end_date.strftime("%T.%f")[:-3])
 
         if end_of_turn:
-            self.terminal_logger.info("EOT TTS", debug=True)
+            self.terminal_logger.info("EOT TTS")
             self.first_clause = True
             iu = self.create_iu(grounded_in=self.iu_buffer[-1].grounded_in, final=True)
             self.iu_buffer.append(iu)
@@ -315,7 +330,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                         )
                     else:
                         pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
-
             pre_pro_words.pop(0)
             pre_pro_words.append(len(words) - 1)
             pre_pro_words_distinct.pop(0)

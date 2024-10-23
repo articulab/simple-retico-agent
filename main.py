@@ -1077,6 +1077,7 @@ def main_DM():
 
     dialogue_history = DialogueHistory(
         prompt_format_config,
+        terminal_logger=terminal_logger,
         initial_system_prompt=system_prompt,
         context_size=context_size,
     )
@@ -1096,6 +1097,9 @@ def main_DM():
         input_framerate=rate,
         frame_length=frame_length,
     )
+    dm.add_repeat_policy()
+    dm.add_soft_interruption_policy()
+    dm.add_continue_policy()
 
     asr = WhisperASRInterruptionModule(
         device=device,

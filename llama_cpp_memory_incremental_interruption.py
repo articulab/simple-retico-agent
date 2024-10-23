@@ -862,7 +862,7 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
                     msg.append(iu)
             elif isinstance(iu, DMIU):
                 if ut == retico_core.UpdateType.ADD:
-                    if iu.action == "system_interruption":
+                    if iu.action == "hard_interruption":
                         self.interruption = True
             elif isinstance(iu, SpeakerAlignementIU):
                 if ut == retico_core.UpdateType.ADD:

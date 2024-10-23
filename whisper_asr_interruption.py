@@ -205,7 +205,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
         """
         eos = False
         for iu, ut in update_message:
-            if iu.action == "system_interruption":
+            if iu.action == "hard_interruption":
                 self.start_process = True
                 continue
             # elif iu.action == "inform":
