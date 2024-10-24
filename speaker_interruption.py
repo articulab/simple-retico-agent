@@ -23,6 +23,7 @@ Outputs : TextAlignedAudioIU
 """
 
 import platform
+import time
 import pyaudio
 
 import retico_core
@@ -187,7 +188,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             um = retico_core.UpdateMessage()
                             um.add_ius(
                                 [
-                                    (retico_core.UpdateType.ADD, um_iu)
+                                    (um_iu, retico_core.UpdateType.ADD)
                                     for um_iu in self.current_output + [output_iu]
                                 ]
                             )
@@ -258,6 +259,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             (bytes, pyaudio type): the tuple containing the audio chunks (bytes)
             and the pyaudio type informing wether the stream should continue or stop.
         """
+        # time.sleep(self.frame_length)
         if len(self.audio_iu_buffer) == 0:
             self.terminal_logger.info("output_silence")
             self.file_logger.info("output_silence")
@@ -268,7 +270,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         # if it is the last IU from TTS for this agent turn, which corresponds to an agent EOT.
         if hasattr(iu, "final") and iu.final:
             self.terminal_logger.info("agent_EOT")
-            self.file_logger.info("agent_EOT")
+            self.file_logger.info("EOT")
             output_iu = self.create_iu(
                 grounded_word=iu.grounded_word,
                 word_id=iu.word_id,
@@ -282,7 +284,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             um = retico_core.UpdateMessage()
             um.add_ius(
                 [
-                    (retico_core.UpdateType.ADD, um_iu)
+                    (um_iu, retico_core.UpdateType.ADD)
                     for um_iu in self.current_output + [output_iu]
                 ]
             )

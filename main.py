@@ -5,6 +5,7 @@ from functools import partial
 import torch
 
 from LLM_DM import LlmDmModule
+from coqui_tts_interruption_2 import TtsDmModule
 from dialogue_manager import DialogueHistory, DialogueManagerModule, VADModule
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
@@ -817,7 +818,7 @@ def main_demo_with_plot():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     printing = False
     log_folder = "logs/run"
-    plot_config = "plot_config_2.json"
+    plot_config = "plot_config_3.json"
     frame_length = 0.02
     tts_frame_length = 0.2
     rate = 16000
@@ -1029,15 +1030,15 @@ def main_DM():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
-    plot_config = "plot_config_2.json"
-    plot_live = True
+    plot_config = "plot_config_3.json"
+    plot_live = False
     module_order = [
         "Microphone",
         "VAD",
         "DialogueManager",
         "WhisperASR",
-        "LlamaCppMemoryIncremental",
-        "CoquiTTS",
+        "LLM",
+        "TTS",
         "Speaker",
     ]
     prompt_format_config = "prompt_format_config.json"
@@ -1128,7 +1129,15 @@ def main_DM():
         device=device,
     )
 
-    tts = CoquiTTSInterruptionModule(
+    # tts = CoquiTTSInterruptionModule(
+    #     language="en",
+    #     model=tts_model,
+    #     printing=printing,
+    #     frame_duration=tts_frame_length,
+    #     device=device,
+    # )
+
+    tts = TtsDmModule(
         language="en",
         model=tts_model,
         printing=printing,

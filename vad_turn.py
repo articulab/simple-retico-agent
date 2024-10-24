@@ -335,7 +335,7 @@ class VADTurnModule(retico_core.AbstractModule):
                         sample_width=self.sample_width,
                         vad_state="user_turn",
                     )
-                    ius.append((retico_core.UpdateType.ADD, output_iu))
+                    ius.append((output_iu, retico_core.UpdateType.ADD))
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
                 return um
@@ -372,7 +372,7 @@ class VADTurnModule(retico_core.AbstractModule):
                             vad_state="user_turn",
                         )
                         # ius.append((output_iu, retico_core.UpdateType.ADD))
-                        ius.append((retico_core.UpdateType.ADD, output_iu))
+                        ius.append((output_iu, retico_core.UpdateType.ADD))
 
                 for audio in self.audio_buffer:
                     # output_iu = self.create_iu(lastest_iu)
@@ -392,7 +392,7 @@ class VADTurnModule(retico_core.AbstractModule):
                         sample_width=self.sample_width,
                         vad_state="user_turn",
                     )
-                    ius.append((retico_core.UpdateType.COMMIT, output_iu))
+                    ius.append((output_iu, retico_core.UpdateType.COMMIT))
                     # ius.append((output_iu, retico_core.UpdateType.COMMIT))
 
                 um = retico_core.UpdateMessage()

@@ -88,7 +88,7 @@ class LlmDmModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "LlamaCppMemoryIncremental Module"
+        return "LLM DM Module"
 
     @staticmethod
     def description():
@@ -441,6 +441,8 @@ class LlmDmModule(retico_core.AbstractModule):
         self.which_stop_criteria = None
         self.nb_clauses = 0
 
+        self.file_logger.info("start_process")
+
         # IMPORTANT : the stop crit is executed after the body of the for loop,
         # which means token here is seen inside the loop before being accessible in stop crit funct
         for token in self.model.generate(
@@ -559,6 +561,7 @@ class LlmDmModule(retico_core.AbstractModule):
                     "LLM : send sentence after punctuation ",
                     datetime.datetime.now().strftime("%T.%f")[:-3],
                 )
+            self.file_logger.info("send_clause")
             self.current_output = []
         self.append(next_um)
 
@@ -690,19 +693,20 @@ class LlmDmModule(retico_core.AbstractModule):
                 elif ut == retico_core.UpdateType.COMMIT:
                     msg.append(iu)
             elif isinstance(iu, DMIU):
-                if ut == retico_core.UpdateType.ADD:
-                    if iu.action == "hard_interruption":
-                        self.interruption = True
-                if iu.action == "stop_turn_id_generation":
-                    if len(self.current_output) > 0:
+                if iu.action == "hard_interruption":
+                    self.interruption = True
+                    self.file_logger.info("hard_interruption")
+                elif iu.action == "soft_interruption":
+                    self.file_logger.info("soft_interruption")
+                elif iu.action == "stop_turn_id":
+                    if (
+                        len(self.current_output) > 0
+                    ):  # do we keep this ? we could interrupt even if it is empty by keeping track of last outputted iu
                         self.terminal_logger.info("STOP TURN ID", debug=True)
+                        self.file_logger.info("stop_turn_id")
                         if iu.turn_id > self.current_output[-1].turn_id:
                             self.interruption = True  # test this
                             # we would have to do something much more simple, just stop generation and clear current_output, no alignement or nothing
-                    else:
-                        self.terminal_logger.info(
-                            "STOP TUNR ID BUT CURRENT OUTPUT EMPTY", debug=True
-                        )
             elif isinstance(iu, SpeakerAlignementIU):
                 if ut == retico_core.UpdateType.ADD:
                     if iu.event == "interruption":
@@ -748,9 +752,10 @@ class LlmDmModule(retico_core.AbstractModule):
             try:
                 time.sleep(0.01)
                 if self.full_sentence:
-                    self.terminal_logger.info("start_process")
-                    self.file_logger.info("start_process")
+                    self.terminal_logger.info("start_answer_generation")
+                    self.file_logger.info("start_answer_generation")
                     self.process_incremental()
+                    self.file_logger.info("EOT")
                     self.full_sentence = False
             except Exception as e:
                 log_exception(module=self, exception=e)

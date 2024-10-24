@@ -240,6 +240,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
             try:
                 time.sleep(0.01)
                 prediction = self.recognize()
+                self.file_logger.info("predict")
                 if len(prediction) != 0:
                     um, new_tokens = retico_core.text.get_text_increment(
                         self, prediction
@@ -271,6 +272,7 @@ class WhisperASRInterruptionModule(retico_core.AbstractModule):
                         self.current_output = []
                         self.eos = False
                         self.latest_input_iu = None
+                        self.file_logger.info("send_clause")
 
                     if len(um) != 0:
                         self.append(um)

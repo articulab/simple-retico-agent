@@ -100,7 +100,7 @@ class WozMicrophoneModule_one_file_allinone(retico_core.AbstractModule):
             output_iu = self.create_iu()
             output_iu.set_audio(sample, chunk_size, rate, sample_width)
             output_iu.dispatch = True
-            list_ius.append((retico_core.UpdateType.ADD, output_iu))
+            list_ius.append((output_iu, retico_core.UpdateType.ADD))
 
         # Add silence for VAD
         silence_duration = 1
@@ -113,7 +113,7 @@ class WozMicrophoneModule_one_file_allinone(retico_core.AbstractModule):
                 silence_sample, rate * silence_duration, rate, sample_width
             )
             output_iu.dispatch = True
-            list_ius.append((retico_core.UpdateType.ADD, output_iu))
+            list_ius.append((output_iu, retico_core.UpdateType.ADD))
 
         um = retico_core.UpdateMessage()
         um.add_ius(iu_list=list_ius)

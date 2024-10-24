@@ -341,6 +341,19 @@ class VADModule(retico_core.AbstractModule):
                     )
                     self.append(um)
 
+                    # something for logging
+                    if self.VA_agent:
+                        if VA_user:
+                            event = "VA_overlap"
+                        else:
+                            event = "VA_agent"
+                    else:
+                        if VA_user:
+                            event = "VA_user"
+                        else:
+                            event = "VA_silence"
+                    self.file_logger.info(event)
+
 
 class DialogueManagerModule(retico_core.AbstractModule):
     """
@@ -642,6 +655,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.terminal_logger.info(
             f"action = {action}", debug=True, turn_id=self.turn_id
         )
+        self.file_logger.info(action)
         # output_iu = self.create_iu(action=action, turn_id=self.turn_id)
         output_iu = DMIU(
             creator=self,
@@ -720,7 +734,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 turn_id=self.turn_id,
                 action="process_audio",
             )
-            ius.append((retico_core.UpdateType.ADD, output_iu))
+            ius.append((output_iu, retico_core.UpdateType.ADD))
 
         if final:
             for iu in self.current_input:
@@ -745,7 +759,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     turn_id=self.turn_id,
                     action="process_audio",
                 )
-                ius.append((retico_core.UpdateType.COMMIT, output_iu))
+                ius.append((output_iu, retico_core.UpdateType.COMMIT))
             self.current_input = []
             self.buffer_pointer = 0
 
@@ -812,7 +826,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         else:
             if source_state == "user_speaking":
                 self.dialogue_history.reset_system_prompt()
-                self.send_action(action="stop_turn_id_generation")
+                self.send_action(action="stop_turn_id")
                 self.send_action(action="start_answer_generation")
 
     def set_repeat_timer(self, offset=3):
@@ -869,8 +883,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 turn_id=self.turn_id,
             )
             ius = [
-                (retico_core.UpdateType.ADD, iu),
-                (retico_core.UpdateType.COMMIT, iu),
+                (iu, retico_core.UpdateType.ADD),
+                (iu, retico_core.UpdateType.COMMIT),
             ]
             um.add_ius(ius)
             self.append(um)
@@ -1287,7 +1301,7 @@ class VADTurnModule2(retico_core.AbstractModule):
                         sample_width=self.sample_width,
                         vad_state="user_turn",
                     )
-                    ius.append((retico_core.UpdateType.ADD, output_iu))
+                    ius.append((output_iu, retico_core.UpdateType.ADD))
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
                 return um
@@ -1314,7 +1328,7 @@ class VADTurnModule2(retico_core.AbstractModule):
                             sample_width=self.sample_width,
                             vad_state="user_turn",
                         )
-                        ius.append((retico_core.UpdateType.ADD, output_iu))
+                        ius.append((output_iu, retico_core.UpdateType.ADD))
 
                 for iu in self.current_input:
                     output_iu = self.create_iu(
@@ -1325,7 +1339,7 @@ class VADTurnModule2(retico_core.AbstractModule):
                         sample_width=self.sample_width,
                         vad_state="user_turn",
                     )
-                    ius.append((retico_core.UpdateType.COMMIT, output_iu))
+                    ius.append((output_iu, retico_core.UpdateType.COMMIT))
 
                 um = retico_core.UpdateMessage()
                 um.add_ius(ius)
