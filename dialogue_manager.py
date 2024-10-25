@@ -387,6 +387,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         bot_dur=0.4,
         silence_threshold=0.75,
         input_framerate=None,
+        incrementality_level="sentence",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -408,27 +409,93 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.turn_beginning_timer = -float("inf")
         self.audio_ius_agent_last_turn = []
         self.dialogue_history = dialogue_history
+        self.incrementality_level = incrementality_level
 
         self.policies = {
             "user_speaking": {
                 "silence_after_user": [
                     self.dialogue_history.reset_system_prompt,
+                    partial(self.send_event, "user_EOT"),
                     partial(self.send_action, action="start_answer_generation"),
+                    partial(self.send_audio_ius, final=True),
                 ],
             },
             "agent_speaking": {
                 "user_overlaps_agent": [
                     self.increment_turn_id,
+                    partial(self.send_event, "user_barge_in"),
+                ],
+                "silence_after_agent": [
+                    partial(self.send_event, "agent_EOT"),
+                ],
+                "agent_speaking": [
+                    self.update_current_input,
                 ],
             },
             "silence_after_agent": {
                 "user_speaking": [
                     self.increment_turn_id,
                 ],
+                "agent_speaking": [
+                    partial(self.send_event, "agent_BOT_same_turn"),
+                    self.update_current_input,
+                ],
+                "silence_after_agent": [
+                    self.update_current_input,
+                ],
             },
             "silence_after_user": {
                 "user_speaking": [
                     self.increment_turn_id,
+                ],
+                "agent_speaking": [
+                    partial(self.send_event, "agent_BOT_new_turn"),
+                    self.update_current_input,
+                ],
+                "silence_after_user": [
+                    self.update_current_input,
+                ],
+            },
+            "agent_overlaps_user": {
+                "silence_after_agent": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "agent_speaking": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "user_speaking": [
+                    partial(self.send_audio_ius),
+                ],
+                "user_overlaps_agent": [
+                    partial(self.send_audio_ius),
+                ],
+            },
+            "user_overlaps_agent": {
+                "silence_after_user": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "agent_speaking": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "user_speaking": [
+                    partial(self.send_audio_ius),
+                ],
+                "user_overlaps_agent": [
+                    partial(self.send_audio_ius),
+                ],
+            },
+            "mutual_overlap": {
+                "silence_after_agent": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "agent_speaking": [
+                    partial(self.send_audio_ius, final=True),
+                ],
+                "user_speaking": [
+                    partial(self.send_audio_ius),
+                ],
+                "mutual_overlap": [
+                    partial(self.send_audio_ius),
                 ],
             },
         }
@@ -670,20 +737,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
     def send_audio_ius_last_turn(self):
         um = retico_core.UpdateMessage()
         for iu in self.audio_ius_agent_last_turn:
-            # output_iu = self.create_iu(
-            #     grounded_in=iu.grounded_in,
-            #     raw_audio=iu.payload,
-            #     nframes=self.nframes,
-            #     rate=self.input_framerate,
-            #     sample_width=self.sample_width,
-            #     char_id=iu.char_id,
-            #     clause_id=iu.clause_id,
-            #     grounded_word=iu.grounded_word,
-            #     word_id=iu.word_id,
-            #     final=iu.final,
-            #     turn_id=self.turn_id,
-            #     action="repeat_last_turn",
-            # )
             output_iu = DMIU(
                 creator=self,
                 iuid=f"{hash(self)}:{self.iu_counter}",
@@ -705,48 +758,29 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.append(um)
 
     def send_audio_ius(self, final=False):
-        # self.terminal_logger.info(
-        #     "action = process_audio", debug=True, turn_id=self.turn_id, final=final
-        # )
-        new_ius = self.current_input[self.buffer_pointer :]
-        self.buffer_pointer = len(self.current_input)
         um = retico_core.UpdateMessage()
         ius = []
-        for iu in new_ius:
-            # output_iu = self.create_iu(
-            #     grounded_in=self.current_input[-1],
-            #     raw_audio=iu.payload,
-            #     nframes=self.nframes,
-            #     rate=self.input_framerate,
-            #     sample_width=self.sample_width,
-            #     turn_id=self.turn_id,
-            #     action="process_audio",
-            # )
-            output_iu = DMIU(
-                creator=self,
-                iuid=f"{hash(self)}:{self.iu_counter}",
-                previous_iu=self._previous_iu,
-                grounded_in=self.current_input[-1],
-                raw_audio=iu.payload,
-                nframes=self.nframes,
-                rate=self.input_framerate,
-                sample_width=self.sample_width,
-                turn_id=self.turn_id,
-                action="process_audio",
-            )
-            ius.append((output_iu, retico_core.UpdateType.ADD))
+
+        if self.incrementality_level == "audio_iu":
+            new_ius = self.current_input[self.buffer_pointer :]
+            self.buffer_pointer = len(self.current_input)
+            for iu in new_ius:
+                output_iu = DMIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=self.current_input[-1],
+                    raw_audio=iu.payload,
+                    nframes=self.nframes,
+                    rate=self.input_framerate,
+                    sample_width=self.sample_width,
+                    turn_id=self.turn_id,
+                    action="process_audio",
+                )
+                ius.append((output_iu, retico_core.UpdateType.ADD))
 
         if final:
             for iu in self.current_input:
-                # output_iu = self.create_iu(
-                #     grounded_in=self.current_input[-1],
-                #     raw_audio=iu.payload,
-                #     nframes=self.nframes,
-                #     rate=self.input_framerate,
-                #     sample_width=self.sample_width,
-                #     turn_id=self.turn_id,
-                #     action="process_audio",
-                # )
                 output_iu = DMIU(
                     creator=self,
                     iuid=f"{hash(self)}:{self.iu_counter}",
@@ -826,8 +860,10 @@ class DialogueManagerModule(retico_core.AbstractModule):
         else:
             if source_state == "user_speaking":
                 self.dialogue_history.reset_system_prompt()
+                self.send_event(event="user_EOT")
                 self.send_action(action="stop_turn_id")
                 self.send_action(action="start_answer_generation")
+                self.send_audio_ius(final=True)
 
     def set_repeat_timer(self, offset=3):
         self.repeat_timer = time.time() + offset
@@ -929,13 +965,13 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 agent_BOT = self.recognize_agent_BOT()
                 if user_EOT:
                     self.state_transition("user_speaking", "silence_after_user")
-                    self.send_event("user_EOT")
-                    self.send_audio_ius(final=True)
+                    # self.send_event("user_EOT")
+                    # self.send_audio_ius(final=True)
                 else:
-                    self.send_audio_ius()
+                    # self.send_audio_ius()
                     if agent_BOT:
                         self.state_transition("user_speaking", "agent_overlaps_user")
-                        self.send_event("agent_starts_overlaping_user")
+                        # self.send_event("agent_starts_overlaping_user")
                     else:  # stay on state "user_speaking"
                         self.state_transition("user_speaking", "user_speaking")
 
@@ -945,11 +981,11 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 self.update_current_input()
                 if agent_EOT:
                     self.state_transition("agent_speaking", "silence_after_agent")
-                    self.send_event("agent_EOT")
+                    # self.send_event("agent_EOT")
                 else:
                     if user_BOT:
                         self.state_transition("agent_speaking", "user_overlaps_agent")
-                        self.send_event("user_barge_in")
+                        # self.send_event("user_barge_in")
                         # choice 1 : trigger "interruption" event
                         # choice 2 : let Turn taking handle user barge-in
                     else:  # stay on state "agent_speaking"
@@ -961,15 +997,15 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 if user_BOT:
                     if agent_BOT:
                         self.state_transition("silence_after_user", "mutual_overlap")
-                        self.send_event("mutual_overlap")
+                        # self.send_event("mutual_overlap")
                     else:
                         self.state_transition("silence_after_user", "user_speaking")
-                        self.send_event("user_BOT_same_turn")
+                        # self.send_event("user_BOT_same_turn")
                 else:
-                    self.update_current_input()
+                    # self.update_current_input()
                     if agent_BOT:
                         self.state_transition("silence_after_user", "agent_speaking")
-                        self.send_event("agent_BOT_new_turn")
+                        # self.send_event("agent_BOT_new_turn")
                     else:  # stay on state "silence_after_user"
                         self.state_transition(
                             "silence_after_user", "silence_after_user"
@@ -981,15 +1017,15 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 if user_BOT:
                     if agent_BOT:
                         self.state_transition("silence_after_agent", "mutual_overlap")
-                        self.send_event("mutual_overlap")
+                        # self.send_event("mutual_overlap")
                     else:
                         self.state_transition("silence_after_agent", "user_speaking")
-                        self.send_event("user_BOT_new_turn")
+                        # self.send_event("user_BOT_new_turn")
                 else:
-                    self.update_current_input()
+                    # self.update_current_input()
                     if agent_BOT:
                         self.state_transition("silence_after_agent", "agent_speaking")
-                        self.send_event("agent_BOT_same_turn")
+                        # self.send_event("agent_BOT_same_turn")
                     else:  # stay on state "silence_after_user"
                         self.state_transition(
                             "silence_after_agent", "silence_after_agent"
@@ -999,7 +1035,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 user_EOT = self.recognize_user_EOT()
                 agent_EOT = self.recognize_agent_EOT()
                 if user_EOT:
-                    self.send_audio_ius(final=True)
+                    # self.send_audio_ius(final=True)
                     if agent_EOT:
                         self.state_transition(
                             "user_overlaps_agent", "silence_after_user"
@@ -1007,7 +1043,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     else:
                         self.state_transition("user_overlaps_agent", "agent_speaking")
                 else:
-                    self.send_audio_ius()
+                    # self.send_audio_ius()
                     if agent_EOT:
                         self.state_transition("user_overlaps_agent", "user_speaking")
                     else:  # stay on state "user_overlaps_agent"
@@ -1019,7 +1055,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 user_EOT = self.recognize_user_EOT()
                 agent_EOT = self.recognize_agent_EOT()
                 if user_EOT:
-                    self.send_audio_ius(final=True)
+                    # self.send_audio_ius(final=True)
                     if agent_EOT:
                         self.state_transition(
                             "agent_overlaps_user", "silence_after_agent"
@@ -1027,7 +1063,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                     else:
                         self.state_transition("agent_overlaps_user", "agent_speaking")
                 else:
-                    self.send_audio_ius()
+                    # self.send_audio_ius()
                     if agent_EOT:
                         self.state_transition("agent_overlaps_user", "user_speaking")
                     else:  # stay on state "agent_overlaps_user"
@@ -1039,13 +1075,13 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 user_EOT = self.recognize_user_EOT()
                 agent_EOT = self.recognize_agent_EOT()
                 if user_EOT:
-                    self.send_audio_ius(final=True)
+                    # self.send_audio_ius(final=True)
                     if agent_EOT:
                         self.state_transition("mutual_overlap", "silence_after_agent")
                     else:
                         self.state_transition("mutual_overlap", "agent_speaking")
                 else:
-                    self.send_audio_ius()
+                    # self.send_audio_ius()
                     if agent_EOT:
                         self.state_transition("mutual_overlap", "user_speaking")
                     else:  # stay on state "mutual_overlap"

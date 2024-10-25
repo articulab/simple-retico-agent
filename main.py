@@ -4,8 +4,9 @@ from retico_core import network, audio, debug, text
 from functools import partial
 import torch
 
+from ASR_DM import AsrDmModule
 from LLM_DM import LlmDmModule
-from coqui_tts_interruption_2 import TtsDmModule
+from TTS_DM import TtsDmModule
 from dialogue_manager import DialogueHistory, DialogueManagerModule, VADModule
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
@@ -1102,9 +1103,15 @@ def main_DM():
     dm.add_soft_interruption_policy()
     dm.add_continue_policy()
 
-    asr = WhisperASRInterruptionModule(
+    # asr = WhisperASRInterruptionModule(
+    #     device=device,
+    #     printing=printing,
+    #     full_sentences=True,
+    #     input_framerate=rate,
+    # )
+
+    asr = AsrDmModule(
         device=device,
-        printing=printing,
         full_sentences=True,
         input_framerate=rate,
     )
