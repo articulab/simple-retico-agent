@@ -36,6 +36,7 @@ Inputs : AudioIU, TextAlignedAudioIU
 Outputs : VADTurnAudioIU
 """
 
+from collections.abc import Callable
 from functools import partial
 import json
 import time
@@ -51,6 +52,8 @@ from additional_IUs import (
     SpeakerAlignementIU,
 )
 from whisper_asr_interruption import SpeechRecognitionTurnIU
+
+from transitions import Machine
 
 
 class DialogueHistory:
@@ -407,7 +410,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.repeat_timer = float("inf")
         self.overlap_timer = -float("inf")
         self.turn_beginning_timer = -float("inf")
-        self.audio_ius_agent_last_turn = []
         self.dialogue_history = dialogue_history
         self.incrementality_level = incrementality_level
 
@@ -466,7 +468,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 "user_speaking": [
                     partial(self.send_audio_ius),
                 ],
-                "user_overlaps_agent": [
+                "agent_overlaps_user": [
                     partial(self.send_audio_ius),
                 ],
             },
@@ -608,7 +610,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.add_policy(
             "silence_after_agent",
             "silence_after_agent",
-            self.check_repeat_timer_2,
+            self.check_repeat_timer,
         )
         self.add_policy(
             "agent_speaking",
@@ -734,29 +736,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
         um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
         self.append(um)
 
-    def send_audio_ius_last_turn(self):
-        um = retico_core.UpdateMessage()
-        for iu in self.audio_ius_agent_last_turn:
-            output_iu = DMIU(
-                creator=self,
-                iuid=f"{hash(self)}:{self.iu_counter}",
-                grounded_in=iu.grounded_in,
-                previous_iu=self._previous_iu,
-                raw_audio=iu.payload,
-                nframes=self.nframes,
-                rate=self.input_framerate,
-                sample_width=self.sample_width,
-                char_id=iu.char_id,
-                clause_id=iu.clause_id,
-                grounded_word=iu.grounded_word,
-                word_id=iu.word_id,
-                final=iu.final,
-                turn_id=self.turn_id,
-                action="repeat_last_turn",
-            )
-            um.add_iu(output_iu, retico_core.UpdateType.ADD)
-        self.append(um)
-
     def send_audio_ius(self, final=False):
         um = retico_core.UpdateMessage()
         ius = []
@@ -855,7 +834,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 debug=True,
             )
             self.send_action("continue")
-            # self.send_audio_ius_last_turn()
             self.overlap_timer = -float("inf")
         else:
             if source_state == "user_speaking":
@@ -872,17 +850,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.repeat_timer = time.time()
 
     def check_repeat_timer(self):
-        if self.repeat_timer < time.time():
-            self.increment_turn_id()
-            self.terminal_logger.info(
-                "repeat timer exceeded, send repeat action :",
-                debug=True,
-                turn_id=self.turn_id,
-            )
-            self.send_audio_ius_last_turn()
-            self.repeat_timer = float("inf")
-
-    def check_repeat_timer_2(self):
         if self.repeat_timer < time.time():
             self.increment_turn_id()
             self.terminal_logger.info(
@@ -944,15 +911,6 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         )
                     self.current_input.append(iu)
                     current_iu_updated = True
-            if isinstance(iu, SpeakerAlignementIU):
-                if iu.event == "ius_from_last_turn":
-                    if len(self.audio_ius_agent_last_turn) != 0:
-                        if self.audio_ius_agent_last_turn[0].turn_id != iu.turn_id:
-                            self.audio_ius_agent_last_turn = [iu]
-                        else:
-                            self.audio_ius_agent_last_turn.append(iu)
-                    else:
-                        self.audio_ius_agent_last_turn = [iu]
 
         if current_iu_updated:
             if self.dialogue_state == "opening":
@@ -1121,6 +1079,663 @@ class DialogueManagerModule(retico_core.AbstractModule):
     #     um.add_ius(ius)
     #     return um
     ########################################
+
+
+class DialogueManagerModule_2(retico_core.AbstractModule):
+
+    @staticmethod
+    def name():
+        return "DialogueManager Module"
+
+    @staticmethod
+    def description():
+        return "a module that manage the dialogue"
+
+    @staticmethod
+    def input_ius():
+        return [VADIU, SpeakerAlignementIU]
+
+    @staticmethod
+    def output_iu():
+        return retico_core.IncrementalUnit
+
+    def __init__(
+        self,
+        dialogue_history: DialogueHistory,
+        silence_dur=1,
+        bot_dur=0.4,
+        silence_threshold=0.75,
+        input_framerate=None,
+        incrementality_level="sentence",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.input_framerate = input_framerate
+        self.channels = None
+        self.sample_width = None
+        self.nframes = None
+        self.silence_dur = silence_dur
+        self.bot_dur = bot_dur
+        self.silence_threshold = silence_threshold
+        self._n_sil_audio_chunks = None
+        self._n_bot_audio_chunks = None
+        self.buffer_pointer = 0
+        self.dialogue_state = "opening"
+        self.turn_id = 0
+        self.repeat_timer = float("inf")
+        self.overlap_timer = -float("inf")
+        self.turn_beginning_timer = -float("inf")
+        self.dialogue_history = dialogue_history
+        self.incrementality_level = incrementality_level
+
+        self.fsm = Machine(
+            model=self,
+            states=[
+                "user_speaking",
+                "agent_speaking",
+                "silence_after_user",
+                "silence_after_agent",
+                "user_overlaps_agent",
+                "agent_overlaps_user",
+                "mutual_overlap",
+            ],
+            initial="silence_after_agent",
+        )
+
+        # set the log_transi callback to all non reflexive transitions
+        self.log_transis()
+
+        # user_speaking
+        self.add_transition_callback(
+            "user_speaking",
+            "silence_after_user",
+            callbacks=[
+                self.dialogue_history.reset_system_prompt,
+                partial(self.send_event, "user_EOT"),
+                partial(self.send_action, action="start_answer_generation"),
+                partial(self.send_audio_ius, final=True),
+            ],
+        )
+
+        self.add_transition_callback(
+            "agent_speaking",
+            "agent_speaking",
+            callbacks=[self.update_current_input],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "silence_after_agent",
+            callbacks=[partial(self.send_event, "agent_EOT")],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "user_overlaps_agent",
+            callbacks=[
+                self.increment_turn_id,
+                partial(self.send_event, "user_barge_in"),
+            ],
+        )
+
+        self.add_transition_callback(
+            "silence_after_user",
+            "silence_after_user",
+            callbacks=[self.update_current_input],
+        )
+        self.add_transition_callback(
+            "silence_after_user",
+            "agent_speaking",
+            callbacks=[
+                partial(self.send_event, "agent_BOT_new_turn"),
+                self.update_current_input,
+            ],
+        )
+        self.add_transition_callback(
+            "silence_after_user",
+            "user_speaking",
+            callbacks=[self.increment_turn_id],
+        )
+
+        self.add_transition_callback(
+            "silence_after_agent",
+            "silence_after_agent",
+            callbacks=[self.increment_turn_id],
+        )
+        self.add_transition_callback(
+            "silence_after_agent",
+            "agent_speaking",
+            callbacks=[
+                partial(self.send_event, "agent_BOT_same_turn"),
+                self.update_current_input,
+            ],
+        )
+        self.add_transition_callback(
+            "silence_after_agent",
+            "user_speaking",
+            callbacks=[self.increment_turn_id],
+        )
+
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "agent_overlaps_user",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "agent_speaking",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "user_speaking",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "silence_after_agent",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "user_overlaps_agent",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "agent_speaking",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "user_speaking",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "silence_after_user",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+
+        self.add_transition_callback(
+            "mutual_overlap",
+            "mutual_overlap",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "agent_speaking",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "user_speaking",
+            callbacks=[partial(self.send_audio_ius)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "silence_after_agent",
+            callbacks=[partial(self.send_audio_ius, final=True)],
+        )
+
+    def run_FSM(self):
+        source_state = self.fsm.state
+        if source_state is "agent_speaking":
+            match (self.recognize_agent_EOT(), self.recognize_user_BOT()):
+                case (True, True):
+                    self.fsm.trigger("to_silence_after_agent")
+                case (True, False):
+                    self.fsm.trigger("to_silence_after_agent")
+                case (False, True):
+                    self.fsm.trigger("to_user_overlaps_agent")
+                case (False, False):
+                    self.fsm.trigger("to_" + source_state)
+        elif source_state is "user_speaking":
+            match (self.recognize_agent_BOT(), self.recognize_user_EOT()):
+                case (True, True):
+                    self.fsm.trigger("to_silence_after_user")
+                case (True, False):
+                    self.fsm.trigger("to_silence_after_user")
+                case (False, True):
+                    self.fsm.trigger("to_agent_overlaps_user")
+                case (False, False):
+                    self.fsm.trigger("to_" + source_state)
+        elif source_state in ["silence_after_user", "silence_after_agent"]:
+            match (self.recognize_agent_BOT(), self.recognize_user_BOT()):
+                case (True, True):
+                    self.fsm.trigger("to_mutual_overlap")
+                case (True, False):
+                    self.fsm.trigger("to_agent_speaking")
+                case (False, True):
+                    self.fsm.trigger("to_user_speaking")
+                case (False, False):
+                    self.fsm.trigger("to_" + source_state)
+        elif source_state in [
+            "user_overlaps_agent",
+            "agent_overlaps_user",
+            "mutual_overlap",
+        ]:
+            match (self.recognize_agent_EOT(), self.recognize_user_EOT()):
+                case (True, True):
+                    self.fsm.trigger("to_silence_after_agent")
+                case (True, False):
+                    self.fsm.trigger("to_agent_speaking")
+                case (False, True):
+                    self.fsm.trigger("to_user_speaking")
+                case (False, False):
+                    self.fsm.trigger("to_" + source_state)
+
+    def log_transi(self, source, dest):
+        self.terminal_logger.info(
+            f"switch state {source} -> {dest}",
+            debug=True,
+            turn_id=self.turn_id,
+        )
+
+    def log_transis(self):
+        for t in self.fsm.get_transitions():
+            if t.source != t.dest:
+                t.after.append(partial(self.log_transi, t.source, t.dest))
+
+    def process_update(self, update_message):
+        """
+        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+
+        Args:
+            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are ADD,
+            they are added to the audio_buffer.
+        """
+        current_iu_updated = False
+        for iu, ut in update_message:
+            if isinstance(iu, VADIU):
+                if ut == retico_core.UpdateType.ADD:
+                    if self.input_framerate != iu.rate:
+                        raise ValueError(
+                            f"input framerate differs from iu framerate : {self.input_framerate} vs {iu.rate}"
+                        )
+                    self.current_input.append(iu)
+                    current_iu_updated = True
+
+        if current_iu_updated:
+            self.run_FSM()
+
+    def add_transition_callback(self, source, dest, callbacks, cond=[]):
+        transitions = self.fsm.get_transitions("to_" + dest, source=source, dest=dest)
+        if len(transitions) == 1:
+            transitions[0].after.extend(callbacks)
+        else:
+            self.terminal_logger.error(
+                "0 or more than 1 transitions with the exact source, dest and trigger. Add the transition directly, or specify."
+            )
+
+    def add_soft_interruption_policy(self):
+        self.add_transition_callback(
+            "silence_after_user",
+            "mutual_overlap",
+            [partial(self.send_action, "soft_interruption")],
+        )
+        self.add_transition_callback(
+            "silence_after_agent",
+            "mutual_overlap",
+            [partial(self.send_action, "soft_interruption")],
+        )
+        self.add_transition_callback(
+            "user_speaking",
+            "agent_overlaps_user",
+            [partial(self.send_action, "soft_interruption")],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "user_overlaps_agent",
+            [partial(self.send_action, "soft_interruption")],
+        )
+
+    def add_continue_policy(self):
+        self.fsm.get_transitions(
+            "run", source="user_speaking", dest="silence_after_user"
+        )[0].after = []
+        self.add_transition_callback(
+            "silence_after_user",
+            "mutual_overlap",
+            [partial(self.set_overlap_timer)],
+        )
+        self.add_transition_callback(
+            "silence_after_agent",
+            "mutual_overlap",
+            [partial(self.set_overlap_timer)],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "user_overlaps_agent",
+            [partial(self.set_overlap_timer)],
+        )
+        self.add_transition_callback(
+            "user_speaking",
+            "agent_overlaps_user",
+            [partial(self.set_overlap_timer)],
+        )
+        self.add_transition_callback(
+            "user_speaking",
+            "silence_after_user",
+            [partial(self.check_overlap_timer, 1, "user_speaking")],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "silence_after_agent",
+            [partial(self.check_overlap_timer, 1, "agent_speaking")],
+        )
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "silence_after_agent",
+            [partial(self.check_overlap_timer, 1)],
+        )
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "silence_after_user",
+            [partial(self.check_overlap_timer, 1)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "silence_after_user",
+            [partial(self.check_overlap_timer, 1)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "silence_after_agent",
+            [partial(self.check_overlap_timer, 1)],
+        )
+
+    def add_hard_interruption_policy(self):
+        self.add_transition_callback(
+            "silence_after_user",
+            "mutual_overlap",
+            [partial(self.send_action, "hard_interruption")],
+        )
+        self.add_transition_callback(
+            "silence_after_agent",
+            "mutual_overlap",
+            [partial(self.send_action, "hard_interruption")],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "user_overlaps_agent",
+            [partial(self.send_action, "hard_interruption")],
+        )
+        self.add_transition_callback(
+            "user_speaking",
+            "agent_overlaps_user",
+            [partial(self.send_action, "hard_interruption")],
+        )
+
+    def add_repeat_policy(self):
+        self.add_transition_callback(
+            "silence_after_agent",
+            "silence_after_agent",
+            [self.check_repeat_timer],
+        )
+        self.add_transition_callback(
+            "agent_speaking",
+            "silence_after_agent",
+            [partial(self.set_repeat_timer, 5)],
+        )
+        self.add_transition_callback(
+            "mutual_overlap",
+            "silence_after_agent",
+            [partial(self.set_repeat_timer, 5)],
+        )
+        self.add_transition_callback(
+            "agent_overlaps_user",
+            "silence_after_user",
+            [partial(self.set_repeat_timer, 5)],
+        )
+        self.add_transition_callback(
+            "user_overlaps_agent",
+            "silence_after_agent",
+            [partial(self.set_repeat_timer, 5)],
+        )
+
+    def get_n_audio_chunks(self, param_name, duration):
+        """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
+        (ie. to how many audio_chunk correspond self.bot_dur)
+
+        Returns:
+            int: the number of audio chunks corresponding to the duration of self.bot_dur.
+        """
+        if not getattr(self, param_name):
+            if len(self.current_input) == 0:
+                return None
+            first_iu = self.current_input[0]
+            self.input_framerate = first_iu.rate
+            self.nframes = first_iu.nframes
+            self.sample_width = first_iu.sample_width
+            # nb frames in each audio chunk
+            nb_frames_chunk = len(first_iu.payload) / 2
+            # duration of 1 audio chunk
+            duration_chunk = nb_frames_chunk / self.input_framerate
+            setattr(self, param_name, int(duration / duration_chunk))
+        return getattr(self, param_name)
+
+    def recognize(self, _n_audio_chunks=None, threshold=None, condition=None):
+        """Function that will calculate if the VAD consider that the user is talking of a long enough duration to predict a BOT.
+        Example :
+        if self.silence_threshold==0.75 (percentage) and self.bot_dur==0.4 (seconds),
+        It returns True if, across the frames corresponding to the last 400ms second of audio, more than 75% are containing speech.
+
+        Returns:
+            boolean : the user BOT prediction
+        """
+        if not _n_audio_chunks or len(self.current_input) < _n_audio_chunks:
+            return False
+        _n_audio_chunks = int(_n_audio_chunks)
+        speech_counter = sum(
+            1 for iu in self.current_input[-_n_audio_chunks:] if condition(iu)
+        )
+        if speech_counter >= int(threshold * _n_audio_chunks):
+            return True
+        return False
+
+    def recognize_user_BOT(self):
+        return self.recognize(
+            _n_audio_chunks=self.get_n_audio_chunks(
+                param_name="_n_bot_audio_chunks", duration=self.bot_dur
+            ),
+            threshold=self.silence_threshold,
+            condition=lambda iu: iu.va_user,
+        )
+
+    def recognize_user_EOT(self):
+        return self.recognize(
+            _n_audio_chunks=self.get_n_audio_chunks(
+                param_name="_n_sil_audio_chunks", duration=self.silence_dur
+            ),
+            threshold=self.silence_threshold,
+            condition=lambda iu: not iu.va_user,
+        )
+
+    def recognize_agent_BOT(self):
+        return self.current_input[-1].va_agent
+
+    def recognize_agent_EOT(self):
+        return not self.current_input[-1].va_agent
+
+    def send_event(self, event):
+        """Send message that describes the event that triggered the transition
+
+        Args:
+            event (str): event description
+        """
+        self.terminal_logger.info(f"event = {event}", debug=True, turn_id=self.turn_id)
+        # output_iu = self.create_iu(event=event, turn_id=self.turn_id)
+        output_iu = DMIU(
+            creator=self,
+            iuid=f"{hash(self)}:{self.iu_counter}",
+            previous_iu=self._previous_iu,
+            event=event,
+            turn_id=self.turn_id,
+        )
+        um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
+        self.append(um)
+
+    def send_action(self, action):
+        """Send message that describes the actions the event implies to perform
+
+        Args:
+            action (str): action description
+        """
+        self.terminal_logger.info(
+            f"action = {action}", debug=True, turn_id=self.turn_id
+        )
+        self.file_logger.info(action)
+        # output_iu = self.create_iu(action=action, turn_id=self.turn_id)
+        output_iu = DMIU(
+            creator=self,
+            iuid=f"{hash(self)}:{self.iu_counter}",
+            previous_iu=self._previous_iu,
+            action=action,
+            turn_id=self.turn_id,
+        )
+        um = retico_core.UpdateMessage.from_iu(output_iu, retico_core.UpdateType.ADD)
+        self.append(um)
+
+    def send_audio_ius(self, final=False):
+        um = retico_core.UpdateMessage()
+        ius = []
+
+        if self.incrementality_level == "audio_iu":
+            new_ius = self.current_input[self.buffer_pointer :]
+            self.buffer_pointer = len(self.current_input)
+            for iu in new_ius:
+                output_iu = DMIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=self.current_input[-1],
+                    raw_audio=iu.payload,
+                    nframes=self.nframes,
+                    rate=self.input_framerate,
+                    sample_width=self.sample_width,
+                    turn_id=self.turn_id,
+                    action="process_audio",
+                )
+                ius.append((output_iu, retico_core.UpdateType.ADD))
+
+        if final:
+            for iu in self.current_input:
+                output_iu = DMIU(
+                    creator=self,
+                    iuid=f"{hash(self)}:{self.iu_counter}",
+                    previous_iu=self._previous_iu,
+                    grounded_in=self.current_input[-1],
+                    raw_audio=iu.payload,
+                    nframes=self.nframes,
+                    rate=self.input_framerate,
+                    sample_width=self.sample_width,
+                    turn_id=self.turn_id,
+                    action="process_audio",
+                )
+                ius.append((output_iu, retico_core.UpdateType.COMMIT))
+            self.current_input = []
+            self.buffer_pointer = 0
+
+        um.add_ius(ius)
+        self.append(um)
+
+    def update_current_input(self):
+        self.current_input = self.current_input[
+            -int(
+                self.get_n_audio_chunks(
+                    param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                )
+            ) :
+        ]
+
+    def increment_turn_id(self):
+        self.turn_id += 1
+
+    def set_turn_beginning_timer(self):
+        self.turn_beginning_timer = time.time()
+
+    def check_turn_beginning_timer(self, duration_threshold=0.5):
+        # if it is the beginning of the turn, set_overlap_timer
+        if self.turn_beginning_timer + duration_threshold >= time.time():
+            self.terminal_logger.info(
+                "it is the beginning of the turn, set_overlap_timer",
+                debug=True,
+            )
+            self.set_overlap_timer()
+            self.turn_beginning_timer = -float("inf")
+
+    def set_overlap_timer(self):
+        self.overlap_timer = time.time()
+
+    def check_overlap_timer(self, duration_threshold=1, source_state=None):
+        self.terminal_logger.info(
+            f"overlap duration = {time.time() - self.overlap_timer}",
+            debug=True,
+        )
+        if self.overlap_timer + duration_threshold >= time.time():
+            self.terminal_logger.info(
+                "overlap failed because both user and agent stopped talking, send repeat action to speaker module:",
+                debug=True,
+            )
+            self.send_action("continue")
+            self.overlap_timer = -float("inf")
+        else:
+            if source_state == "user_speaking":
+                self.dialogue_history.reset_system_prompt()
+                self.send_event(event="user_EOT")
+                self.send_action(action="stop_turn_id")
+                self.send_action(action="start_answer_generation")
+                self.send_audio_ius(final=True)
+
+    def set_repeat_timer(self, offset=3):
+        self.repeat_timer = time.time() + offset
+
+    def reset_repeat_timer(self):
+        self.repeat_timer = time.time()
+
+    def check_repeat_timer(self):
+        if self.repeat_timer < time.time():
+            self.increment_turn_id()
+            self.terminal_logger.info(
+                "repeat timer exceeded, send repeat action :",
+                debug=True,
+                turn_id=self.turn_id,
+            )
+
+            dh = self.dialogue_history.get_dialogue_history()
+            last_sentence = dh[-1]["text"]
+            repeat_system_prompt = (
+                "This is a spoken dialog scenario between a teacher and a 8 years old child student. \
+            The teacher is teaching mathematics to the child student. \
+            As the student is a child, the teacher needs to stay gentle all the time. \
+            You play the role of a teacher, and your last sentence '"
+                + last_sentence
+                + "' had no answer from the child. Please provide a next teacher sentence that would re-engage the child in the conversation. \
+            Here is the beginning of the conversation :"
+            )
+            previous_system_prompt = self.dialogue_history.change_system_prompt(
+                repeat_system_prompt
+            )
+            um = retico_core.UpdateMessage()
+            iu = SpeechRecognitionTurnIU(
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=None,
+                grounded_in=None,
+                predictions=["..."],
+                text="...",
+                stability=0.0,
+                confidence=0.99,
+                final=True,
+                turn_id=self.turn_id,
+            )
+            ius = [
+                (iu, retico_core.UpdateType.ADD),
+                (iu, retico_core.UpdateType.COMMIT),
+            ]
+            um.add_ius(ius)
+            self.append(um)
+            self.repeat_timer = float("inf")
 
 
 class VADTurnModule2(retico_core.AbstractModule):
