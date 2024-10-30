@@ -23,6 +23,7 @@ Outputs : TextAlignedAudioIU
 """
 
 import datetime
+import random
 import threading
 import time
 import numpy as np
@@ -31,7 +32,13 @@ from TTS.api import TTS
 import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU, DMIU
+from additional_IUs import (
+    BackchannelIU,
+    TurnTextIU,
+    VADTurnAudioIU,
+    TextAlignedAudioIU,
+    DMIU,
+)
 
 
 class TtsDmModule(retico_core.AbstractModule):
@@ -150,6 +157,16 @@ class TtsDmModule(retico_core.AbstractModule):
         self.current_turn_id = -1
 
         self.first_clause = True
+        self.backchannel = None
+
+        self.bc_text = [
+            "Yeah !",
+            "okay",
+            "alright",
+            "Yeah, okay.",
+            "uh",
+            "uh, okay",
+        ]
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
@@ -235,9 +252,9 @@ class TtsDmModule(retico_core.AbstractModule):
                         self.interrupted_turn = self.current_turn_id
                         self.first_clause = True
                         self.current_input = []
-                    if iu.action == "soft_interruption":
+                    elif iu.action == "soft_interruption":
                         self.file_logger.info("soft_interruption")
-                    if iu.action == "stop_turn_id":
+                    elif iu.action == "stop_turn_id":
                         self.terminal_logger.info(
                             "STOP TURN ID",
                             debug=True,
@@ -249,6 +266,9 @@ class TtsDmModule(retico_core.AbstractModule):
                             self.interrupted_turn = self.current_turn_id
                         self.first_clause = True
                         self.current_input = []
+                    elif iu.action == "back_channel":
+                        self.terminal_logger.info("TTS BC", debug=True)
+                        self.backchannel = self.bc_text[random.randint(0, 5)]
                     if iu.event == "user_BOT_same_turn":
                         self.interrupted_turn = None
                 elif ut == retico_core.UpdateType.REVOKE:
@@ -259,16 +279,13 @@ class TtsDmModule(retico_core.AbstractModule):
         if len(clause_ius) != 0:
             self.current_input.append(clause_ius)
 
-    def check_current_input(self):
-        clause_ius = self.current_input.pop(0)
-        return clause_ius[-1].final, clause_ius
-
     def _process_one_clause(self):
         while self._tts_thread_active:
             try:
                 time.sleep(0.02)
                 if len(self.current_input) != 0:
-                    end_of_turn, clause_ius = self.check_current_input()
+                    clause_ius = self.current_input.pop(0)
+                    end_of_turn = clause_ius[-1].final
                     um = retico_core.UpdateMessage()
                     if end_of_turn:
                         self.terminal_logger.info(
@@ -297,8 +314,48 @@ class TtsDmModule(retico_core.AbstractModule):
                         )
                         self.file_logger.info("send_clause")
                     self.append(um)
+                elif self.backchannel is not None:
+                    um = retico_core.UpdateMessage()
+                    output_ius = self.get_ius_backchannel()
+                    um.add_ius([(iu, retico_core.UpdateType.ADD) for iu in output_ius])
+                    self.append(um)
+                    self.terminal_logger.info("TTS BC send_backchannel", debug=True)
+                    self.file_logger.info("send_backchannel")
+                    self.backchannel = None
             except Exception as e:
                 log_exception(module=self, exception=e)
+
+    def get_ius_backchannel(self):
+        """function that creates a list of BackchannelIUs containing audio that are the transcription of the chosen 'self.backchannel' string.
+
+        Returns:
+            list[BackchannelIU]: list of BackchannelIUs, transcriptions of 'self.backchannel'.
+        """
+        new_audio, outputs = self.synthesize(self.backchannel)
+        outputs = outputs[0]
+        len_wav = len(outputs["wav"])
+
+        ius = []
+        i = 0
+        while i < len_wav:
+            chunk = outputs["wav"][i : i + self.chunk_size]
+            chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
+            if len(chunk) < self.chunk_size_bytes:
+                chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
+
+            i += self.chunk_size
+            iu = BackchannelIU(
+                creator=self,
+                iuid=f"{hash(self)}:{self.iu_counter}",
+                previous_iu=None,
+                grounded_in=None,
+                raw_audio=chunk,
+                rate=self.samplerate,
+                nframes=self.chunk_size,
+                sample_width=self.samplewidth,
+            )
+            ius.append(iu)
+        return ius
 
     def get_new_iu_buffer_from_clause_ius(self, clause_ius):
         """Function that aligns the TTS inputs and outputs.
@@ -337,8 +394,10 @@ class TtsDmModule(retico_core.AbstractModule):
         else:
             pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
 
+        # hard coded values for the TTS model found in CoquiTTS github repo or calculated
         SPACE_TOKEN_ID = 16
         NB_FRAME_PER_DURATION = 256
+
         self.file_logger.info("before_synthesize")
         new_audio, final_outputs = self.synthesize(current_text)
         self.file_logger.info("after_synthesize")
@@ -399,18 +458,6 @@ class TtsDmModule(retico_core.AbstractModule):
                 char_id = sum(len_words) - 1
 
                 i += self.chunk_size
-                # iu = self.create_iu(grounded_iu)
-                # iu.set_data(
-                #     audio=chunk,
-                #     chunk_size=self.chunk_size,
-                #     rate=self.samplerate,
-                #     sample_width=self.samplewidth,
-                #     grounded_word=temp_word,
-                #     word_id=word_id,
-                #     char_id=char_id,
-                #     turn_id=grounded_iu.turn_id,
-                #     clause_id=grounded_iu.clause_id,
-                # )
                 iu = self.create_iu(
                     grounded_in=grounded_iu,
                     audio=chunk,

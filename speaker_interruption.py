@@ -28,7 +28,13 @@ import pyaudio
 
 import retico_core
 import retico_core.abstract
-from additional_IUs import VADTurnAudioIU, TextAlignedAudioIU, DMIU, SpeakerAlignementIU
+from additional_IUs import (
+    BackchannelIU,
+    VADTurnAudioIU,
+    TextAlignedAudioIU,
+    DMIU,
+    SpeakerAlignementIU,
+)
 
 
 class SpeakerInterruptionModule(retico_core.AbstractModule):
@@ -66,11 +72,12 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             TextAlignedAudioIU,
             VADTurnAudioIU,
             DMIU,
+            BackchannelIU,
+            retico_core.audio.AudioIU,
         ]
 
     @staticmethod
     def output_iu():
-        # return TextAlignedAudioIU
         return SpeakerAlignementIU
 
     def __init__(
@@ -112,6 +119,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         self.soft_interrupted_iu = None
         self.interrupted_turn_iu_buffer = []
         self.frame_length = frame_length
+
+        self.backchannel_iu_buffer = []
 
     def process_update(self, update_message):
         """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L282
@@ -238,9 +247,8 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                             self.interrupted_turn_iu_buffer.append(iu)
                     else:
                         self.audio_iu_buffer.append(iu)
-
-            else:
-                raise TypeError("Unknown IU type " + type(iu))
+            elif isinstance(iu, BackchannelIU):
+                self.backchannel_iu_buffer.append(iu)
 
         return None
 
@@ -259,7 +267,10 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             (bytes, pyaudio type): the tuple containing the audio chunks (bytes)
             and the pyaudio type informing wether the stream should continue or stop.
         """
-        # time.sleep(self.frame_length)
+        if len(self.backchannel_iu_buffer) > 0:
+            iu = self.backchannel_iu_buffer.pop(0)
+            data = bytes(iu.raw_audio)
+            return (data, pyaudio.paContinue)
         if len(self.audio_iu_buffer) == 0:
             self.terminal_logger.info("output_silence")
             self.file_logger.info("output_silence")
