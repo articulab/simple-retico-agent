@@ -1307,9 +1307,9 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
                 case (True, True):
                     self.trigger("to_silence_after_user")
                 case (True, False):
-                    self.trigger("to_silence_after_user")
-                case (False, True):
                     self.trigger("to_agent_overlaps_user")
+                case (False, True):
+                    self.trigger("to_silence_after_user")
                 case (False, False):
                     self.trigger("to_" + source_state)
         elif source_state in ["silence_after_user", "silence_after_agent"]:
@@ -1512,6 +1512,10 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             "user_speaking",
             [self.check_backchannel],
         )
+
+    def check_backchannel(self):
+        if random.randint(1, 200) > 199:
+            self.send_action("back_channel")
 
     def get_n_audio_chunks(self, param_name, duration):
         """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
@@ -1756,10 +1760,6 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             um.add_ius(ius)
             self.append(um)
             self.repeat_timer = float("inf")
-
-    def check_backchannel(self):
-        if random.randint(1, 100) > 99:
-            self.send_action("back_channel")
 
 
 class VADTurnModule2(retico_core.AbstractModule):
