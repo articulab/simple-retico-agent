@@ -33,9 +33,7 @@ from retico_core.log_utils import (
     filter_value_not_in_list,
     filter_conditions,
     filter_cases,
-    plotting_run,
-    plotting_run_2,
-    plotting_run_3,
+    plot_once,
     configurate_plot,
 )
 
@@ -1071,7 +1069,7 @@ def main_DM():
 
     # configure plot
     configurate_plot(
-        plot_live=plot_live,
+        is_plot_live=plot_live,
         refreshing_time=1,
         plot_config=plot_config,
         module_order=module_order,
@@ -1187,7 +1185,7 @@ def main_DM():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_3(
+        plot_once(
             plot_config=plot_config,
             module_order=module_order,
         )

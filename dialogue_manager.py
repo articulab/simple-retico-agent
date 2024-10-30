@@ -1279,7 +1279,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
 
     def run_FSM(self):
         source_state = self.fsm.state
-        if source_state is "agent_speaking":
+        if source_state == "agent_speaking":
             match (self.recognize_agent_EOT(), self.recognize_user_BOT()):
                 case (True, True):
                     self.fsm.trigger("to_silence_after_agent")
@@ -1289,7 +1289,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
                     self.fsm.trigger("to_user_overlaps_agent")
                 case (False, False):
                     self.fsm.trigger("to_" + source_state)
-        elif source_state is "user_speaking":
+        elif source_state == "user_speaking":
             match (self.recognize_agent_BOT(), self.recognize_user_EOT()):
                 case (True, True):
                     self.fsm.trigger("to_silence_after_user")
