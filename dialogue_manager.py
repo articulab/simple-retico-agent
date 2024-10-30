@@ -643,7 +643,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def check_backchannel(self):
-        if random.randint(1, 500) > 499:
+        if random.randint(1, 200) > 199:
             self.send_action("back_channel")
 
     def get_n_audio_chunks(self, param_name, duration):

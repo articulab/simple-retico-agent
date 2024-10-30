@@ -7,7 +7,6 @@ import torch
 from ASR_DM import AsrDmModule
 from LLM_DM import LlmDmModule
 from TTS_DM import TtsDmModule
-from TTS_DM2 import TtsDmModule_2
 from dialogue_manager import (
     DialogueHistory,
     DialogueManagerModule,
@@ -1168,14 +1167,6 @@ def main_DM():
     # )
 
     tts = TtsDmModule(
-        language="en",
-        model=tts_model,
-        printing=printing,
-        frame_duration=tts_frame_length,
-        device=device,
-    )
-
-    tts = TtsDmModule_2(
         language="en",
         model=tts_model,
         printing=printing,

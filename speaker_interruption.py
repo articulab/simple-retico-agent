@@ -78,7 +78,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
 
     @staticmethod
     def output_iu():
-        # return TextAlignedAudioIU
         return SpeakerAlignementIU
 
     def __init__(
@@ -130,7 +129,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         """
         for iu, ut in update_message:
             if isinstance(iu, DMIU):
-                # self.terminal_logger.info("SPK DMIU", debug=True)
                 if ut == retico_core.UpdateType.ADD:
                     if iu.action == "continue":
                         self.terminal_logger.info("continue")
@@ -224,10 +222,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                         self.interrupted_iu = None
 
             elif isinstance(iu, TextAlignedAudioIU):
-                # self.terminal_logger.info(
-                #     "TTS IU received",
-                #     debug=True,
-                # )
                 if ut == retico_core.UpdateType.ADD:
                     if self.interrupted_iu is not None:
                         # if, after an interrupted turn, an IU from a new turn has been received
@@ -252,18 +246,9 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                         else:
                             self.interrupted_turn_iu_buffer.append(iu)
                     else:
-                        # self.terminal_logger.info(
-                        #     "TTS IU stored",
-                        #     debug=True,
-                        # )
                         self.audio_iu_buffer.append(iu)
             elif isinstance(iu, BackchannelIU):
-                self.terminal_logger.info("SPK BC", debug=True)
-                # self.audio_iu_buffer.append(iu)
                 self.backchannel_iu_buffer.append(iu)
-
-            # else:
-            #     raise TypeError("Unknown IU type " + str(type(iu)))
 
         return None
 
@@ -285,12 +270,7 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
         if len(self.backchannel_iu_buffer) > 0:
             iu = self.backchannel_iu_buffer.pop(0)
             data = bytes(iu.raw_audio)
-            # self.terminal_logger.info(
-            #     "BC IU played",
-            #     debug=True,
-            # )
             return (data, pyaudio.paContinue)
-        # time.sleep(self.frame_length)
         if len(self.audio_iu_buffer) == 0:
             self.terminal_logger.info("output_silence")
             self.file_logger.info("output_silence")
@@ -298,11 +278,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
             return (silence_bytes, pyaudio.paContinue)
 
         iu = self.audio_iu_buffer.pop(0)
-        # if isinstance(iu, retico_core.audio.AudioIU) and not isinstance(
-        #     iu, TextAlignedAudioIU
-        # ):
-        #     data = bytes(iu.raw_audio)
-        #     return (data, pyaudio.paContinue)
         # if it is the last IU from TTS for this agent turn, which corresponds to an agent EOT.
         if hasattr(iu, "final") and iu.final:
             self.terminal_logger.info("agent_EOT")
@@ -350,11 +325,6 @@ class SpeakerInterruptionModule(retico_core.AbstractModule):
                     output_iu, retico_core.UpdateType.ADD
                 )
                 self.append(um)
-
-            # self.terminal_logger.info(
-            #     "audio IU played",
-            #     debug=True,
-            # )
 
             self.terminal_logger.info("output_audio")
             self.file_logger.info("output_audio")

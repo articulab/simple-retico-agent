@@ -681,15 +681,6 @@ class LlamaCppMemoryIncrementalInterruptionModule(retico_core.AbstractModule):
         """
         # Construct UM and IU
         next_um = retico_core.UpdateMessage()
-        # if len(self.current_input) > 0:
-        #     output_iu = self.create_iu(self.current_input[-1])
-        # else:
-        #     output_iu = self.create_iu()
-        # output_iu.set_data(
-        #     text=payload,
-        #     turn_id=len(self.utterances),
-        #     clause_id=self.nb_clauses,
-        # )
         last_iu = None
         if len(self.current_input) > 0:
             last_iu = self.current_input[-1]

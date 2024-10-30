@@ -403,18 +403,6 @@ class CoquiTTSInterruptionModule(retico_core.AbstractModule):
                 char_id = sum(len_words) - 1
 
                 i += self.chunk_size
-                # iu = self.create_iu(grounded_iu)
-                # iu.set_data(
-                #     audio=chunk,
-                #     chunk_size=self.chunk_size,
-                #     rate=self.samplerate,
-                #     sample_width=self.samplewidth,
-                #     grounded_word=temp_word,
-                #     word_id=word_id,
-                #     char_id=char_id,
-                #     turn_id=grounded_iu.turn_id,
-                #     clause_id=grounded_iu.clause_id,
-                # )
                 iu = self.create_iu(
                     grounded_in=grounded_iu,
                     audio=chunk,
