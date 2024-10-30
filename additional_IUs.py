@@ -6,6 +6,18 @@ import torch
 import retico_core
 
 
+class BackchannelIU(retico_core.audio.AudioIU):
+
+    @staticmethod
+    def type():
+        return "Backchannel IU"
+
+    def __init__(self, **kwargs):
+        super().__init__(
+            **kwargs,
+        )
+
+
 class DMIU(retico_core.audio.AudioIU):
 
     @staticmethod

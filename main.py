@@ -7,7 +7,13 @@ import torch
 from ASR_DM import AsrDmModule
 from LLM_DM import LlmDmModule
 from TTS_DM import TtsDmModule
-from dialogue_manager import DialogueHistory, DialogueManagerModule, VADModule
+from TTS_DM2 import TtsDmModule_2
+from dialogue_manager import (
+    DialogueHistory,
+    DialogueManagerModule,
+    DialogueManagerModule_2,
+    VADModule,
+)
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
@@ -33,10 +39,8 @@ from retico_core.log_utils import (
     filter_value_not_in_list,
     filter_conditions,
     filter_cases,
-    plotting_run,
-    plotting_run_2,
-    plotting_run_3,
     configurate_plot,
+    plot_once,
 )
 
 
@@ -831,34 +835,45 @@ def main_demo_with_plot():
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
     plot_live = True
+    module_order = [
+        "Microphone",
+        "VAD",
+        "DialogueManager",
+        "WhisperASR",
+        "LLM",
+        "TTS",
+        "Speaker",
+    ]
 
-    # filters
-    # filters = [
-    #     partial(
-    #         filter_cases,
-    #         cases=[
-    #             [("debug", [True]), ("module", ["WhisperASR Module"])],
-    #             [("level", ["warning", "error"])],
-    #         ],
-    #         # cases=[
-    #         #     [("debug", [True])],
-    #         #     [("level", ["warning", "error"])],
-    #         # ],
-    #     )
-    # ]
+    filters = [
+        partial(
+            filter_cases,
+            cases=[
+                [("debug", [True])],
+                # [("debug", [True]), ("module", ["DialogueManager Module"])],
+                [("level", ["warning", "error"])],
+            ],
+            # cases=[
+            #     [("module", ["DialogueManager Module"])],
+            #     [("level", ["warning", "error"])],
+            # ],
+        )
+    ]
     # filters = []
     # configurate logger
-    # terminal_logger, _ = retico_core.log_utils.configurate_logger(
-    #     log_folder, filters=filters
-    # )
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(
+        log_folder, filters=filters
+    )
 
     # configurate logger
-    terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
+    # terminal_logger, _ = retico_core.log_utils.configurate_logger(log_folder)
 
+    # configure plot
     configurate_plot(
-        plot_live=plot_live,
+        is_plot_live=plot_live,
         refreshing_time=1,
         plot_config=plot_config,
+        module_order=module_order,
     )
 
     # create modules
@@ -925,7 +940,9 @@ def main_demo_with_plot():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_3(plot_config=plot_config)
+        plot_once(
+            plot_config=plot_config,
+        )
 
 
 from retico_amq import utils
@@ -1071,7 +1088,7 @@ def main_DM():
 
     # configure plot
     configurate_plot(
-        plot_live=plot_live,
+        is_plot_live=plot_live,
         refreshing_time=1,
         plot_config=plot_config,
         module_order=module_order,
@@ -1099,9 +1116,15 @@ def main_DM():
         input_framerate=rate,
         frame_length=frame_length,
     )
+    # dm = DialogueManagerModule_2(
+    #     dialogue_history=dialogue_history,
+    #     input_framerate=rate,
+    #     frame_length=frame_length,
+    # )
     dm.add_repeat_policy()
     dm.add_soft_interruption_policy()
     dm.add_continue_policy()
+    dm.add_backchannel_policy()
 
     # asr = WhisperASRInterruptionModule(
     #     device=device,
@@ -1152,6 +1175,14 @@ def main_DM():
         device=device,
     )
 
+    tts = TtsDmModule_2(
+        language="en",
+        model=tts_model,
+        printing=printing,
+        frame_duration=tts_frame_length,
+        device=device,
+    )
+
     speaker = SpeakerInterruptionModule(
         rate=tts_model_samplerate,
     )
@@ -1187,7 +1218,7 @@ def main_DM():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plotting_run_3(
+        plot_once(
             plot_config=plot_config,
             module_order=module_order,
         )

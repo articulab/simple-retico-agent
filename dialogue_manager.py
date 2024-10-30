@@ -39,7 +39,9 @@ Outputs : VADTurnAudioIU
 from collections.abc import Callable
 from functools import partial
 import json
+import random
 import time
+import numpy as np
 import pydub
 import webrtcvad
 
@@ -632,6 +634,17 @@ class DialogueManagerModule(retico_core.AbstractModule):
             "silence_after_agent",
             partial(self.set_repeat_timer, 5),
         )
+
+    def add_backchannel_policy(self):
+        self.add_policy(
+            "user_speaking",
+            "user_speaking",
+            self.check_backchannel,
+        )
+
+    def check_backchannel(self):
+        if random.randint(1, 500) > 499:
+            self.send_action("back_channel")
 
     def get_n_audio_chunks(self, param_name, duration):
         """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
@@ -1278,37 +1291,37 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
         )
 
     def run_FSM(self):
-        source_state = self.fsm.state
-        if source_state is "agent_speaking":
+        source_state = self.state
+        if source_state == "agent_speaking":
             match (self.recognize_agent_EOT(), self.recognize_user_BOT()):
                 case (True, True):
-                    self.fsm.trigger("to_silence_after_agent")
+                    self.trigger("to_silence_after_agent")
                 case (True, False):
-                    self.fsm.trigger("to_silence_after_agent")
+                    self.trigger("to_silence_after_agent")
                 case (False, True):
-                    self.fsm.trigger("to_user_overlaps_agent")
+                    self.trigger("to_user_overlaps_agent")
                 case (False, False):
-                    self.fsm.trigger("to_" + source_state)
-        elif source_state is "user_speaking":
+                    self.trigger("to_" + source_state)
+        elif source_state == "user_speaking":
             match (self.recognize_agent_BOT(), self.recognize_user_EOT()):
                 case (True, True):
-                    self.fsm.trigger("to_silence_after_user")
+                    self.trigger("to_silence_after_user")
                 case (True, False):
-                    self.fsm.trigger("to_silence_after_user")
+                    self.trigger("to_silence_after_user")
                 case (False, True):
-                    self.fsm.trigger("to_agent_overlaps_user")
+                    self.trigger("to_agent_overlaps_user")
                 case (False, False):
-                    self.fsm.trigger("to_" + source_state)
+                    self.trigger("to_" + source_state)
         elif source_state in ["silence_after_user", "silence_after_agent"]:
             match (self.recognize_agent_BOT(), self.recognize_user_BOT()):
                 case (True, True):
-                    self.fsm.trigger("to_mutual_overlap")
+                    self.trigger("to_mutual_overlap")
                 case (True, False):
-                    self.fsm.trigger("to_agent_speaking")
+                    self.trigger("to_agent_speaking")
                 case (False, True):
-                    self.fsm.trigger("to_user_speaking")
+                    self.trigger("to_user_speaking")
                 case (False, False):
-                    self.fsm.trigger("to_" + source_state)
+                    self.trigger("to_" + source_state)
         elif source_state in [
             "user_overlaps_agent",
             "agent_overlaps_user",
@@ -1316,13 +1329,13 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
         ]:
             match (self.recognize_agent_EOT(), self.recognize_user_EOT()):
                 case (True, True):
-                    self.fsm.trigger("to_silence_after_agent")
+                    self.trigger("to_silence_after_agent")
                 case (True, False):
-                    self.fsm.trigger("to_agent_speaking")
+                    self.trigger("to_agent_speaking")
                 case (False, True):
-                    self.fsm.trigger("to_user_speaking")
+                    self.trigger("to_user_speaking")
                 case (False, False):
-                    self.fsm.trigger("to_" + source_state)
+                    self.trigger("to_" + source_state)
 
     def log_transi(self, source, dest):
         self.terminal_logger.info(
@@ -1390,9 +1403,9 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
         )
 
     def add_continue_policy(self):
-        self.fsm.get_transitions(
-            "run", source="user_speaking", dest="silence_after_user"
-        )[0].after = []
+        self.fsm.get_transitions(source="user_speaking", dest="silence_after_user")[
+            0
+        ].after = []
         self.add_transition_callback(
             "silence_after_user",
             "mutual_overlap",
@@ -1491,6 +1504,13 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             "user_overlaps_agent",
             "silence_after_agent",
             [partial(self.set_repeat_timer, 5)],
+        )
+
+    def add_backchannel_policy(self):
+        self.add_transition_callback(
+            "user_speaking",
+            "user_speaking",
+            [self.check_backchannel],
         )
 
     def get_n_audio_chunks(self, param_name, duration):
@@ -1736,6 +1756,10 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             um.add_ius(ius)
             self.append(um)
             self.repeat_timer = float("inf")
+
+    def check_backchannel(self):
+        if random.randint(1, 100) > 99:
+            self.send_action("back_channel")
 
 
 class VADTurnModule2(retico_core.AbstractModule):

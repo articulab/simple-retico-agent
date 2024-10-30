@@ -31,16 +31,10 @@ from TTS.api import TTS
 import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import (
-    BackchannelIU,
-    TurnTextIU,
-    VADTurnAudioIU,
-    TextAlignedAudioIU,
-    DMIU,
-)
+from additional_IUs import TurnTextIU, VADTurnAudioIU, TextAlignedAudioIU, DMIU
 
 
-class TtsDmModule(retico_core.AbstractModule):
+class TtsDmModule_2(retico_core.AbstractModule):
     """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
     audio), and handles user interruption.
 
@@ -82,7 +76,6 @@ class TtsDmModule(retico_core.AbstractModule):
     @staticmethod
     def output_iu():
         return TextAlignedAudioIU
-        # return retico_core.audio.AudioIU
 
     LANGUAGE_MAPPING = {
         "en": {
@@ -157,7 +150,6 @@ class TtsDmModule(retico_core.AbstractModule):
         self.current_turn_id = -1
 
         self.first_clause = True
-        self.back_channel_buffer = []
 
     def synthesize(self, text):
         """Takes the given text and returns the synthesized speech as 22050 Hz
@@ -243,9 +235,9 @@ class TtsDmModule(retico_core.AbstractModule):
                         self.interrupted_turn = self.current_turn_id
                         self.first_clause = True
                         self.current_input = []
-                    elif iu.action == "soft_interruption":
+                    if iu.action == "soft_interruption":
                         self.file_logger.info("soft_interruption")
-                    elif iu.action == "stop_turn_id":
+                    if iu.action == "stop_turn_id":
                         self.terminal_logger.info(
                             "STOP TURN ID",
                             debug=True,
@@ -257,16 +249,6 @@ class TtsDmModule(retico_core.AbstractModule):
                             self.interrupted_turn = self.current_turn_id
                         self.first_clause = True
                         self.current_input = []
-                    elif iu.action == "back_channel":
-                        self.terminal_logger.info("TTS BC", debug=True)
-                        self.back_channel_buffer = [
-                            TurnTextIU(
-                                creator=self,
-                                text="Yeah !",
-                                turn_id=-1,
-                                grounded_word="",
-                            )
-                        ]
                     if iu.event == "user_BOT_same_turn":
                         self.interrupted_turn = None
                 elif ut == retico_core.UpdateType.REVOKE:
@@ -275,7 +257,6 @@ class TtsDmModule(retico_core.AbstractModule):
                     continue
 
         if len(clause_ius) != 0:
-            # self.terminal_logger.info("TTS CLAUSE APPEND", debug=True)
             self.current_input.append(clause_ius)
 
     def check_current_input(self):
@@ -287,7 +268,6 @@ class TtsDmModule(retico_core.AbstractModule):
             try:
                 time.sleep(0.02)
                 if len(self.current_input) != 0:
-                    # self.terminal_logger.info("TTS CLAUSE GENE", debug=True)
                     end_of_turn, clause_ius = self.check_current_input()
                     um = retico_core.UpdateMessage()
                     if end_of_turn:
@@ -316,28 +296,7 @@ class TtsDmModule(retico_core.AbstractModule):
                             [(iu, retico_core.UpdateType.ADD) for iu in output_ius]
                         )
                         self.file_logger.info("send_clause")
-                        # self.terminal_logger.info("send_clause", debug=True)
                     self.append(um)
-                elif len(self.back_channel_buffer) != 0:
-                    um = retico_core.UpdateMessage()
-                    new_audio, final_outputs = self.synthesize(
-                        self.back_channel_buffer[0].text
-                    )
-                    iu = BackchannelIU(
-                        creator=self,
-                        iuid=f"{hash(self)}:{self.iu_counter}",
-                        previous_iu=None,
-                        grounded_in=None,
-                        raw_audio=new_audio,
-                        rate=self.samplerate,
-                        nframes=self.chunk_size,
-                        sample_width=self.samplewidth,
-                    )
-                    um.add_iu(iu, retico_core.UpdateType.ADD)
-                    self.append(um)
-                    self.terminal_logger.info("TTS BC send_backchannel", debug=True)
-                    self.file_logger.info("send_backchannel")
-                    self.back_channel_buffer = []
             except Exception as e:
                 log_exception(module=self, exception=e)
 
