@@ -90,11 +90,11 @@ class TtsDmModule(retico_core.AbstractModule):
             "vits": "tts_models/en/ljspeech/vits",
             "vits_neon": "tts_models/en/ljspeech/vits--neon",
             # "fast_pitch": "tts_models/en/ljspeech/fast_pitch", # bug sometimes
-            "vits_vctk": "tts_models/en/vctk/vits",
         },
         "multi": {
             "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2",  # bugs
             "your_tts": "tts_models/multilingual/multi-dataset/your_tts",
+            "vits_vctk": "tts_models/en/vctk/vits",
         },
     }
 
@@ -158,6 +158,7 @@ class TtsDmModule(retico_core.AbstractModule):
 
         self.first_clause = True
         self.backchannel = None
+        self.space_token = None
 
         self.bc_text = [
             "Yeah !",
@@ -181,7 +182,6 @@ class TtsDmModule(retico_core.AbstractModule):
 
         final_outputs = self.model.tts(
             text=text,
-            speaker="p225",
             return_extra_outputs=True,
             split_sentences=False,
             verbose=self.printing,
@@ -192,6 +192,7 @@ class TtsDmModule(retico_core.AbstractModule):
         #     final_outputs = self.model.tts(
         #         text=text,
         #         language=self.language,
+        #         speaker="p225",
         #         speaker_wav=self.speaker_wav,
         #         # speaker="Ana Florence",
         #     )
@@ -395,8 +396,10 @@ class TtsDmModule(retico_core.AbstractModule):
             pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
 
         # hard coded values for the TTS model found in CoquiTTS github repo or calculated
-        SPACE_TOKEN_ID = 16
-        NB_FRAME_PER_DURATION = 256
+        # SPACE_TOKEN_ID = 16
+        # NB_FRAME_PER_DURATION = 256
+        SPACE_TOKEN_ID = self.space_token
+        NB_FRAME_PER_DURATION = 512
 
         self.file_logger.info("before_synthesize")
         new_audio, final_outputs = self.synthesize(current_text)
@@ -512,6 +515,7 @@ class TtsDmModule(retico_core.AbstractModule):
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
+        self.space_token = self.model.synthesizer.tts_model.tokenizer.encode(" ")[0]
 
     def prepare_run(self):
         """
