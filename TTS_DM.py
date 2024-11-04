@@ -369,31 +369,54 @@ class TtsDmModule(retico_core.AbstractModule):
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
-        pre_pro_words = []
-        pre_pro_words_distinct = []
-        try:
-            for i, w in enumerate(words):
-                if w[0] == " ":
-                    pre_pro_words.append(i - 1)
-                    if len(pre_pro_words) >= 2:
-                        pre_pro_words_distinct.append(
-                            words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
-                        )
-                    else:
-                        pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
-            pre_pro_words.pop(0)
-            pre_pro_words.append(len(words) - 1)
-            pre_pro_words_distinct.pop(0)
-        except IndexError as e:
-            log_exception(self, e)
-            raise IndexError from e
+        self.terminal_logger.info(
+            "TTS get iu clause", debug=True, current_text=current_text, words=words
+        )
 
-        if len(pre_pro_words) >= 2:
-            pre_pro_words_distinct.append(
-                words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
-            )
+        # pre_pro_words = []
+        # pre_pro_words_distinct = []
+        # try:
+        #     for i, w in enumerate(words):
+        #         if w[0] == " ":
+        #             pre_pro_words.append(i - 1)
+        #             if len(pre_pro_words) >= 2:
+        #                 pre_pro_words_distinct.append(
+        #                     words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+        #                 )
+        #             else:
+        #                 pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+        #     self.terminal_logger.info(pre_pro_words, debug=True)
+        #     self.terminal_logger.info(pre_pro_words_distinct, debug=True)
+        #     pre_pro_words.pop(0)
+        #     pre_pro_words_distinct.pop(0)
+        #     pre_pro_words.append(len(words) - 1)
+        # except IndexError as e:
+        #     log_exception(self, e)
+        #     raise IndexError from e
+
+        # self.terminal_logger.info(pre_pro_words, debug=True)
+        # self.terminal_logger.info(pre_pro_words_distinct, debug=True)
+
+        # if len(pre_pro_words) >= 2:
+        #     pre_pro_words_distinct.append(
+        #         words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+        #     )
+        # else:
+        #     pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+
+        npw = np.array(words)
+        non_space_words = np.array([i for i, w in enumerate(npw) if w[0] != " "])
+        pre_pro_words = list(np.delete(np.arange(len(npw)), non_space_words - 1))
+        if len(pre_pro_words) == 0:
+            pre_pro_words_distinct = []
         else:
-            pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+            pre_pro_words_distinct = [words[0 : pre_pro_words[0] + 1]] + [
+                words[x + 1 : pre_pro_words[i + 1] + 1]
+                for i, x in enumerate(pre_pro_words[:-1])
+            ]
+
+        self.terminal_logger.info(pre_pro_words, debug=True)
+        self.terminal_logger.info(pre_pro_words_distinct, debug=True)
 
         # hard coded values for the TTS model found in CoquiTTS github repo or calculated
         # SPACE_TOKEN_ID = 16
@@ -446,7 +469,7 @@ class TtsDmModule(retico_core.AbstractModule):
                 chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
                 ## TODO : change that silence padding: padding with silence will slow down the speaker a lot
                 word_id = pre_pro_words[-1]
-                if len(chunk) < self.chunk_size_bytes:
+                if len(chunk) <= self.chunk_size_bytes:
                     chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
                 else:
                     while i + self.chunk_size >= cumsum_wav_words_chunk_len[j]:
