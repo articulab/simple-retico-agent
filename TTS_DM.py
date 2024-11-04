@@ -90,11 +90,11 @@ class TtsDmModule(retico_core.AbstractModule):
             "vits": "tts_models/en/ljspeech/vits",
             "vits_neon": "tts_models/en/ljspeech/vits--neon",
             # "fast_pitch": "tts_models/en/ljspeech/fast_pitch", # bug sometimes
-            "vits_vctk": "tts_models/en/vctk/vits",
         },
         "multi": {
             "xtts_v2": "tts_models/multilingual/multi-dataset/xtts_v2",  # bugs
             "your_tts": "tts_models/multilingual/multi-dataset/your_tts",
+            "vits_vctk": "tts_models/en/vctk/vits",
         },
     }
 
@@ -158,6 +158,7 @@ class TtsDmModule(retico_core.AbstractModule):
 
         self.first_clause = True
         self.backchannel = None
+        self.space_token = None
 
         self.bc_text = [
             "Yeah !",
@@ -181,7 +182,6 @@ class TtsDmModule(retico_core.AbstractModule):
 
         final_outputs = self.model.tts(
             text=text,
-            speaker="p225",
             return_extra_outputs=True,
             split_sentences=False,
             verbose=self.printing,
@@ -192,6 +192,7 @@ class TtsDmModule(retico_core.AbstractModule):
         #     final_outputs = self.model.tts(
         #         text=text,
         #         language=self.language,
+        #         speaker="p225",
         #         speaker_wav=self.speaker_wav,
         #         # speaker="Ana Florence",
         #     )
@@ -368,35 +369,60 @@ class TtsDmModule(retico_core.AbstractModule):
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
-        pre_pro_words = []
-        pre_pro_words_distinct = []
-        try:
-            for i, w in enumerate(words):
-                if w[0] == " ":
-                    pre_pro_words.append(i - 1)
-                    if len(pre_pro_words) >= 2:
-                        pre_pro_words_distinct.append(
-                            words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
-                        )
-                    else:
-                        pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
-            pre_pro_words.pop(0)
-            pre_pro_words.append(len(words) - 1)
-            pre_pro_words_distinct.pop(0)
-        except IndexError as e:
-            log_exception(self, e)
-            raise IndexError from e
+        self.terminal_logger.info(
+            "TTS get iu clause", debug=True, current_text=current_text, words=words
+        )
 
-        if len(pre_pro_words) >= 2:
-            pre_pro_words_distinct.append(
-                words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
-            )
+        # pre_pro_words = []
+        # pre_pro_words_distinct = []
+        # try:
+        #     for i, w in enumerate(words):
+        #         if w[0] == " ":
+        #             pre_pro_words.append(i - 1)
+        #             if len(pre_pro_words) >= 2:
+        #                 pre_pro_words_distinct.append(
+        #                     words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+        #                 )
+        #             else:
+        #                 pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+        #     self.terminal_logger.info(pre_pro_words, debug=True)
+        #     self.terminal_logger.info(pre_pro_words_distinct, debug=True)
+        #     pre_pro_words.pop(0)
+        #     pre_pro_words_distinct.pop(0)
+        #     pre_pro_words.append(len(words) - 1)
+        # except IndexError as e:
+        #     log_exception(self, e)
+        #     raise IndexError from e
+
+        # self.terminal_logger.info(pre_pro_words, debug=True)
+        # self.terminal_logger.info(pre_pro_words_distinct, debug=True)
+
+        # if len(pre_pro_words) >= 2:
+        #     pre_pro_words_distinct.append(
+        #         words[pre_pro_words[-2] + 1 : pre_pro_words[-1] + 1]
+        #     )
+        # else:
+        #     pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+
+        npw = np.array(words)
+        non_space_words = np.array([i for i, w in enumerate(npw) if w[0] != " "])
+        pre_pro_words = list(np.delete(np.arange(len(npw)), non_space_words - 1))
+        if len(pre_pro_words) == 0:
+            pre_pro_words_distinct = []
         else:
-            pre_pro_words_distinct.append(words[: pre_pro_words[-1] + 1])
+            pre_pro_words_distinct = [words[0 : pre_pro_words[0] + 1]] + [
+                words[x + 1 : pre_pro_words[i + 1] + 1]
+                for i, x in enumerate(pre_pro_words[:-1])
+            ]
+
+        self.terminal_logger.info(pre_pro_words, debug=True)
+        self.terminal_logger.info(pre_pro_words_distinct, debug=True)
 
         # hard coded values for the TTS model found in CoquiTTS github repo or calculated
-        SPACE_TOKEN_ID = 16
-        NB_FRAME_PER_DURATION = 256
+        # SPACE_TOKEN_ID = 16
+        # NB_FRAME_PER_DURATION = 256
+        SPACE_TOKEN_ID = self.space_token
+        NB_FRAME_PER_DURATION = 512
 
         self.file_logger.info("before_synthesize")
         new_audio, final_outputs = self.synthesize(current_text)
@@ -443,7 +469,7 @@ class TtsDmModule(retico_core.AbstractModule):
                 chunk = (np.array(chunk) * 32767).astype(np.int16).tobytes()
                 ## TODO : change that silence padding: padding with silence will slow down the speaker a lot
                 word_id = pre_pro_words[-1]
-                if len(chunk) < self.chunk_size_bytes:
+                if len(chunk) <= self.chunk_size_bytes:
                     chunk = chunk + b"\x00" * (self.chunk_size_bytes - len(chunk))
                 else:
                     while i + self.chunk_size >= cumsum_wav_words_chunk_len[j]:
@@ -512,6 +538,7 @@ class TtsDmModule(retico_core.AbstractModule):
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
+        self.space_token = self.model.synthesizer.tts_model.tokenizer.encode(" ")[0]
 
     def prepare_run(self):
         """

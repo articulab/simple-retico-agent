@@ -1039,16 +1039,19 @@ def main_DM():
     log_folder = "logs/run"
     frame_length = 0.02
     tts_frame_length = 0.2
+    # tts_frame_length = 0.02
     rate = 16000
-    tts_model_samplerate = 22050
-    tts_model = "vits_vctk"
+    # tts_model_samplerate = 22050
+    # tts_model = "vits_vctk"
+    tts_model_samplerate = 48000
+    tts_model = "jenny"
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
     system_prompt = "This is a spoken dialog scenario between a teacher and a 8 years old child student.\
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
     plot_config = "plot_config_3.json"
-    plot_live = False
+    plot_live = True
     module_order = [
         "Microphone",
         "VAD",
@@ -1091,6 +1094,7 @@ def main_DM():
         refreshing_time=1,
         plot_config=plot_config,
         module_order=module_order,
+        window_dur=30,
     )
 
     dialogue_history = DialogueHistory(
