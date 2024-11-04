@@ -59,6 +59,9 @@ from transitions import Machine
 
 
 class DialogueHistory:
+    """The dialogue history is where all the sentences from the previvous agent and user turns will be stored.
+    The LLM, and/or DM will retrieve the history to build the prompt and use it to generate the next agent turn.
+    """
 
     def __init__(
         self,
@@ -86,21 +89,15 @@ class DialogueHistory:
 
     # Formatters
 
-    def format(self, config_id, text):
-        return (
-            self.prompt_format_config[config_id]["pre"]
-            + self.format_role(config_id)
-            + text
-            + self.prompt_format_config[config_id]["suf"]
-        )
-
-    def format_system_prompt(self, system_prompt):
-        return self.format(config_id="system_prompt", text=system_prompt)
-
-    def format_sentence(self, utterance):
-        return self.format(config_id=utterance["speaker"], text=utterance["text"])
-
     def format_role(self, config_id):
+        """function that format a sentence by adding the role and role separation.
+
+        Args:
+            config_id (str): the id to find the corresponding prefix, suffix, etc in the config.
+
+        Returns:
+            str: the formatted sentence.
+        """
         if "role" in self.prompt_format_config[config_id]:
             return (
                 self.prompt_format_config[config_id]["role"]
@@ -111,9 +108,43 @@ class DialogueHistory:
         else:
             return ""
 
+    def format(self, config_id, text):
+        """basic function to format a text with regards to the prompt_format_config.
+        Format meaning to add prefix, sufix, role, etc to the text (for agent or user sentence, system prompt, etc).
+
+        Args:
+            config_id (str): the id to find the corresponding prefix, suffix, etc in the config.
+            text (str): the text to format with the prompt_format_config.
+
+        Returns:
+            str: the formatted text.
+        """
+        return (
+            self.prompt_format_config[config_id]["pre"]
+            + self.format_role(config_id)
+            + text
+            + self.prompt_format_config[config_id]["suf"]
+        )
+
+    def format_sentence(self, utterance):
+        """function that formats utterance, to whether an agent or a user sentence.
+
+        Args:
+            utterance (dict[str]): a dictionary describing the utterance to format (speaker, and text).
+
+        Returns:
+            str: the formatted sentence.
+        """
+        return self.format(config_id=utterance["speaker"], text=utterance["text"])
+
     # Setters
 
     def append_utterance(self, utterance):
+        """Add the utterance to the dialogue history.
+
+        Args:
+            utterance (dict): a dict containing the speaker and the turn's transcription (text of the sentences).
+        """
         assert set(("turn_id", "speaker", "text")) <= set(utterance)
         self.terminal_logger.info(
             "DH append utterance",
@@ -125,25 +156,42 @@ class DialogueHistory:
         self.dialogue_history.append(utterance)
 
     def reset_system_prompt(self):
+        """set the system prompt to initial_system_prompt, which is the prompt given at the DialogueHistory initialization."""
         self.change_system_prompt(self.initial_system_prompt)
 
     def change_system_prompt(self, system_prompt):
+        """function that changes the DialogueHistory current system prompt.
+        The system prompt contains the LLM instruction and the scenario of the interaction.
+
+        Args:
+            system_prompt (str): the new system_prompt.
+
+        Returns:
+            str: the previous system_prompt.
+        """
         previous_system_prompt = self.current_system_prompt
         self.current_system_prompt = system_prompt
         self.dialogue_history[0]["text"] = system_prompt
         return previous_system_prompt
 
     def prepare_dialogue_history(self, fun_tokenize):
-        """Calculate if the current dialogue history is bigger than the size threshold (short_memory_context_size).
-        If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the threshold.
+        """Calculate if the current dialogue history is bigger than the LLM's context size (in nb of token).
+        If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the context size.
+        The self.cpt_0 class argument is used to store the id of the older turn of last prepare_dialogue_history call (to start back the while loop at this id).
+
+        Args:
+            fun_tokenize (Callable[]): the tokenize function given by the LLM, so that the DialogueHistory can calculate the right dialogue_history size.
+
+        Returns:
+            (text, int): the prompt to give to the LLM (containing the formatted system prompt, and a maximum of formatted previous sentences), and it's size in nb of token.
         """
 
-        prompt = self.get_prompt_cpt(self.cpt_0)
+        prompt = self.get_prompt(self.cpt_0)
         prompt_tokens = fun_tokenize(bytes(prompt, "utf-8"))
         nb_tokens = len(prompt_tokens)
         while nb_tokens > self.context_size:
             self.cpt_0 += 1
-            prompt = self.get_prompt_cpt(self.cpt_0)
+            prompt = self.get_prompt(self.cpt_0)
             prompt_tokens = fun_tokenize(bytes(prompt, "utf-8"))
             nb_tokens = len(prompt_tokens)
         return prompt, prompt_tokens
@@ -152,14 +200,12 @@ class DialogueHistory:
         self, utterance, punctuation_ids, interrupted_speaker_iu
     ):
         """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
-
-        This function is triggered if the interrupted speaker IU has been received before the module has stored the new agent sentence in the dialogue history.
-        If that is not the case, the function interruption_alignment_last_agent_sentence is triggered instead.
-
-        With the informations stored in self.interrupted_speaker_iu, this function will shorten the new_agent_sentence to be aligned with the last words spoken by the agent.
+        With the informations stored in interrupted_speaker_iu, this function will shorten the utterance to be aligned with the last words spoken by the agent.
 
         Args:
-            new_agent_sentence (string): the utterance generated by the LLM, that has been interrupted by the user and needs to be aligned.
+            utterance (dict[str]): the utterance generated by the LLM, that has been interrupted by the user and needs to be aligned.
+            punctuation_ids (list[int]): the id of the punctuation marks, calculated by the LLM at initialization.
+            interrupted_speaker_iu (IncrementalUnit): the SpeakerModule's IncrementalUnit, used to align the agent utterance.
         """
         new_agent_sentence = utterance["text"].encode("utf-8")
 
@@ -201,25 +247,36 @@ class DialogueHistory:
     # Getters
 
     def get_dialogue_history(self):
+        """Get DialogueHistory's dictionary containing the system prompt and all previous turns.
+
+        Returns:
+            dict: DialogueHistory's dictionary.
+        """
         return self.dialogue_history
 
-    def get_prompt(self):
-        prompt = ""
-        for utterance in self.dialogue_history:
-            prompt += self.format_sentence(utterance)
-        return self.format("prompt", prompt)
+    def get_prompt(self, start=1, end=None, system_prompt=None):
+        """Get the formatted prompt containing all turns between start and end.
 
-    def get_prompt_cpt(self, start=1, end=None):
+        Args:
+            start (int, optional): start id of the oldest turn to take. Defaults to 1.
+            end (int, optional): end id of the latest turn to take. Defaults to None.
+
+        Returns:
+            str: the corresponding formatted prompt.
+        """
         if end is None:
             end = len(self.dialogue_history)
         assert start > 0
         assert end >= start
-        prompt = self.format_system_prompt(self.dialogue_history[0]["text"])
+        if system_prompt is not None:
+            prompt = self.format("system_prompt", system_prompt)
+        else:
+            prompt = self.format_sentence(self.dialogue_history[0])
         for utterance in self.dialogue_history[start:end]:
             prompt += self.format_sentence(utterance)
-
         prompt = self.format("prompt", prompt)
-        # put additional "/n/nTeacher :" at the end of the prompt
+
+        # put additional "/n/nTeacher :" at the end of the prompt, so that it is not the LLM that generates the role
         prompt += (
             "\n\n"
             + self.prompt_format_config["agent"]["pre"]
@@ -227,13 +284,12 @@ class DialogueHistory:
         )
         return prompt
 
-    def get_prompt_with_specific_system_prompt(self, system_prompt):
-        prompt = self.format_system_prompt(system_prompt)
-        for utterance in self.dialogue_history[1:]:
-            prompt += self.format_sentence(utterance)
-        return self.format("prompt", prompt)
-
     def get_stop_patterns(self):
+        """Get stop patterns for both user and agent.
+
+        Returns:
+            tuple[bytes], tuple[bytes]: user and agent stop patterns.
+        """
         c = self.prompt_format_config
         user_stop_pat = (
             bytes(c["user"]["role"] + " " + c["user"]["role_sep"], encoding="utf-8"),
@@ -361,11 +417,13 @@ class VADModule(retico_core.AbstractModule):
 
 
 class DialogueManagerModule(retico_core.AbstractModule):
-    """
+    """Module that plays a central role in the dialogue system because it centralizes a lot of information to be able to take complex decisions at the dialogue level.
+    It calculates dialogue states (close to a FSM), depending on the user and agent VA (agent_speaking, silence_atfer_user, user_overlaps_agent, etc).
+    It also contains dialogue policies to apply in different situations, situations that can be related to transitions between dialogue states, clocks, etc.
 
-    Inputs : VADIU
+    Inputs : VADIU, SpeakerAlignementIU
 
-    Outputs : DMIU
+    Outputs : IncrementalUnit (DMIU & SpeechRecognitionTurnIU for repetitions)
     """
 
     @staticmethod
@@ -374,7 +432,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
 
     @staticmethod
     def description():
-        return "a module that manage the dialogue"
+        return "a module that centralize a lot of data to manage the dialogue system"
 
     @staticmethod
     def input_ius():
@@ -505,6 +563,13 @@ class DialogueManagerModule(retico_core.AbstractModule):
         }
 
     def add_policy(self, origin_state, destination_state, value):
+        """Add a new policy (behavior that is triggered when the DM state transition from origin_state to destination_state) to the policies dict.
+
+        Args:
+            origin_state (str): origin state of the trigger transition.
+            destination_state (str): destination state of the trigger transition.
+            value (Callable[]): the function that will be called when this new policy is triggered.
+        """
         if origin_state not in self.policies:
             self.policies[origin_state] = {destination_state: []}
         elif destination_state not in self.policies[origin_state]:
@@ -512,6 +577,10 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.policies[origin_state][destination_state].append(value)
 
     def add_soft_interruption_policy(self):
+        """Add all policies related to the SOFT INTERRUPTION behavior.
+        This behavior will make the system stop outputting sound when the user interrupts the agent during one of its turns.
+        The LLM and TTS are not stopping their generation of the interrupted turn, and the generated IUs are stored in a Speaker Module buffer for a possible future CONTINUE.
+        """
         self.add_policy(
             "silence_after_user",
             "mutual_overlap",
@@ -534,6 +603,11 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def add_continue_policy(self):
+        """Add all policies related to the CONTINUE behavior.
+        This behavior occurs when the user interrupts the agent during one of its turns, but with a very short Voice Activation.
+        In such case, the behavior will make the system continue the interrupted turn instead of generating a new one.
+        The generated IUs stored in the Speaker Module buffer with the SOFT INTERRUPTION are played by the SpeakerModule.
+        """
         self.policies["user_speaking"]["silence_after_user"] = []
         self.add_policy(
             "silence_after_user",
@@ -587,6 +661,10 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def add_hard_interruption_policy(self):
+        """Add all policies related to the HARD INTERRUPTION behavior.
+        This behavior will make the system stop outputting sound when the user interrupts the agent during one of its turns.
+        The LLM, TTS and SPEAKER Modules will totally stop generating/processing all IUs from the interrupted turn.
+        """
         self.add_policy(
             "silence_after_user",
             "mutual_overlap",
@@ -609,6 +687,11 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def add_repeat_policy(self):
+        """Add all policies related to the REPEAT behavior.
+        This behavior occurs when the user remains silent for a long period of time after an agent turn.
+        In such case, the DM changes its system prompt, to instruct to repeat the previous sentence and try to motivate the user engagement,
+        and generates a new turn with this new system prompt.
+        """
         self.add_policy(
             "silence_after_agent",
             "silence_after_agent",
@@ -636,6 +719,9 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def add_backchannel_policy(self):
+        """Add all policies related to the REPEAT behavior.
+        This behaviors will make the system randomly generate backchannels when the user is speaking.
+        """
         self.add_policy(
             "user_speaking",
             "user_speaking",
@@ -643,17 +729,22 @@ class DialogueManagerModule(retico_core.AbstractModule):
         )
 
     def check_backchannel(self):
+        """function that randomly sends a back_channel action. Called during a user turn."""
         if random.randint(1, 200) > 199:
             self.send_action("back_channel")
 
-    def get_n_audio_chunks(self, param_name, duration):
-        """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
-        (ie. to how many audio_chunk correspond self.bot_dur)
+    def get_n_audio_chunks(self, n_chunks_param_name, duration):
+        """Returns the number of audio chunks corresponding to duration.
+        Store this number in the n_chunks_param_name class argument if it hasn't been done before.
+
+        Args:
+            n_chunks_param_name (str): the name of class argument to check and/or set.
+            duration (float): duration in second.
 
         Returns:
-            int: the number of audio chunks corresponding to the duration of self.bot_dur.
+            int: the number of audio chunks corresponding to duration.
         """
-        if not getattr(self, param_name):
+        if not getattr(self, n_chunks_param_name):
             if len(self.current_input) == 0:
                 return None
             first_iu = self.current_input[0]
@@ -664,8 +755,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
             nb_frames_chunk = len(first_iu.payload) / 2
             # duration of 1 audio chunk
             duration_chunk = nb_frames_chunk / self.input_framerate
-            setattr(self, param_name, int(duration / duration_chunk))
-        return getattr(self, param_name)
+            setattr(self, n_chunks_param_name, int(duration / duration_chunk))
+        return getattr(self, n_chunks_param_name)
 
     def recognize(self, _n_audio_chunks=None, threshold=None, condition=None):
         """Function that will calculate if the VAD consider that the user is talking of a long enough duration to predict a BOT.
@@ -673,8 +764,13 @@ class DialogueManagerModule(retico_core.AbstractModule):
         if self.silence_threshold==0.75 (percentage) and self.bot_dur==0.4 (seconds),
         It returns True if, across the frames corresponding to the last 400ms second of audio, more than 75% are containing speech.
 
+        Args:
+            _n_audio_chunks (_type_, optional): the threshold number of audio chunks to recognize a user BOT or EOT. Defaults to None.
+            threshold (float, optional): the threshold share of audio chunks to recognize a user BOT or EOT. Defaults to None.
+            condition (Callable[], optional): function that takes an IU and returns a boolean, if True is returned, the speech_counter is incremented. Defaults to None.
+
         Returns:
-            boolean : the user BOT prediction
+            boolean : the user BOT or EOT prediction.
         """
         if not _n_audio_chunks or len(self.current_input) < _n_audio_chunks:
             return False
@@ -686,28 +782,50 @@ class DialogueManagerModule(retico_core.AbstractModule):
             return True
         return False
 
-    def recognize_user_BOT(self):
+    def recognize_user_bot(self):
+        """Return the prediction on user BOT from the current audio buffer.
+        Returns True if enough audio chunks contain speech.
+
+        Returns:
+            bool: the BOT prediction.
+        """
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                n_chunks_param_name="_n_bot_audio_chunks", duration=self.bot_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: iu.va_user,
         )
 
-    def recognize_user_EOT(self):
+    def recognize_user_eot(self):
+        """Return the prediction on user EOT from the current audio buffer.
+        Returns True if enough audio chunks do not contain speech.
+
+        Returns:
+            bool: the EOT prediction.
+        """
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_sil_audio_chunks", duration=self.silence_dur
+                n_chunks_param_name="_n_sil_audio_chunks", duration=self.silence_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: not iu.va_user,
         )
 
-    def recognize_agent_BOT(self):
+    def recognize_agent_bot(self):
+        """Return True if the last VAIU received presents a positive agent VA.
+
+        Returns:
+            bool: the BOT prediction.
+        """
         return self.current_input[-1].va_agent
 
-    def recognize_agent_EOT(self):
+    def recognize_agent_eot(self):
+        """Return True if the last VAIU received presents a negative agent VA.
+
+        Returns:
+            bool: the EOT prediction.
+        """
         return not self.current_input[-1].va_agent
 
     def send_event(self, event):
@@ -750,6 +868,11 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.append(um)
 
     def send_audio_ius(self, final=False):
+        """Sends new audio IUs from current_input to ASR and other modules.
+
+        Args:
+            final (bool, optional): if set to True, all IUs in current_input will be COMMITTED to other modules. Defaults to False.
+        """
         um = retico_core.UpdateMessage()
         ius = []
 
@@ -793,15 +916,22 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.append(um)
 
     def update_current_input(self):
+        """Update the current_input AudioIU buffer by removing the oldest IUs (that will not be considered for EOT or BOT recognition)"""
         self.current_input = self.current_input[
             -int(
                 self.get_n_audio_chunks(
-                    param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                    n_chunks_param_name="_n_bot_audio_chunks", duration=self.bot_dur
                 )
             ) :
         ]
 
     def state_transition(self, source_state, destination_state):
+        """Perform a DM state transition, from source_state to destination_state, and trigger all corresponding policies.
+
+        Args:
+            source_state (str): the transition source state.
+            destination_state (str): the transition destination state.
+        """
         if source_state != destination_state:
             self.terminal_logger.info(
                 f"switch state {source_state} -> {destination_state}",
@@ -818,6 +948,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
         self.dialogue_state = destination_state
 
     def increment_turn_id(self):
+        """Increment turn_id class argument."""
         self.turn_id += 1
 
     def set_turn_beginning_timer(self):
@@ -834,9 +965,17 @@ class DialogueManagerModule(retico_core.AbstractModule):
             self.turn_beginning_timer = -float("inf")
 
     def set_overlap_timer(self):
+        """Set overlap timer to current time."""
         self.overlap_timer = time.time()
 
     def check_overlap_timer(self, duration_threshold=1, source_state=None):
+        """Check if current time is greater than overlap timer + duration_threshold.
+        If False, the system will perform a CONTINUE behavior. If True, the system will generate a new agent turn.
+
+        Args:
+            duration_threshold (int, optional): _description_. Defaults to 1.
+            source_state (_type_, optional): _description_. Defaults to None.
+        """
         self.terminal_logger.info(
             f"overlap duration = {time.time() - self.overlap_timer}",
             debug=True,
@@ -857,12 +996,22 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 self.send_audio_ius(final=True)
 
     def set_repeat_timer(self, offset=3):
+        """sets the repeat timer to current time + an offset of n seconds
+        (after which check_repeat_timer will be triggered, and the agent will perform a repeat behavior).
+
+        Args:
+            offset (int, optional): offset in seconds after which the agent will perform a repeat behavior. Defaults to 3.
+        """
         self.repeat_timer = time.time() + offset
 
     def reset_repeat_timer(self):
+        """resets the repeat timer to current time"""
         self.repeat_timer = time.time()
 
     def check_repeat_timer(self):
+        """Checks if current time is greater than repeat timer (repeat threshold exceeded).
+        If it the case, change system prompt to repeat_system_prompt, and sends a "..." as the only recognized speech from user.
+        """
         if self.repeat_timer < time.time():
             self.increment_turn_id()
             self.terminal_logger.info(
@@ -932,8 +1081,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                 self.state_transition("opening", "silence_after_agent")
 
             elif self.dialogue_state == "user_speaking":
-                user_EOT = self.recognize_user_EOT()
-                agent_BOT = self.recognize_agent_BOT()
+                user_EOT = self.recognize_user_eot()
+                agent_BOT = self.recognize_agent_bot()
                 if user_EOT:
                     self.state_transition("user_speaking", "silence_after_user")
                     # self.send_event("user_EOT")
@@ -947,8 +1096,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         self.state_transition("user_speaking", "user_speaking")
 
             elif self.dialogue_state == "agent_speaking":
-                agent_EOT = self.recognize_agent_EOT()
-                user_BOT = self.recognize_user_BOT()
+                agent_EOT = self.recognize_agent_eot()
+                user_BOT = self.recognize_user_bot()
                 self.update_current_input()
                 if agent_EOT:
                     self.state_transition("agent_speaking", "silence_after_agent")
@@ -963,8 +1112,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         self.state_transition("agent_speaking", "agent_speaking")
 
             elif self.dialogue_state == "silence_after_user":
-                user_BOT = self.recognize_user_BOT()
-                agent_BOT = self.recognize_agent_BOT()
+                user_BOT = self.recognize_user_bot()
+                agent_BOT = self.recognize_agent_bot()
                 if user_BOT:
                     if agent_BOT:
                         self.state_transition("silence_after_user", "mutual_overlap")
@@ -983,8 +1132,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         )
 
             elif self.dialogue_state == "silence_after_agent":
-                user_BOT = self.recognize_user_BOT()
-                agent_BOT = self.recognize_agent_BOT()
+                user_BOT = self.recognize_user_bot()
+                agent_BOT = self.recognize_agent_bot()
                 if user_BOT:
                     if agent_BOT:
                         self.state_transition("silence_after_agent", "mutual_overlap")
@@ -1003,8 +1152,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         )
 
             elif self.dialogue_state == "user_overlaps_agent":
-                user_EOT = self.recognize_user_EOT()
-                agent_EOT = self.recognize_agent_EOT()
+                user_EOT = self.recognize_user_eot()
+                agent_EOT = self.recognize_agent_eot()
                 if user_EOT:
                     # self.send_audio_ius(final=True)
                     if agent_EOT:
@@ -1023,8 +1172,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         )
 
             elif self.dialogue_state == "agent_overlaps_user":
-                user_EOT = self.recognize_user_EOT()
-                agent_EOT = self.recognize_agent_EOT()
+                user_EOT = self.recognize_user_eot()
+                agent_EOT = self.recognize_agent_eot()
                 if user_EOT:
                     # self.send_audio_ius(final=True)
                     if agent_EOT:
@@ -1043,8 +1192,8 @@ class DialogueManagerModule(retico_core.AbstractModule):
                         )
 
             elif self.dialogue_state == "mutual_overlap":
-                user_EOT = self.recognize_user_EOT()
-                agent_EOT = self.recognize_agent_EOT()
+                user_EOT = self.recognize_user_eot()
+                agent_EOT = self.recognize_agent_eot()
                 if user_EOT:
                     # self.send_audio_ius(final=True)
                     if agent_EOT:
@@ -1069,7 +1218,7 @@ class DialogueManagerModule(retico_core.AbstractModule):
     # if self.recognize_silence():
     #     n_iu_kept = int(
     #         self.get_n_audio_chunks(
-    #             param_name="_n_sil_audio_chunks", duration=self.silence_dur
+    #             n_chunks_param_name="_n_sil_audio_chunks", duration=self.silence_dur
     #         )
     #     )
     #     self.buffer_pointer -= len(self.current_input) - n_iu_kept
@@ -1293,7 +1442,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
     def run_FSM(self):
         source_state = self.state
         if source_state == "agent_speaking":
-            match (self.recognize_agent_EOT(), self.recognize_user_BOT()):
+            match (self.recognize_agent_eot(), self.recognize_user_bot()):
                 case (True, True):
                     self.trigger("to_silence_after_agent")
                 case (True, False):
@@ -1303,7 +1452,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
                 case (False, False):
                     self.trigger("to_" + source_state)
         elif source_state == "user_speaking":
-            match (self.recognize_agent_BOT(), self.recognize_user_EOT()):
+            match (self.recognize_agent_bot(), self.recognize_user_eot()):
                 case (True, True):
                     self.trigger("to_silence_after_user")
                 case (True, False):
@@ -1313,7 +1462,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
                 case (False, False):
                     self.trigger("to_" + source_state)
         elif source_state in ["silence_after_user", "silence_after_agent"]:
-            match (self.recognize_agent_BOT(), self.recognize_user_BOT()):
+            match (self.recognize_agent_bot(), self.recognize_user_bot()):
                 case (True, True):
                     self.trigger("to_mutual_overlap")
                 case (True, False):
@@ -1327,7 +1476,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             "agent_overlaps_user",
             "mutual_overlap",
         ]:
-            match (self.recognize_agent_EOT(), self.recognize_user_EOT()):
+            match (self.recognize_agent_eot(), self.recognize_user_eot()):
                 case (True, True):
                     self.trigger("to_silence_after_agent")
                 case (True, False):
@@ -1517,14 +1666,14 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
         if random.randint(1, 200) > 199:
             self.send_action("back_channel")
 
-    def get_n_audio_chunks(self, param_name, duration):
+    def get_n_audio_chunks(self, n_chunks_param_name, duration):
         """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
         (ie. to how many audio_chunk correspond self.bot_dur)
 
         Returns:
             int: the number of audio chunks corresponding to the duration of self.bot_dur.
         """
-        if not getattr(self, param_name):
+        if not getattr(self, n_chunks_param_name):
             if len(self.current_input) == 0:
                 return None
             first_iu = self.current_input[0]
@@ -1535,8 +1684,8 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             nb_frames_chunk = len(first_iu.payload) / 2
             # duration of 1 audio chunk
             duration_chunk = nb_frames_chunk / self.input_framerate
-            setattr(self, param_name, int(duration / duration_chunk))
-        return getattr(self, param_name)
+            setattr(self, n_chunks_param_name, int(duration / duration_chunk))
+        return getattr(self, n_chunks_param_name)
 
     def recognize(self, _n_audio_chunks=None, threshold=None, condition=None):
         """Function that will calculate if the VAD consider that the user is talking of a long enough duration to predict a BOT.
@@ -1557,28 +1706,28 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
             return True
         return False
 
-    def recognize_user_BOT(self):
+    def recognize_user_bot(self):
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                n_chunks_param_name="_n_bot_audio_chunks", duration=self.bot_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: iu.va_user,
         )
 
-    def recognize_user_EOT(self):
+    def recognize_user_eot(self):
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_sil_audio_chunks", duration=self.silence_dur
+                n_chunks_param_name="_n_sil_audio_chunks", duration=self.silence_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: not iu.va_user,
         )
 
-    def recognize_agent_BOT(self):
+    def recognize_agent_bot(self):
         return self.current_input[-1].va_agent
 
-    def recognize_agent_EOT(self):
+    def recognize_agent_eot(self):
         return not self.current_input[-1].va_agent
 
     def send_event(self, event):
@@ -1667,7 +1816,7 @@ class DialogueManagerModule_2(retico_core.AbstractModule):
         self.current_input = self.current_input[
             -int(
                 self.get_n_audio_chunks(
-                    param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                    n_chunks_param_name="_n_bot_audio_chunks", duration=self.bot_dur
                 )
             ) :
         ]
@@ -1839,14 +1988,14 @@ class VADTurnModule2(retico_core.AbstractModule):
         self.user_turn_text = "no speaker"
         self.buffer_pointer = 0
 
-    def get_n_audio_chunks(self, param_name, duration):
+    def get_n_audio_chunks(self, n_chunks_param_name, duration):
         """Returns the number of audio chunks containing speech needed in the audio buffer to have a BOT (beginning of turn)
         (ie. to how many audio_chunk correspond self.bot_dur)
 
         Returns:
             int: the number of audio chunks corresponding to the duration of self.bot_dur.
         """
-        if not getattr(self, param_name):
+        if not getattr(self, n_chunks_param_name):
             if len(self.current_input) == 0:
                 return None
             first_iu = self.current_input[0]
@@ -1857,8 +2006,8 @@ class VADTurnModule2(retico_core.AbstractModule):
             nb_frames_chunk = len(first_iu.payload) / 2
             # duration of 1 audio chunk
             duration_chunk = nb_frames_chunk / self.input_framerate
-            setattr(self, param_name, int(duration / duration_chunk))
-        return getattr(self, param_name)
+            setattr(self, n_chunks_param_name, int(duration / duration_chunk))
+        return getattr(self, n_chunks_param_name)
 
     def recognize(self, _n_audio_chunks=None, threshold=None, condition=None):
         """Function that will calculate if the VAD consider that the user is talking of a long enough duration to predict a BOT.
@@ -1882,7 +2031,7 @@ class VADTurnModule2(retico_core.AbstractModule):
     def recognize_bot(self):
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                n_chunks_param_name="_n_bot_audio_chunks", duration=self.bot_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: iu.va_user,
@@ -1891,7 +2040,7 @@ class VADTurnModule2(retico_core.AbstractModule):
     def recognize_silence(self):
         return self.recognize(
             _n_audio_chunks=self.get_n_audio_chunks(
-                param_name="_n_sil_audio_chunks", duration=self.silence_dur
+                n_chunks_param_name="_n_sil_audio_chunks", duration=self.silence_dur
             ),
             threshold=self.silence_threshold,
             condition=lambda iu: not iu.va_user,
@@ -1947,7 +2096,8 @@ class VADTurnModule2(retico_core.AbstractModule):
                 self.current_input = self.current_input[
                     -int(
                         self.get_n_audio_chunks(
-                            param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                            n_chunks_param_name="_n_bot_audio_chunks",
+                            duration=self.bot_dur,
                         )
                     ) :
                 ]
@@ -2044,7 +2194,8 @@ class VADTurnModule2(retico_core.AbstractModule):
                 self.current_input = self.current_input[
                     -int(
                         self.get_n_audio_chunks(
-                            param_name="_n_bot_audio_chunks", duration=self.bot_dur
+                            n_chunks_param_name="_n_bot_audio_chunks",
+                            duration=self.bot_dur,
                         )
                     ) :
                 ]
