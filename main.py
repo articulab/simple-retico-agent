@@ -13,6 +13,7 @@ from dialogue_manager import (
     DialogueManagerModule_2,
     VADModule,
 )
+import simple_whisper_asr
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
@@ -1219,6 +1220,147 @@ def main_DM():
         )
 
 
+def main_simple():
+    # parameters definition
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    printing = False
+    log_folder = "logs/run"
+    frame_length = 0.02
+    tts_frame_length = 0.2
+    rate = 16000
+    tts_model_samplerate = 48000
+    tts_model = "jenny"
+    model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
+    system_prompt = "This is a spoken dialog scenario between a teacher and a 8 years old child student.\
+        The teacher is teaching mathemathics to the child student.\
+        As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
+        You play the role of a teacher. Here is the beginning of the conversation :"
+    plot_config_path = "configs/plot_config_3.json"
+    plot_live = True
+    module_order = [
+        "Microphone",
+        "VAD",
+        "DialogueManager",
+        "WhisperASR",
+        "LLM",
+        "TTS",
+        "Speaker",
+    ]
+    prompt_format_config = "configs/prompt_format_config.json"
+    context_size = 2000
+
+    # filters
+    filters = [
+        partial(
+            filter_cases,
+            cases=[
+                [("debug", [True])],
+                # [("debug", [True]), ("module", ["DialogueManager Module"])],
+                [("level", ["warning", "error"])],
+            ],
+            # cases=[
+            #     [("module", ["DialogueManager Module"])],
+            #     [("level", ["warning", "error"])],
+            # ],
+        )
+    ]
+    # filters = []
+    # configurate logger
+    terminal_logger, _ = retico_core.log_utils.configurate_logger(
+        log_folder, filters=filters
+    )
+
+    # configure plot
+    configurate_plot(
+        is_plot_live=plot_live,
+        refreshing_time=1,
+        plot_config_path=plot_config_path,
+        module_order=module_order,
+        window_duration=30,
+    )
+
+    # dialogue_history = DialogueHistory(
+    #     prompt_format_config,
+    #     terminal_logger=terminal_logger,
+    #     initial_system_prompt=system_prompt,
+    #     context_size=context_size,
+    # )
+
+    # create modules
+    mic = audio.MicrophoneModule()
+
+    vad = VADModule(
+        input_framerate=rate,
+        frame_length=frame_length,
+    )
+
+    asr = simple_whisper_asr.SimpleWhisperASRModule(
+        device=device,
+    )
+
+    # llm = LlamaCppMemoryIncrementalInterruptionModule(
+    #     model_path,
+    #     None,
+    #     None,
+    #     None,
+    #     system_prompt,
+    #     printing=printing,
+    #     device=device,
+    #     context_size=context_size,
+    # )
+
+    # llm = LlmDmModule(
+    #     model_path,
+    #     None,
+    #     None,
+    #     dialogue_history=dialogue_history,
+    #     printing=printing,
+    #     device=device,
+    # )
+
+    # tts = CoquiTTSInterruptionModule(
+    #     language="en",
+    #     model=tts_model,
+    #     printing=printing,
+    #     frame_duration=tts_frame_length,
+    #     device=device,
+    # )
+
+    # tts = TtsDmModule(
+    #     language="en",
+    #     model=tts_model,
+    #     printing=printing,
+    #     frame_duration=tts_frame_length,
+    #     device=device,
+    # )
+
+    # speaker = SpeakerInterruptionModule(
+    #     rate=tts_model_samplerate,
+    # )
+    cback = debug.CallbackModule(callback=callback_fun)
+
+    # create network
+    mic.subscribe(vad)
+    vad.subscribe(asr)
+    asr.subscribe(cback)
+
+    # running system
+    try:
+        network.run(mic)
+        # terminal_logger.info("Dialog system running until ENTER key is pressed")
+        print("Dialog system running until ENTER key is pressed")
+        input()
+        network.stop(mic)
+    except Exception:
+        terminal_logger.exception("exception in main")
+        network.stop(mic)
+    finally:
+        plot_once(
+            plot_config_path=plot_config_path,
+            module_order=module_order,
+        )
+
+
 msg = []
 
 if __name__ == "__main__":
@@ -1238,4 +1380,5 @@ if __name__ == "__main__":
     # amq_test_with_ASR()
     # main_demo_with_plot()
 
-    main_DM()
+    # main_DM()
+    main_simple()
