@@ -1,62 +1,38 @@
 """
-SpeakerInterruptionModule
-==================
+SimpleSpeakerModule
+===================
 
 A retico module that outputs through the computer's speakers the audio contained in
-TextAlignedAudioIUs. The module stops the speakers if it receives the information that the user
-started talking (user barge-in/interruption of agent turn).
-The interruption information is recognized by an VADTurnAudioIU with a parameter
-vad_state="interruption".
+AudioFinalIU. The module is similar to the original SpeakerModule, except it outputs TextIU when an
+agent Begining-Of-Turn or End-Of-Turn is encountered. I.e. when it outputs the audio of,
+respectively, the first and last AudioIU of an agent turn (information calculated from 
+latest_processed_iu and IU's final attribute). These agent BOT and EOT information could be received
+by a Voice Activity Dectection (VAD) or a Dialogue Manager (DM) Modules.
 
-The modules sends TextAlignedAudioIUs in 2 cases :
-- When it is agent end of turn : when it consumes the last TextAlignedAudioIU of an agent turn
-(with the parameter final=True), it sends back that IU to indicate to other modules that the
-agent has stopped talking.
-- When the agent turn is interrupted by the user : when it receives an VADTurnAudioIU with a
-parameter vad_state="interruption", it sends the last TextAlignedAudioIU consumed (ie. the last
-audio that has been spoken by the agent in the interrupted turn). It is useful to align the
-dialogue history with the last spoken words.
+Inputs : AudioFinalIU
 
-Inputs : TextAlignedAudioIU, VADTurnAudioIU
-
-Outputs : TextAlignedAudioIU
+Outputs : TextIU
 """
 
 import platform
 import pyaudio
 
 import retico_core
-import retico_core.abstract
 from retico_core.text import TextIU
-from additional_IUs import (
-    BackchannelIU,
-    VADTurnAudioIU,
-    TextAlignedAudioIU,
-    DMIU,
-    SpeakerAlignementIU,
-)
-from simple_tts import AudioFinalIU
+from additional_IUs import AudioFinalIU
 
 
 class SimpleSpeakerModule(retico_core.AbstractModule):
     """A retico module that outputs through the computer's speakers the audio contained in
-    TextAlignedAudioIUs. The module stops the speakers if it receives the information that the user
-    started talking (user barge-in/interruption of agent turn).
-    The interruption information is recognized by an VADTurnAudioIU with a parameter
-    vad_state="interruption".
+    AudioFinalIU. The module is similar to the original SpeakerModule, except it outputs TextIU when
+    an agent Begining-Of-Turn or End-Of-Turn is encountered. I.e. when it outputs the audio of,
+    respectively, the first and last AudioIU of an agent turn (information calculated from
+    latest_processed_iu and IU's final attribute). These agent BOT and EOT information could be
+    received by a Voice Activity Dectection (VAD) or a Dialogue Manager (DM) Modules.
 
-    The modules sends TextAlignedAudioIUs in 2 cases :
-    - When it is agent end of turn : when it consumes the last TextAlignedAudioIU of an agent turn
-    (with the parameter final=True), it sends back that IU to indicate to other modules that the
-    agent has stopped talking.
-    - When the agent turn is interrupted by the user : when it receives an VADTurnAudioIU with a
-    parameter vad_state="interruption", it sends the last TextAlignedAudioIU consumed (ie. the last
-    audio that has been spoken by the agent in the interrupted turn). It is useful to align the
-    dialogue history with the last spoken words.
+    Inputs : AudioFinalIU
 
-    Inputs : TextAlignedAudioIU, VADTurnAudioIU
-
-    Outputs : TextAlignedAudioIU
+    Outputs : TextIU
     """
 
     @staticmethod
@@ -65,7 +41,7 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
 
     @staticmethod
     def description():
-        return "A module that plays audio to speakers and stops playing audio if the user starts speaking."
+        return "A module that plays audio to speakers and outpus agent BOT and EOT (agent turn's first and last audio outputted)"
 
     @staticmethod
     def input_ius():
@@ -88,15 +64,17 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
         **kwargs,
     ):
         """
-        Initializes the SpeakerInterruption Module.
+        Initializes the SimpleSpeakerModule.
 
         Args:
             rate (int): framerate of the played audio chunks.
             frame_length (float): duration of the played audio chunks.
-            channels (int): number of channels (1=mono, 2=stereo) of the received VADTurnAudioIUs.
-            sample_width (int):sample width (number of bits used to encode each frame) of the received VADTurnAudioIUs.
-            use_speaker (string): wether the audio should be played in the right, left or both speakers.
-            device_index(string):
+            channels (int): number of channels (1=mono, 2=stereo) of the received AudioFinalIU.
+            sample_width (int): sample width (number of bits used to encode each frame) of the
+                received AudioFinalIU.
+            use_speaker (string): wether the audio should be played in the right, left or both
+                speakers.
+            device_index(string): PortAudio's default device.
         """
         super().__init__(**kwargs)
         self.rate = rate
@@ -113,10 +91,7 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
         self.latest_processed_iu = None
 
     def process_update(self, update_message):
-        """overrides SpeakerModule : https://github.com/retico-team/retico-core/blob/main/retico_core/audio.py#L282
-
-        overrides SpeakerModule's process_update to save logs.
-        """
+        """Process the received ADD AudioFinalIU by storing them in self.audio_iu_buffer"""
         for iu, ut in update_message:
             if isinstance(iu, AudioFinalIU):
                 if ut == retico_core.UpdateType.ADD:
@@ -124,19 +99,19 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
         return None
 
     def callback(self, in_data, frame_count, time_info, status):
-        """callback function given to the pyaudio stream that will output audio to the computer speakers.
-        This function returns an audio chunk that will be written in the stream.
-        It is called everytime the last chunk has been fully consumed.
+        """callback function given to the pyaudio stream that will output audio to the computer
+        speakers. This function returns an audio chunk that will be written in the stream. It is
+        called everytime the last chunk has been fully consumed.
 
         Args:
-            in_data (_type_): _description_
-            frame_count (_type_): number of frames in an audio chunk written in the stream
-            time_info (_type_): _description_
-            status (_type_): _description_
+            in_data (_type_):
+            frame_count (int): number of frames in an audio chunk written in the stream.
+            time_info (_type_):
+            status (_type_):
 
         Returns:
-            (bytes, pyaudio type): the tuple containing the audio chunks (bytes)
-            and the pyaudio type informing wether the stream should continue or stop.
+            (bytes, pyaudio type): the tuple containing the audio chunks (bytes) and the pyaudio
+            type informing wether the stream should continue or stop.
         """
         if len(self.audio_iu_buffer) == 0:
             self.terminal_logger.info("output_silence")
@@ -196,7 +171,7 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
             stream_info = None
 
         # Adding the stream_callback parameter should make the stream.write() function non blocking,
-        # which would make it possible to run in parallel of the reception of update messages (and the uptdate of vad_state)
+        # which would make it possible to run in parallel of the reception of update messages
         self.stream = p.open(
             format=p.get_format_from_width(self.sample_width),
             channels=self.channels,

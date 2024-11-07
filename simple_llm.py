@@ -46,24 +46,11 @@ import time
 from llama_cpp import Llama
 
 import retico_core
-from retico_core.text import TextIU, SpeechRecognitionIU
+from retico_core.text import SpeechRecognitionIU
+from additional_IUs import TextFinalIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
 from dialogue_history import DialogueHistory
-
-
-class TextFinalIU(TextIU):
-    """TextIU with an additional final attribute."""
-
-    @staticmethod
-    def type():
-        return "Text Final IU"
-
-    def __init__(self, final=False, **kwargs):
-        super().__init__(
-            **kwargs,
-        )
-        self.final = final
 
 
 class SimpleLLMModule(retico_core.AbstractModule):

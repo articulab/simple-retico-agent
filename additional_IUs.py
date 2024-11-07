@@ -1,9 +1,32 @@
-import csv
-import datetime
-import os
-
-import torch
 import retico_core
+
+
+class TextFinalIU(retico_core.text.TextIU):
+    """TextIU with an additional final attribute."""
+
+    @staticmethod
+    def type():
+        return "Text Final IU"
+
+    def __init__(self, final=False, **kwargs):
+        super().__init__(
+            **kwargs,
+        )
+        self.final = final
+
+
+class AudioFinalIU(retico_core.audio.AudioIU):
+    """AudioIU with an additional final attribute."""
+
+    @staticmethod
+    def type():
+        return "Audio Final IU"
+
+    def __init__(self, final=False, **kwargs):
+        super().__init__(
+            **kwargs,
+        )
+        self.final = final
 
 
 class BackchannelIU(retico_core.audio.AudioIU):

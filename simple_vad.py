@@ -1,9 +1,10 @@
 import pydub
+import webrtcvad
+
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import TextIU
 from additional_IUs import VADIU
-import webrtcvad
 
 
 class SimpleVADModule(retico_core.AbstractModule):

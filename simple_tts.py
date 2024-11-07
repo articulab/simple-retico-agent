@@ -1,28 +1,21 @@
 """
-coqui-ai TTS Module
-==================
+SimpleTTSModule
+===============
 
-A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
-audio), and handles user interruption.
-
-When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
-IUs contained in UpdateMessage.
-This module also aligns the inputed words with the outputted audio, providing the outputted
-TextAlignedAudioIU with the information of the word it corresponds to (contained in the
-grounded_word parameter), and its place in the agent's current sentence.
-The module stops synthesizing if it receives the information that the user started talking
-(user barge-in/interruption of agent turn). The interruption information is recognized by
-an VADTurnAudioIU with a parameter vad_state="interruption".
+A retico module that provides Text-To-Speech (TTS) to a retico system by transforming TextFinalIUs
+into AudioFinalIUs, clause by clause. When receiving COMMIT TextFinalIU from the LLM, i.e. 
+TextFinalIUs that consists in a full clause. Synthesizes audio (AudioFinalIUs) corresponding to all
+IUs contained in UpdateMessage (the complete clause). The module only sends TextFinalIU with a fixed
+raw_audio length.
 
 This modules uses the deep learning approach implemented with coqui-ai's TTS library :
 https://github.com/coqui-ai/TTS
 
-Inputs : TurnTextIU, VADTurnAudioIU
+Inputs : TextFinalIU
 
-Outputs : TextAlignedAudioIU
+Outputs : AudioFinalIU
 """
 
-import random
 import threading
 import time
 import numpy as np
@@ -31,43 +24,22 @@ from TTS.api import TTS
 import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from retico_core.audio import AudioIU
-from simple_llm import TextFinalIU
-
-
-class AudioFinalIU(AudioIU):
-    """AudioIU with an additional final attribute."""
-
-    @staticmethod
-    def type():
-        return "Audio Final IU"
-
-    def __init__(self, final=False, **kwargs):
-        super().__init__(
-            **kwargs,
-        )
-        self.final = final
+from additional_IUs import TextFinalIU, AudioFinalIU
 
 
 class SimpleTTSModule(retico_core.AbstractModule):
-    """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
-    audio), and handles user interruption.
-
-    When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
-    IUs contained in UpdateMessage.
-    This module also aligns the inputed words with the outputted audio, providing the outputted
-    TextAlignedAudioIU with the information of the word it corresponds to (contained in the
-    grounded_word parameter), and its place in the agent's current sentence.
-    The module stops synthesizing if it receives the information that the user started talking
-    (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an VADTurnAudioIU with a parameter vad_state="interruption".
+    """A retico module that provides Text-To-Speech (TTS) to a retico system by transforming
+    TextFinalIUs into AudioFinalIUs, clause by clause. When receiving COMMIT TextFinalIU from the
+    LLM, i.e. TextFinalIUs that consists in a full clause. Synthesizes audio (AudioFinalIUs)
+    corresponding to all IUs contained in UpdateMessage (the complete clause). The module only sends
+    TextFinalIU with a fixed raw_audio length.
 
     This modules uses the deep learning approach implemented with coqui-ai's TTS library :
     https://github.com/coqui-ai/TTS
 
-    Inputs : TurnTextIU, VADTurnAudioIU
+    Inputs : TextFinalIU
 
-    Outputs : TextAlignedAudioIU
+    Outputs : AudioFinalIU
     """
 
     @staticmethod
@@ -113,14 +85,19 @@ class SimpleTTSModule(retico_core.AbstractModule):
         **kwargs,
     ):
         """
-        Initializes the CoquiTTSInterruption Module.
+        Initializes the SimpleTTSModule.
 
         Args:
-            model (string): name of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
-            frame_duration (float): duration of the audio chunks contained in the outputted TextAlignedAudioIUs.
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+            model (string): name of the desired model, has to be contained in the constant
+                LANGUAGE_MAPPING.
+            language (string): language of the desired model, has to be contained in the constant
+                LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice
+                cloning models).
+            frame_duration (float): duration of the audio chunks contained in the outputted
+                TextAlignedAudioIUs.
+            verbose (bool, optional): the verbose level of the TTS model. Defaults to False.
+            device (string, optional): the device the module will run on (cuda for gpu, or cpu)
         """
         super().__init__(**kwargs)
 
@@ -164,14 +141,14 @@ class SimpleTTSModule(retico_core.AbstractModule):
         self.space_token = None
 
     def synthesize(self, text):
-        """Takes the given text and returns the synthesized speech as 22050 Hz
-        int16-encoded numpy ndarray.
+        """Takes the given text and synthesizes speech using the TTS model. Returns the synthesized
+        speech as 22050 Hz int16-encoded numpy ndarray.
 
         Args:
-            text (str): The speech to synthesize
+            text (str): The text to use to synthesize speech.
 
         Returns:
-            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray
+            bytes: The speech as a 22050 Hz int16-encoded numpy ndarray.
         """
 
         final_outputs = self.model.tts(
@@ -218,14 +195,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
         return "".join(words), words
 
     def process_update(self, update_message):
-        """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
-
-        Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs to process, ADD IUs' data are added to the current_input,
-            COMMIT IUs are launching the speech synthesizing (using the synthesize function) with the accumulated text data in current_input (the sentence chunk).
-
-        Returns:
-            _type_: returns None if update message is None.
+        """Process the COMMIT TextFinalIUs received by appending to self.current_input the list of
+        IUs corresponding to the full clause.
         """
         if not update_message:
             return None
@@ -280,13 +251,12 @@ class SimpleTTSModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def get_new_iu_buffer_from_clause_ius(self, clause_ius):
-        """Function that aligns the TTS inputs and outputs.
-        It links the words sent by LLM to audio chunks generated by TTS model.
-        As we have access to the durations of the phonems generated by the model,
-        we can link the audio chunks sent to speaker to the words that it corresponds to.
+        """Function that take all TextFinalIUs from one clause, synthesizes the corresponding speech
+        and split the audio into AudioFinalIUs of a fixed raw_audio length.
 
         Returns:
-            list[TextAlignedAudioIU]: the TextAlignedAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
+            list[AudioFinalIU]: the generated AudioFinalIUs, with a fixed raw_audio length, that
+                will be sent to the speaker module.
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
@@ -320,39 +290,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
 
         return new_buffer
 
-    # def _tts_thread(self):
-    #     """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module. if the clear_after_finish param is True,
-    #     it means that speech chunks have been synthesized from a sentence chunk, and the speech chunks are sent to the children modules.
-    #     """
-    #     # TODO : change this function so that it sends the IUs without waiting for the IU duration to make it faster and let speaker module handle that ?
-    #     # TODO : check if the usual system, like in the demo branch, works without this function, and having the message sending directly in process update function
-    #     t1 = time.time()
-    #     while self._tts_thread_active:
-    #         try:
-    #             t2 = t1
-    #             t1 = time.time()
-    #             if t1 - t2 < self.frame_duration:
-    #                 time.sleep(self.frame_duration)
-    #             else:
-    #                 time.sleep(max((2 * self.frame_duration) - (t1 - t2), 0))
-
-    #             if self.buffer_pointer >= len(self.iu_buffer):
-    #                 self.buffer_pointer = 0
-    #                 self.iu_buffer = []
-    #             else:
-    #                 iu = self.iu_buffer[self.buffer_pointer]
-    #                 self.buffer_pointer += 1
-    #                 um = retico_core.UpdateMessage.from_iu(
-    #                     iu, retico_core.UpdateType.ADD
-    #                 )
-    #                 self.append(um)
-    #         except Exception as e:
-    #             log_exception(module=self, exception=e)
-
     def setup(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
-        """
+        """Setup Module by instanciating the TTS model and its related audio attributes."""
         super().setup()
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
@@ -360,19 +299,13 @@ class SimpleTTSModule(retico_core.AbstractModule):
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
 
     def prepare_run(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
-        """
+        """Prepare run by instanciating the Thread that synthesizes the audio."""
         super().prepare_run()
-        self.buffer_pointer = 0
-        self.iu_buffer = []
         self._tts_thread_active = True
         # threading.Thread(target=self._tts_thread).start()
         threading.Thread(target=self._process_one_clause).start()
 
     def shutdown(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
-        """
+        """Shutdown Thread and Module"""
         super().shutdown()
         self._tts_thread_active = False

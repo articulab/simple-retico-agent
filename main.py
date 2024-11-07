@@ -1242,13 +1242,12 @@ def main_simple():
         The teacher is teaching mathemathics to the child student.\
         As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the followig conversation.\
         You play the role of a teacher. Here is the beginning of the conversation :"
-    plot_config_path = "configs/plot_config_3.json"
+    plot_config_path = "configs/plot_config_simple.json"
     plot_live = True
     module_order = [
         "Microphone",
         "VAD",
-        "DialogueManager",
-        "WhisperASR",
+        "ASR",
         "LLM",
         "TTS",
         "Speaker",
