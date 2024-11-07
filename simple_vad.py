@@ -1,14 +1,15 @@
 import pydub
 import retico_core
 from retico_core.audio import AudioIU
-from additional_IUs import VADIU, SpeakerAlignementIU
+from retico_core.text import TextIU
+from additional_IUs import VADIU
 import webrtcvad
 
 
-class VADModule(retico_core.AbstractModule):
+class SimpleVADModule(retico_core.AbstractModule):
     @staticmethod
     def name():
-        return "VAD Module"
+        return "VAD Simple Module"
 
     @staticmethod
     def description():
@@ -16,7 +17,7 @@ class VADModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [AudioIU, SpeakerAlignementIU]
+        return [AudioIU, TextIU]
 
     @staticmethod
     def output_iu():
@@ -71,18 +72,14 @@ class VADModule(retico_core.AbstractModule):
         """
         for iu, ut in update_message:
             # IUs from SpeakerModule, can be either agent BOT or EOT
-            if isinstance(iu, SpeakerAlignementIU):
+            if isinstance(iu, TextIU):
                 if ut == retico_core.UpdateType.ADD:
                     # agent BOT
-                    if iu.event == "agent_BOT":
+                    if iu.payload == "agent_BOT":
                         self.VA_agent = True
-                    # elif iu.event == "continue":
-                    #     self.VA_agent = True
                     # agent EOT
-                    elif iu.event == "agent_EOT":
+                    elif iu.payload == "agent_EOT":
                         self.VA_agent = False
-                    # if iu.event == "interruption":
-                    #     self.VA_agent = False
             elif isinstance(iu, AudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if self.input_framerate != iu.rate:

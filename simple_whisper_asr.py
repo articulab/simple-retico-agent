@@ -60,7 +60,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
 
     @staticmethod
     def name():
-        return "ASR Whisper Module"
+        return "ASR Whisper Simple Module"
 
     @staticmethod
     def description():

@@ -8,12 +8,12 @@ from ASR_DM import AsrDmModule
 from LLM_DM import LlmDmModule
 from TTS_DM import TtsDmModule
 from dialogue_manager import (
-    DialogueHistory,
+    # DialogueHistory,
     DialogueManagerModule,
     DialogueManagerModule_2,
     VADModule,
 )
-import simple_whisper_asr
+
 from whisper_asr import WhisperASRModule
 from llama_cpp_memory_incremental import LlamaCppMemoryIncrementalModule
 from coqui_tts import CoquiTTSModule
@@ -31,6 +31,14 @@ from speaker_interruption import SpeakerInterruptionModule
 from coqui_tts_interruption import CoquiTTSInterruptionModule
 from vad_turn import VADTurnModule
 from whisper_asr_interruption import WhisperASRInterruptionModule
+
+from dialogue_history import DialogueHistory
+from simple_vad import SimpleVADModule
+from simple_whisper_asr import SimpleWhisperASRModule
+from simple_llm import SimpleLLMModule
+from simple_tts import SimpleTTSModule
+from simple_speaker import SimpleSpeakerModule
+
 
 from retico_core.log_utils import (
     filter_has_key,
@@ -1229,7 +1237,6 @@ def main_simple():
     tts_frame_length = 0.2
     rate = 16000
     tts_model_samplerate = 48000
-    tts_model = "jenny"
     model_path = "./models/mistral-7b-instruct-v0.2.Q4_K_S.gguf"
     system_prompt = "This is a spoken dialog scenario between a teacher and a 8 years old child student.\
         The teacher is teaching mathemathics to the child student.\
@@ -1279,70 +1286,51 @@ def main_simple():
         window_duration=30,
     )
 
-    # dialogue_history = DialogueHistory(
-    #     prompt_format_config,
-    #     terminal_logger=terminal_logger,
-    #     initial_system_prompt=system_prompt,
-    #     context_size=context_size,
-    # )
+    dialogue_history = DialogueHistory(
+        prompt_format_config,
+        terminal_logger=terminal_logger,
+        initial_system_prompt=system_prompt,
+        context_size=context_size,
+    )
 
     # create modules
     mic = audio.MicrophoneModule()
 
-    vad = VADModule(
+    vad = SimpleVADModule(
         input_framerate=rate,
         frame_length=frame_length,
     )
 
-    asr = simple_whisper_asr.SimpleWhisperASRModule(
+    asr = SimpleWhisperASRModule(
         device=device,
     )
 
-    # llm = LlamaCppMemoryIncrementalInterruptionModule(
-    #     model_path,
-    #     None,
-    #     None,
-    #     None,
-    #     system_prompt,
-    #     printing=printing,
-    #     device=device,
-    #     context_size=context_size,
-    # )
+    llm = SimpleLLMModule(
+        model_path=model_path,
+        model_repo=None,
+        model_name=None,
+        dialogue_history=dialogue_history,
+        device=device,
+        verbose=printing,
+    )
 
-    # llm = LlmDmModule(
-    #     model_path,
-    #     None,
-    #     None,
-    #     dialogue_history=dialogue_history,
-    #     printing=printing,
-    #     device=device,
-    # )
+    tts = SimpleTTSModule(
+        verbose=printing,
+        frame_duration=tts_frame_length,
+        device=device,
+    )
 
-    # tts = CoquiTTSInterruptionModule(
-    #     language="en",
-    #     model=tts_model,
-    #     printing=printing,
-    #     frame_duration=tts_frame_length,
-    #     device=device,
-    # )
+    speaker = SimpleSpeakerModule(rate=tts_model_samplerate)
 
-    # tts = TtsDmModule(
-    #     language="en",
-    #     model=tts_model,
-    #     printing=printing,
-    #     frame_duration=tts_frame_length,
-    #     device=device,
-    # )
-
-    # speaker = SpeakerInterruptionModule(
-    #     rate=tts_model_samplerate,
-    # )
-    cback = debug.CallbackModule(callback=callback_fun)
+    # cback = debug.CallbackModule(callback=callback_fun)
 
     # create network
     mic.subscribe(vad)
     vad.subscribe(asr)
-    asr.subscribe(cback)
+    asr.subscribe(llm)
+    llm.subscribe(tts)
+    tts.subscribe(speaker)
+    speaker.subscribe(vad)
 
     # running system
     try:
