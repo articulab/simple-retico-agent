@@ -1,3 +1,25 @@
+"""
+SimpleVADModule
+===============
+
+A retico module that provides Voice Activity Detection (VAD) using
+WebRTC's VAD. Takes AudioIU as input, resamples the IU's raw_audio to
+match WebRTC VAD's input frame rate, then call the VAD to predict
+(user's) voice activity on the resampled raw_audio (True == speech
+recognized), and finally returns the prediction alognside with the
+raw_audio (and related parameter such as frame rate, etc) using a new IU
+type called VADIU.
+
+It also takes TextIU as input, to additionally keep tracks of the
+agent's voice activity (agent == the retico system) by receiving IUs
+from the SpeakerModule. The agent's voice activity is also outputted in
+the VADIU.
+
+Inputs : AudioIU, TextIU
+
+Outputs : VADIU
+"""
+
 import pydub
 import webrtcvad
 
@@ -8,13 +30,28 @@ from additional_IUs import VADIU
 
 
 class SimpleVADModule(retico_core.AbstractModule):
+    """A retico module that provides Voice Activity Detection (VAD)
+    using WebRTC's VAD. Takes AudioIU as input, resamples the IU's
+    raw_audio to match WebRTC VAD's input frame rate, then call the VAD
+    to predict (user's) voice activity on the resampled raw_audio (True
+    == speech recognized), and finally returns the prediction alognside
+    with the raw_audio (and related parameter such as frame rate, etc)
+    using a new IU type called VADIU.
+
+    It also takes TextIU as input, to additionally keep tracks of the
+    agent's voice activity (agent == the retico system) by receiving IUs
+    from the SpeakerModule. The agent's voice activity is also outputted
+    in the VADIU.
+    """
+
     @staticmethod
     def name():
         return "VAD Simple Module"
 
     @staticmethod
     def description():
-        return "a module enhancing AudioIUs with VA activation for both user (using webrtcvad's VAD) and agent (using IUs received from Speaker Module)."
+        return "a module enhancing AudioIUs with voice activity for both user (using\
+            WebRTC's VAD) and agent (using Text IUs received from Speaker Module)."
 
     @staticmethod
     def input_ius():
@@ -44,10 +81,12 @@ class SimpleVADModule(retico_core.AbstractModule):
         self.VA_agent = False
 
     def resample_audio(self, audio):
-        """Resample the audio's frame_rate to correspond to self.target_framerate.
+        """Resample the audio's frame_rate to correspond to
+        self.target_framerate.
 
         Args:
-            audio (bytes): the audio received from the microphone that could need resampling.
+            audio (bytes): the audio received from the microphone that
+                could need resampling.
 
         Returns:
             bytes: the resampled audio chunk.
@@ -64,12 +103,16 @@ class SimpleVADModule(retico_core.AbstractModule):
         return audio
 
     def process_update(self, update_message):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """Receives TextIU and AudioIU, use the first one to set the
+        self.VA_agent class attribute, and process the second one by
+        predicting whether it contains speech or not to set VA_user IU
+        parameter.
 
         Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are ADD,
-            they are added to the audio_buffer.
+            update_message (UpdateType): UpdateMessage that contains new
+                IUs (TextIUs or AudioIUs), both are used to provide
+                voice activity information (respectively for agent and
+                user).
         """
         for iu, ut in update_message:
             # IUs from SpeakerModule, can be either agent BOT or EOT
@@ -85,7 +128,8 @@ class SimpleVADModule(retico_core.AbstractModule):
                 if ut == retico_core.UpdateType.ADD:
                     if self.input_framerate != iu.rate:
                         raise ValueError(
-                            f"input framerate differs from iu framerate : {self.input_framerate} vs {iu.rate}"
+                            f"input framerate differs from iu framerate : {self.input_framerate}\
+                            vs {iu.rate}"
                         )
                     audio = self.resample_audio(iu.raw_audio)
                     VA_user = self.vad.is_speech(audio, self.target_framerate)
