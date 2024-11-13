@@ -1,0 +1,169 @@
+{
+    "VAD Simple Module": {
+        "events": {
+            "VA_silence": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "darkgray",
+                    "marker_size": 8
+                }
+            },
+            "VA_user": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "red",
+                    "marker_size": 12
+                }
+            },
+            "VA_agent": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "seagreen",
+                    "marker_size": 12
+                }
+            },
+            "VA_overlap": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "orange",
+                    "marker_size": 16
+                }
+            },
+            "create_iu": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 1
+                }
+            },
+            "append UM": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "deepskyblue",
+                    "marker_size": 1
+                }
+            },
+            "process_update": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 1
+                }
+            }
+        }
+    },
+    "TTS Simple Module": {
+        "events": {
+            "before_synthesize": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "violet",
+                    "marker_size": 15
+                }
+            },
+            "after_synthesize": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "violet",
+                    "marker_size": 19
+                }
+            },
+            "after_alignement": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "violet",
+                    "marker_size": 23
+                }
+            }
+        }
+    },
+    "ASR Whisper Simple Module": {
+        "events": {
+            "predict": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "violet",
+                    "marker_size": 18
+                }
+            }
+        }
+    },
+    "Speaker Simple Module": {
+        "events": {
+            "output_silence": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "darkgray",
+                    "marker_size": 8
+                }
+            },
+            "output_audio": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "seagreen",
+                    "marker_size": 12
+                }
+            }
+        }
+    },
+    "any_module": {
+        "events": {
+            "create_iu": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 12
+                }
+            },
+            "append UM": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "deepskyblue",
+                    "marker_size": 8
+                }
+            },
+            "process_update": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "mediumblue",
+                    "marker_size": 4
+                }
+            },
+            "start_process": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "orange",
+                    "marker_size": 25
+                }
+            },
+            "start_answer_generation": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "seagreen",
+                    "marker_size": 18
+                }
+            },
+            "send_clause": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "darkviolet",
+                    "marker_size": 18
+                }
+            },
+            "EOT": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "r",
+                    "marker_size": 15
+                }
+            },
+            "any_event": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "lightslategrey",
+                    "marker_size": 18
+                }
+            }
+        }
+    }
+}
