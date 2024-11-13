@@ -29,7 +29,33 @@ class AudioFinalIU(retico_core.audio.AudioIU):
         self.final = final
 
 
+class VADIU(retico_core.audio.AudioIU):
+    """AudioIU enhanced by VADModule with VA for both user and agent.
+
+    Attributes:
+        va_user (bool): user VA activation, True means voice recognized,
+            False means no voice recognized.
+        va_agent (bool): agent VA activation, True means audio outputted
+            by the agent, False means no audio outputted by the agent.
+    """
+
+    @staticmethod
+    def type():
+        return "VAD IU"
+
+    def __init__(
+        self,
+        va_user=None,
+        va_agent=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.va_user = va_user
+        self.va_agent = va_agent
+
+
 class BackchannelIU(retico_core.audio.AudioIU):
+    """AudioIU with a different type for backchannel behavior."""
 
     @staticmethod
     def type():
@@ -72,57 +98,21 @@ class DMIU(retico_core.audio.AudioIU):
         self.final = final
 
 
-class VADIU(retico_core.audio.AudioIU):
-    """AudioIU enhanced by VADModule with VA for both user and agent
-
-    Attributes:
-        va_user (bool): user VA activation, True means voice recognized, False means no voice recognized.
-        va_agent (bool): agent VA activation, True means audio outputted by the agent, False means no audio outputted by the agent.
-    """
-
-    @staticmethod
-    def type():
-        return "VAD IU"
-
-    def __init__(
-        self,
-        creator=None,
-        iuid=0,
-        previous_iu=None,
-        grounded_in=None,
-        audio=None,
-        rate=None,
-        nframes=None,
-        sample_width=None,
-        va_user=None,
-        va_agent=None,
-        **kwargs,
-    ):
-        super().__init__(
-            creator=creator,
-            iuid=iuid,
-            previous_iu=previous_iu,
-            grounded_in=grounded_in,
-            payload=audio,
-            raw_audio=audio,
-            rate=rate,
-            nframes=nframes,
-            sample_width=sample_width,
-        )
-        self.va_user = va_user
-        self.va_agent = va_agent
-
-
 class SpeakerAlignementIU(retico_core.audio.AudioIU):
-    """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
+    """AudioIU enhanced with information that aligns the AudioIU to the current
+    written agent turn.
 
     Attributes:
-        - grounded_word : the word corresponding to the audio.
-        - turn_id (int) : The index of the dialogue's turn the IU is part of.
-        - clause_id (int) : The index of the clause the IU is part of, in the current turn.
-        - word_id (int) : The index of the word that corresponds to the end of the IU].
-        - char_id (int) : The index of the last character from the grounded_word.
-        - final (bool) : Wether the IU is an EOT.
+        grounded_word (str): the word corresponding to the audio.
+        turn_id (int): The index of the dialogue's turn the IU is part
+            of.
+        clause_id (int): The index of the clause the IU is part of, in
+            the current turn.
+        word_id (int): The index of the word that corresponds to the end
+            of the IU].
+        char_id (int): The index of the last character from the
+            grounded_word.
+        final (bool): Wether the IU is an EOT.
     """
 
     @staticmethod
@@ -161,15 +151,20 @@ class SpeakerAlignementIU(retico_core.audio.AudioIU):
 
 
 class TextAlignedAudioIU(retico_core.audio.AudioIU):
-    """AudioIU enhanced with information that aligns the AudioIU to the current written agent turn.
+    """AudioIU enhanced with information that aligns the AudioIU to the current
+    written agent turn.
 
     Attributes:
-        - grounded_word : the word corresponding to the audio.
-        - turn_id (int) : The index of the dialogue's turn the IU is part of.
-        - clause_id (int) : The index of the clause the IU is part of, in the current turn.
-        - word_id (int) : The index of the word that corresponds to the end of the IU].
-        - char_id (int) : The index of the last character from the grounded_word.
-        - final (bool) : Wether the IU is an EOT.
+        grounded_word (str): the word corresponding to the audio.
+        turn_id (int): The index of the dialogue's turn the IU is part
+            of.
+        clause_id (int): The index of the clause the IU is part of, in
+            the current turn.
+        word_id (int): The index of the word that corresponds to the end
+            of the IU].
+        char_id (int): The index of the last character from the
+            grounded_word.
+        final (bool): Wether the IU is an EOT.
     """
 
     @staticmethod
@@ -225,7 +220,7 @@ class TextAlignedAudioIU(retico_core.audio.AudioIU):
         sample_width=None,
         final=False,
     ):
-        """Sets AudioIU parameters and the alignment information"""
+        """Sets AudioIU parameters and the alignment information."""
         # alignment information
         self.grounded_word = grounded_word
         self.word_id = word_id
@@ -242,12 +237,14 @@ class TextAlignedAudioIU(retico_core.audio.AudioIU):
 
 
 class TurnTextIU(retico_core.text.TextIU):
-    """TextIU enhanced with information related to dialogue turns, clauses, etc.
+    """TextIU enhanced with information related to dialogue turns, clauses,
+    etc.
 
     Attributes:
-        - turn_id (int) : Which dialogue's turn the IU is part of.
-        - clause_id (int) : Which clause the IU is part of, in the current turn.
-        - final (bool) : Wether the IU is an EOT.
+        turn_id (int): Which dialogue's turn the IU is part of.
+        clause_id (int): Which clause the IU is part of, in the current
+            turn.
+        final (bool): Wether the IU is an EOT.
     """
 
     @staticmethod
@@ -284,7 +281,8 @@ class TurnTextIU(retico_core.text.TextIU):
         clause_id=None,
         final=False,
     ):
-        """Sets TextIU parameters and dialogue turns informations (turn_id, clause_id, final)"""
+        """Sets TextIU parameters and dialogue turns informations (turn_id,
+        clause_id, final)"""
         # dialogue turns information
         self.turn_id = turn_id
         self.clause_id = clause_id
@@ -295,11 +293,13 @@ class TurnTextIU(retico_core.text.TextIU):
 
 
 class VADTurnAudioIU(retico_core.audio.AudioIU):
-    """AudioIU enhanced by VADTurnModule with dialogue turn information (agent_turn, user_turn,
-    silence, interruption, etc) contained in the vad_state parameter.
+    """AudioIU enhanced by VADTurnModule with dialogue turn information
+    (agent_turn, user_turn, silence, interruption, etc) contained in the
+    vad_state parameter.
 
     Attributes:
-        vad_state (string): dialogue turn information (agent_turn, user_turn, silence, interruption, etc) from VADTurnModule.
+        vad_state (string): dialogue turn information (agent_turn,
+            user_turn, silence, interruption, etc) from VADTurnModule.
     """
 
     @staticmethod
@@ -335,7 +335,7 @@ class VADTurnAudioIU(retico_core.audio.AudioIU):
     def set_data(
         self, vad_state=None, audio=None, nframes=None, rate=None, sample_width=None
     ):
-        """Sets AudioIU parameters and vad_state"""
+        """Sets AudioIU parameters and vad_state."""
         # vad_state
         self.vad_state = vad_state
         # AudioIU information

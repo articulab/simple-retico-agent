@@ -1,16 +1,16 @@
-"""
-whisper ASR Module
-==================
+"""Whisper ASR Module ==================
 
-A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper
-model. Periodically predicts a new text hypothesis from the input incremental speech and
-predicts a final hypothesis when it is the user end of turn.
+A retico module that provides Automatic Speech Recognition (ASR) using a
+OpenAI's Whisper model. Periodically predicts a new text hypothesis from
+the input incremental speech and predicts a final hypothesis when it is
+the user end of turn.
 
-The received VADTurnAudioIU are stored in a buffer from which a prediction is made periodically,
-the words that were not present in the previous hypothesis are ADDED, in contrary, the words
-that were present, but aren't anymore are REVOKED.
-It recognize the user's EOT information when COMMIT VADTurnAudioIUs are received, a final
-prediciton is then made and the corresponding IUs are COMMITED.
+The received VADTurnAudioIU are stored in a buffer from which a
+prediction is made periodically, the words that were not present in the
+previous hypothesis are ADDED, in contrary, the words that were present,
+but aren't anymore are REVOKED. It recognize the user's EOT information
+when COMMIT VADTurnAudioIUs are received, a final prediciton is then
+made and the corresponding IUs are COMMITED.
 
 The faster_whisper library is used to speed up the whisper inference.
 
@@ -50,17 +50,20 @@ class SpeechRecognitionTurnIU(retico_core.text.SpeechRecognitionIU):
 
 
 class AsrDmModule(retico_core.AbstractModule):
-    """A retico module that provides Automatic Speech Recognition (ASR) using a OpenAI's Whisper
-    model. Periodically predicts a new text hypothesis from the input incremental speech and
-    predicts a final hypothesis when it is the user end of turn.
+    """A retico module that provides Automatic Speech Recognition (ASR) using a
+    OpenAI's Whisper model. Periodically predicts a new text hypothesis from
+    the input incremental speech and predicts a final hypothesis when it is the
+    user end of turn.
 
-    The received VADTurnAudioIU are stored in a buffer from which a prediction is made periodically,
-    the words that were not present in the previous hypothesis are ADDED, in contrary, the words
-    that were present, but aren't anymore are REVOKED.
-    It recognize the user's EOT information when COMMIT VADTurnAudioIUs are received, a final
+    The received VADTurnAudioIU are stored in a buffer from which a
+    prediction is made periodically, the words that were not present in
+    the previous hypothesis are ADDED, in contrary, the words that were
+    present, but aren't anymore are REVOKED. It recognize the user's EOT
+    information when COMMIT VADTurnAudioIUs are received, a final
     prediciton is then made and the corresponding IUs are COMMITED.
 
-    The faster_whisper library is used to speed up the whisper inference.
+    The faster_whisper library is used to speed up the whisper
+    inference.
 
     Inputs : VADTurnAudioIU
 
@@ -95,19 +98,26 @@ class AsrDmModule(retico_core.AbstractModule):
         sample_width=2,
         **kwargs,
     ):
-        """
-        Initializes the WhisperASRInterruption Module.
+        """Initializes the WhisperASRInterruption Module.
 
         Args:
-            whisper_model (string): name of the desired model, has to correspond to a model in the faster_whisper library.
-            device (string): wether the model will be executed on cpu or gpu (using "cuda").
-            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
+            whisper_model (string): name of the desired model, has to
+                correspond to a model in the faster_whisper library.
+            device (string): wether the model will be executed on cpu or
+                gpu (using "cuda").
+            language (string): language of the desired model, has to be
+                contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the
+                desired voice to copy (for voice cloning models).
             target_framerate (int): model's desired audio framerate.
-            input_framerate (int): framerate of the received VADTurnAudioIUs.
-            channels (int): number of channels (1=mono, 2=stereo) of the received VADTurnAudioIUs.
-            sample_width (int):sample width (number of bits used to encode each frame) of the received VADTurnAudioIUs.
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+            input_framerate (int): framerate of the received
+                VADTurnAudioIUs.
+            channels (int): number of channels (1=mono, 2=stereo) of the
+                received VADTurnAudioIUs.
+            sample_width (int):sample width (number of bits used to
+                encode each frame) of the received VADTurnAudioIUs.
+            printing (bool, optional): You can choose to print some
+                running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
 
@@ -130,10 +140,12 @@ class AsrDmModule(retico_core.AbstractModule):
         self.sample_width = sample_width
 
     def resample_audio(self, audio):
-        """Resample the audio's frame_rate to correspond to self.target_framerate.
+        """Resample the audio's frame_rate to correspond to
+        self.target_framerate.
 
         Args:
-            audio (bytes): the audio received from the microphone that could need resampling.
+            audio (bytes): the audio received from the microphone that
+                could need resampling.
 
         Returns:
             bytes: the resampled audio chunk.
@@ -150,7 +162,8 @@ class AsrDmModule(retico_core.AbstractModule):
         return audio
 
     def add_audio(self, audio):
-        """Resamples and adds the audio chunk received from the microphone to the audio buffer.
+        """Resamples and adds the audio chunk received from the microphone to
+        the audio buffer.
 
         Args:
             audio (bytes): the audio chunk received from the microphone.
@@ -159,13 +172,16 @@ class AsrDmModule(retico_core.AbstractModule):
         self.audio_buffer.append(audio)
 
     def recognize(self):
-        """Recreate the audio signal received by the microphone by concatenating the audio chunks
-        from the audio_buffer and transcribe this concatenation into a list of predicted words.
-        The function also keeps track of the user turns with the self.vad_state parameter that
-        changes with the EOS recognized with the self.recognize_silence() function.
+        """Recreate the audio signal received by the microphone by
+        concatenating the audio chunks from the audio_buffer and transcribe
+        this concatenation into a list of predicted words. The function also
+        keeps track of the user turns with the self.vad_state parameter that
+        changes with the EOS recognized with the self.recognize_silence()
+        function.
 
         Returns:
-            (list[string], boolean): the list of words transcribed by the asr and the VAD state.
+            (list[string], boolean): the list of words transcribed by
+                the asr and the VAD state.
         """
         # faster whisper
         full_audio = b"".join(self.audio_buffer)
@@ -179,12 +195,13 @@ class AsrDmModule(retico_core.AbstractModule):
         return transcription
 
     def process_update(self, update_message):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L402.
 
         Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are ADD,
-            they are added to the audio_buffer.
+            update_message (UpdateType): UpdateMessage that contains new
+                IUs, if the IUs are ADD, they are added to the
+                audio_buffer.
         """
         eos = False
         for iu, ut in update_message:
@@ -203,11 +220,15 @@ class AsrDmModule(retico_core.AbstractModule):
             self.eos = eos
 
     def _asr_thread(self):
-        """function used as a thread in the prepare_run function. Handles the messaging aspect of the retico module.
-        Calls the WhisperASR sub-class's recognize function, and sends ADD IUs of the recognized sentence chunk to the children modules.
-        If the end-of-sentence is predicted by the WhisperASR sub-class (>700ms silence), sends COMMIT IUs of the recognized full sentence.
+        """Function used as a thread in the prepare_run function. Handles the
+        messaging aspect of the retico module. Calls the WhisperASR sub-class's
+        recognize function, and sends ADD IUs of the recognized sentence chunk
+        to the children modules. If the end-of-sentence is predicted by the
+        WhisperASR sub-class (>700ms silence), sends COMMIT IUs of the
+        recognized full sentence.
 
-        Using the current output to create the final prediction and COMMIT the full final transcription.
+        Using the current output to create the final prediction and
+        COMMIT the full final transcription.
         """
         while self._asr_thread_active:
             try:
@@ -244,16 +265,14 @@ class AsrDmModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def prepare_run(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L808."""
         super().prepare_run()
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
 
     def shutdown(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L819."""
         super().shutdown()
         self._asr_thread_active = False

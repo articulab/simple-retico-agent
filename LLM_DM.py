@@ -1,44 +1,42 @@
-"""
-LlamaCppMemoryIncrementalModule
-==================
+"""LlamaCppMemoryIncrementalModule ==================
 
-A retico module that provides Natural Language Generation (NLG) using a Large Language Model
-(LLM), and handles user interruption.
+A retico module that provides Natural Language Generation (NLG) using a
+Large Language Model (LLM), and handles user interruption.
 
-when a full user sentence (COMMIT SpeechRecognitionIUs) is received from the ASR, the module
-adds the sentence to the previous dialogue turns stored in the dialogue history to build a
-constructed prompt (with a defined template), it then use it to generates a system answer.
-During the generation, if a punctuation is encountered (end of clause), the IUs corresponding
-to the generated clause are COMMITED.
-Record the dialogue history by saving the dialogue turns from both the user and the agent.
-Update the dialogue history do that it doesn't exceed a certain threshold of token size.
-Put the dialogue history in the prompt at each new system sentence generation.
-The module stops its generation if it receives the information that the user started talking
-(user barge-in/interruption of agent turn). The interruption information is recognized by
-an VADTurnAudioIU with a parameter vad_state="interruption". After an interruption, it aligns the
-agent interrupted sentence in dialogue history with the last word spoken by the agent (these
-informations are recognized when a TextAlignedAudioIU with parameter final = False is received after
-an interruption).
+when a full user sentence (COMMIT SpeechRecognitionIUs) is received from
+the ASR, the module adds the sentence to the previous dialogue turns
+stored in the dialogue history to build a constructed prompt (with a
+defined template), it then use it to generates a system answer. During
+the generation, if a punctuation is encountered (end of clause), the IUs
+corresponding to the generated clause are COMMITED. Record the dialogue
+history by saving the dialogue turns from both the user and the agent.
+Update the dialogue history do that it doesn't exceed a certain
+threshold of token size. Put the dialogue history in the prompt at each
+new system sentence generation. The module stops its generation if it
+receives the information that the user started talking (user barge-
+in/interruption of agent turn). The interruption information is
+recognized by an VADTurnAudioIU with a parameter
+vad_state="interruption". After an interruption, it aligns the agent
+interrupted sentence in dialogue history with the last word spoken by
+the agent (these informations are recognized when a TextAlignedAudioIU
+with parameter final = False is received after an interruption).
 
-The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
+The llama-cpp-python library is used to speed up the LLM inference
+(execution in C++).
 
 Inputs : SpeechRecognitionIU, VADTurnAudioIU, TextAlignedAudioIU
 
 Outputs : TurnTextIU
 
-
-example of the prompt template :
-prompt = "[INST] <<SYS>>\
-This is a spoken dialog scenario between a teacher and a 8 years old child student. \
-The teacher is teaching mathematics to the child student. \
-As the student is a child, the teacher needs to stay gentle all the time. Please provide the next valid response for the following conversation.\
-You play the role of a teacher. Here is the beginning of the conversation : \
-<</SYS>>\
-\
-Child : Hello ! \
-Teacher : Hi! How are your today ? \
-Child : I am fine, and I can't wait to learn mathematics ! \
-[/INST]"
+example of the prompt template : prompt = "[INST] <<SYS>>\ This is a
+spoken dialog scenario between a teacher and a 8 years old child
+student. \ The teacher is teaching mathematics to the child student. \
+As the student is a child, the teacher needs to stay gentle all the
+time. Please provide the next valid response for the following
+conversation.\ You play the role of a teacher. Here is the beginning of
+the conversation : \ <</SYS>>\ \ Child : Hello ! \ Teacher : Hi! How are
+your today ? \ Child : I am fine, and I can't wait to learn mathematics
+! \ [/INST]"
 """
 
 import datetime
@@ -61,25 +59,31 @@ from dialogue_manager import DialogueHistory
 
 
 class LlmDmModule(retico_core.AbstractModule):
-    """A retico module that provides Natural Language Generation (NLG) using a Large Language Model
-    (LLM), and handles user interruption.
+    """A retico module that provides Natural Language Generation (NLG) using a
+    Large Language Model (LLM), and handles user interruption.
 
-    when a full user sentence (COMMIT SpeechRecognitionIUs) is received from the ASR, the module
-    adds the sentence to the previous dialogue turns stored in the dialogue history to build a
-    constructed prompt (with a defined template), it then use it to generates a system answer.
-    During the generation, if a punctuation is encountered (end of clause), the IUs corresponding
-    to the generated clause are COMMITED.
-    Record the dialogue history by saving the dialogue turns from both the user and the agent.
-    Update the dialogue history do that it doesn't exceed a certain threshold of token size.
-    Put the dialogue history in the prompt at each new system sentence generation.
-    The module stops its generation if it receives the information that the user started talking
-    (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an VADTurnAudioIU with a parameter vad_state="interruption". After an interruption, it aligns the
-    agent interrupted sentence in dialogue history with the last word spoken by the agent (these
-    informations are recognized when a TextAlignedAudioIU with parameter final = False is received after
-    an interruption).
+    when a full user sentence (COMMIT SpeechRecognitionIUs) is received
+    from the ASR, the module adds the sentence to the previous dialogue
+    turns stored in the dialogue history to build a constructed prompt
+    (with a defined template), it then use it to generates a system
+    answer. During the generation, if a punctuation is encountered (end
+    of clause), the IUs corresponding to the generated clause are
+    COMMITED. Record the dialogue history by saving the dialogue turns
+    from both the user and the agent. Update the dialogue history do
+    that it doesn't exceed a certain threshold of token size. Put the
+    dialogue history in the prompt at each new system sentence
+    generation. The module stops its generation if it receives the
+    information that the user started talking (user barge-
+    in/interruption of agent turn). The interruption information is
+    recognized by an VADTurnAudioIU with a parameter
+    vad_state="interruption". After an interruption, it aligns the agent
+    interrupted sentence in dialogue history with the last word spoken
+    by the agent (these informations are recognized when a
+    TextAlignedAudioIU with parameter final = False is received after an
+    interruption).
 
-    The llama-cpp-python library is used to speed up the LLM inference (execution in C++).
+    The llama-cpp-python library is used to speed up the LLM inference
+    (execution in C++).
 
     Inputs : SpeechRecognitionIU, VADTurnAudioIU, TextAlignedAudioIU
 
@@ -120,20 +124,38 @@ class LlmDmModule(retico_core.AbstractModule):
         n_gpu_layers=100,
         **kwargs,
     ):
-        """
-        Initializes the LlamaCppMemoryIncremental Module.
+        """Initializes the LlamaCppMemoryIncremental Module.
 
         Args:
-            model_path (string): local model instantiation. The path to the desired local model weights file (my_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
-            model_repo (string): HF model instantiation. The path to the desired remote hugging face model (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
-            model_name (string): HF model instantiation. The name of the desired remote hugging face model (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
-            initial_prompt (string): _description_. Deprecated. Defaults to None.
-            system_prompt (string): The dialogue scenario that you want the system to base its interactions on. Ex : "This is spoken dialogue, you are a teacher...". (will be inputted into every prompt)
-            context_size (int, optional): Max number of tokens that the total prompt can contain. Defaults to 2000.
-            short_memory_context_size (int, optional): Max number of tokens that the short term memory (dialogue history) can contain. Has to be lower than context_size. Defaults to 500.
-            n_gpu_layers (int, optional): Number of model layers you want to run on GPU. Take the model nb layers if greater. Defaults to 100.
-            device (string, optional): the device the module will run on (cuda for gpu, or cpu)
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+            model_path (string): local model instantiation. The path to
+                the desired local model weights file
+                (my_models/mistral-7b-instruct-v0.2.Q4_K_M.gguf for
+                example).
+            model_repo (string): HF model instantiation. The path to the
+                desired remote hugging face model
+                (TheBloke/Mistral-7B-Instruct-v0.2-GGUF for example).
+            model_name (string): HF model instantiation. The name of the
+                desired remote hugging face model
+                (mistral-7b-instruct-v0.2.Q4_K_M.gguf for example).
+            initial_prompt (string): _description_. Deprecated. Defaults
+                to None.
+            system_prompt (string): The dialogue scenario that you want
+                the system to base its interactions on. Ex : "This is
+                spoken dialogue, you are a teacher...". (will be
+                inputted into every prompt)
+            context_size (int, optional): Max number of tokens that the
+                total prompt can contain. Defaults to 2000.
+            short_memory_context_size (int, optional): Max number of
+                tokens that the short term memory (dialogue history) can
+                contain. Has to be lower than context_size. Defaults to
+                500.
+            n_gpu_layers (int, optional): Number of model layers you
+                want to run on GPU. Take the model nb layers if greater.
+                Defaults to 100.
+            device (string, optional): the device the module will run on
+                (cuda for gpu, or cpu)
+            printing (bool, optional): You can choose to print some
+                running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
 
@@ -178,7 +200,8 @@ class LlmDmModule(retico_core.AbstractModule):
     #######
 
     def init_stop_criteria(self):
-        """Calculates the stopping token patterns using the instantiated model tokenizer."""
+        """Calculates the stopping token patterns using the instantiated model
+        tokenizer."""
         self.stop_token_ids.append(self.model.token_eos())
         self.stop_token_text_patterns, self.role_token_text_patterns = (
             self.dialogue_history.get_stop_patterns()
@@ -192,8 +215,9 @@ class LlmDmModule(retico_core.AbstractModule):
             self.role_token_patterns.append(self.model.tokenize(pat, add_bos=False))
 
     def new_user_sentence(self, user_sentence):
-        """Function called to register a new user sentence into the dialogue history (utterances attribute).
-        Calculates the exact token number added to the dialogue history (with template prefixes and suffixes).
+        """Function called to register a new user sentence into the dialogue
+        history (utterances attribute). Calculates the exact token number added
+        to the dialogue history (with template prefixes and suffixes).
 
         Args:
             user_sentence (string): the new user sentence to register.
@@ -207,12 +231,15 @@ class LlmDmModule(retico_core.AbstractModule):
         )
 
     def new_agent_sentence(self, agent_sentence, turn_id):
-        """Function called to register a new agent sentence into the dialogue history (utterances attribute).
-        Calculates the exact token number added to the dialogue history (with template prefixes and suffixes).
+        """Function called to register a new agent sentence into the dialogue
+        history (utterances attribute). Calculates the exact token number added
+        to the dialogue history (with template prefixes and suffixes).
 
         Args:
             agent_sentence (string): the new agent sentence to register.
-            agent_sentence_nb_tokens (int): the number of token corresponding to the agent sentence (without template prefixes and suffixes).
+            agent_sentence_nb_tokens (int): the number of token
+                corresponding to the agent sentence (without template
+                prefixes and suffixes).
         """
         self.dialogue_history.append_utterance(
             {
@@ -223,15 +250,23 @@ class LlmDmModule(retico_core.AbstractModule):
         )
 
     def interruption_alignment_new_agent_sentence(self, new_agent_sentence):
-        """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
+        """After an interruption, this function will align the sentence stored
+        in dialogue history with the last word spoken by the agent.
 
-        This function is triggered if the interrupted speaker IU has been received before the module has stored the new agent sentence in the dialogue history.
-        If that is not the case, the function interruption_alignment_last_agent_sentence is triggered instead.
+        This function is triggered if the interrupted speaker IU has
+        been received before the module has stored the new agent
+        sentence in the dialogue history. If that is not the case, the
+        function interruption_alignment_last_agent_sentence is triggered
+        instead.
 
-        With the informations stored in self.interrupted_speaker_iu, this function will shorten the new_agent_sentence to be aligned with the last words spoken by the agent.
+        With the informations stored in self.interrupted_speaker_iu,
+        this function will shorten the new_agent_sentence to be aligned
+        with the last words spoken by the agent.
 
         Args:
-            new_agent_sentence (string): the utterance generated by the LLM, that has been interrupted by the user and needs to be aligned.
+            new_agent_sentence (string): the utterance generated by the
+                LLM, that has been interrupted by the user and needs to
+                be aligned.
         """
         utterance = {
             "turn_id": self.interrupted_speaker_iu.turn_id,
@@ -243,14 +278,19 @@ class LlmDmModule(retico_core.AbstractModule):
         )
 
     def interruption_alignment_last_agent_sentence(self, iu):
-        """After an interruption, this function will align the sentence stored in dialogue history with the last word spoken by the agent.
+        """After an interruption, this function will align the sentence stored
+        in dialogue history with the last word spoken by the agent.
 
-        If the turn that the speaker IU is a turn further from the last utterance in self.utterances,
-        store the speaker IU in self.interrupted_speaker_iu and wait for the sentence generation to end,
-        the interruption_alignment_new_agent_sentence function will then be called.
+        If the turn that the speaker IU is a turn further from the last
+        utterance in self.utterances, store the speaker IU in
+        self.interrupted_speaker_iu and wait for the sentence generation
+        to end, the interruption_alignment_new_agent_sentence function
+        will then be called.
 
         Args:
-            iu (AudioTurnIU): The IU received from the Speaker module, that correspond to the last IU that has been outputted through the speakers.
+            iu (AudioTurnIU): The IU received from the Speaker module,
+                that correspond to the last IU that has been outputted
+                through the speakers.
         """
         # it could be the DM that has that function, because the DM receives the IUs from speaker module too
         self.interrupted_speaker_iu = iu
@@ -268,15 +308,18 @@ class LlmDmModule(retico_core.AbstractModule):
                 )
 
     def remove_stop_patterns(self, sentence, pattern_id):
-        """Function called when a stopping token pattern has been encountered during the sentence generation.
-        Remove the encountered pattern from the generated sentence.
+        """Function called when a stopping token pattern has been encountered
+        during the sentence generation. Remove the encountered pattern from the
+        generated sentence.
 
         Args:
-            sentence (string): Agent new generated sentence containing a stopping token pattern.
+            sentence (string): Agent new generated sentence containing a
+                stopping token pattern.
 
         Returns:
-            string: Agent new generated sentence without the stopping token pattern encountered.
-            int: nb tokens removed (from the stopping token pattern).
+            string: Agent new generated sentence without the stopping
+                token pattern encountered. int: nb tokens removed (from
+                the stopping token pattern).
         """
         sentence = sentence[: -len(self.stop_token_text_patterns[pattern_id])]
         nb_token_removed = len(self.stop_token_patterns[pattern_id])
@@ -286,15 +329,18 @@ class LlmDmModule(retico_core.AbstractModule):
         return sentence, nb_token_removed
 
     def identify_and_remove_stop_patterns(self, sentence):
-        """Function called when a stopping token pattern has been encountered during the sentence generation.
-        Remove the encountered pattern from the generated sentence.
+        """Function called when a stopping token pattern has been encountered
+        during the sentence generation. Remove the encountered pattern from the
+        generated sentence.
 
         Args:
-            sentence (string): Agent new generated sentence containing a stopping token pattern.
+            sentence (string): Agent new generated sentence containing a
+                stopping token pattern.
 
         Returns:
-            string: Agent new generated sentence without the stopping token pattern encountered.
-            int: nb tokens removed (from the stopping token pattern).
+            string: Agent new generated sentence without the stopping
+                token pattern encountered. int: nb tokens removed (from
+                the stopping token pattern).
         """
         nb_token_removed = 0
         for i, pattern in enumerate(self.stop_token_text_patterns):
@@ -308,14 +354,18 @@ class LlmDmModule(retico_core.AbstractModule):
         return sentence, nb_token_removed
 
     def remove_role_patterns(self, sentence):
-        """Function called when a role token pattern has been encountered during the sentence generation.
-        Remove the encountered pattern from the generated sentence.
+        """Function called when a role token pattern has been encountered
+        during the sentence generation. Remove the encountered pattern from the
+        generated sentence.
 
         Args:
-            sentence (string): Agent new generated sentence containing a role token pattern.
+            sentence (string): Agent new generated sentence containing a
+                role token pattern.
 
         Returns:
-            (bytes, int): the agent new generated sentence without the role token pattern, and the number of token removed while removing the role token pattern from the sentence.
+            (bytes, int): the agent new generated sentence without the
+                role token pattern, and the number of token removed
+                while removing the role token pattern from the sentence.
         """
         first_chunck_string = sentence
         nb_token_removed = 0
@@ -327,8 +377,12 @@ class LlmDmModule(retico_core.AbstractModule):
         return sentence, nb_token_removed
 
     def prepare_dialogue_history(self):
-        """Calculate if the current dialogue history is bigger than the size threshold (short_memory_context_size).
-        If the dialogue history contains too many tokens, remove the older dialogue turns until its size is smaller than the threshold.
+        """Calculate if the current dialogue history is bigger than the size
+        threshold (short_memory_context_size).
+
+        If the dialogue history contains too many tokens, remove the
+        older dialogue turns until its size is smaller than the
+        threshold.
         """
         print(self.dialogue_history.get_dialogue_history())
         return self.dialogue_history.prepare_dialogue_history(self.model.tokenize)
@@ -337,7 +391,8 @@ class LlmDmModule(retico_core.AbstractModule):
         """Returns True if the token correspond to a punctuation.
 
         Args:
-            word (bytes): a detokenized word corresponding to last generated LLM token
+            word (bytes): a detokenized word corresponding to last
+                generated LLM token
 
         Returns:
             bool: True if the token correspond to a punctuation.
@@ -345,27 +400,32 @@ class LlmDmModule(retico_core.AbstractModule):
         return word in self.punctuation_text
 
     def is_stop_token(self, token):
-        """
-        Function used by the LLM to stop generate tokens when it meets certain criteria.
+        """Function used by the LLM to stop generate tokens when it meets
+        certain criteria.
 
         Args:
             token (int): last token generated by the LLM
-            word (bytes): the detokenized word corresponding to last generated token
+            word (bytes): the detokenized word corresponding to last
+                generated token
 
         Returns:
-            bool: returns True if it the last generated token corresponds to self.stop_token_ids or self.stop_token_text.
+            bool: returns True if it the last generated token
+                corresponds to self.stop_token_ids or
+                self.stop_token_text.
         """
         is_stopping_id = token in self.stop_token_ids
         return is_stopping_id
 
     def is_stop_pattern(self, sentence):
-        """Returns True if one of the stopping token patterns matches the end of the sentence.
+        """Returns True if one of the stopping token patterns matches the end
+        of the sentence.
 
         Args:
             sentence (string): a sentence.
 
         Returns:
-            bool: True if one of the stopping token patterns matches the end of the sentence.
+            bool: True if one of the stopping token patterns matches the
+                end of the sentence.
         """
         for i, pat in enumerate(self.stop_token_text_patterns):
             # self.terminal_logger.info(
@@ -376,13 +436,15 @@ class LlmDmModule(retico_core.AbstractModule):
         return False, None, None
 
     def is_role_pattern(self, sentence):
-        """Returns True if one of the role token patterns matches the beginning of the sentence.
+        """Returns True if one of the role token patterns matches the beginning
+        of the sentence.
 
         Args:
             sentence (string): a sentence.
 
         Returns:
-            bool: True if one of the role token patterns matches the beginning of the sentence.
+            bool: True if one of the role token patterns matches the
+                beginning of the sentence.
         """
         # We want to only check at the very beginning of the sentence
         if self.max_role_pattern_length < len(sentence):
@@ -402,29 +464,37 @@ class LlmDmModule(retico_core.AbstractModule):
         temp=1.0,
         repeat_penalty=1.1,
     ):
-        """Generates the agent next sentence from the constructed prompt (dialogue scenario, dialogue history, instruct...).
-        At each generated token, check is the end of the sentence corresponds to a stopping pattern, role pattern, or punctuation.
-        Sends the info to the retico Module using the submodule function.
-        Stops the generation if a stopping token pattern is encountered (using the stop_multiple_utterances_generation as the stopping criteria).
+        """Generates the agent next sentence from the constructed prompt
+        (dialogue scenario, dialogue history, instruct...). At each generated
+        token, check is the end of the sentence corresponds to a stopping
+        pattern, role pattern, or punctuation. Sends the info to the retico
+        Module using the submodule function. Stops the generation if a stopping
+        token pattern is encountered (using the
+        stop_multiple_utterances_generation as the stopping criteria).
 
         Args:
-            subprocess (function): the function to call during the sentence generation to possibly send chunks of sentence to the children modules.
+            subprocess (function): the function to call during the
+                sentence generation to possibly send chunks of sentence
+                to the children modules.
             top_k (int, optional): _description_. Defaults to 40.
             top_p (float, optional): _description_. Defaults to 0.95.
             temp (float, optional): _description_. Defaults to 1.0.
-            repeat_penalty (float, optional): _description_. Defaults to 1.1.
+            repeat_penalty (float, optional): _description_. Defaults to
+                1.1.
 
         Returns:
-            string: Agent new generated sentence.
-            int: nb tokens in new agent sentence.
+            string: Agent new generated sentence. int: nb tokens in new
+                agent sentence.
         """
 
         def stop_function(tokens, logits):
-            """stop the sentence generation if the which_stop_criteria class parameter is not None,
-            i.e. when a stop token, pattern has been encountered or the user interrupted the agent.
+            """Stop the sentence generation if the which_stop_criteria class
+            parameter is not None, i.e. when a stop token, pattern has been
+            encountered or the user interrupted the agent.
 
             Args:
-                tokens (_type_): tokens generated by LLM during current turn.
+                tokens (_type_): tokens generated by LLM during current
+                    turn.
                 logits (_type_): _description_
 
             Returns:
@@ -490,10 +560,12 @@ class LlmDmModule(retico_core.AbstractModule):
     #######
 
     def recreate_sentence_from_um(self, msg):
-        """recreate the complete user sentence from the strings contained in every COMMIT update message IU (msg).
+        """Recreate the complete user sentence from the strings contained in
+        every COMMIT update message IU (msg).
 
         Args:
-            msg (list): list of every COMMIT IUs contained in the UpdateMessage.
+            msg (list): list of every COMMIT IUs contained in the
+                UpdateMessage.
 
         Returns:
             string: the complete user sentence calculated by the ASR.
@@ -509,19 +581,25 @@ class LlmDmModule(retico_core.AbstractModule):
         is_punctuation=None,
         role_pattern=None,
     ):
-        """
-        This function will be called by the submodule at each token generation.
-        It handles the communication with the subscribed module (TTS for example),
-        by updating and publishing new UpdateMessage containing the new IUS.
-        IUs are :
-            - ADDED in every situation (the generated words are sent to the subscribed modules)
-            - COMMITTED if the last token generated is a punctuation (The TTS can start generating the voice corresponding to the clause)
-            - REVOKED if the last tokens generated corresponds to a role pattern (so that the subscribed module delete the role pattern)
+        """This function will be called by the submodule at each token
+        generation. It handles the communication with the subscribed module
+        (TTS for example), by updating and publishing new UpdateMessage
+        containing the new IUS.
+
+        IUs are : - ADDED in every situation (the generated words are
+        sent to the subscribed modules) - COMMITTED if the last token
+        generated is a punctuation (The TTS can start generating the
+        voice corresponding to the clause) - REVOKED if the last tokens
+        generated corresponds to a role pattern (so that the subscribed
+        module delete the role pattern)
 
         Args:
-            payload (string): the text corresponding to the last generated token
-            is_punctuation (bool, optional): True if the last generated token correspond to a punctuation. Defaults to None.
-            stop_pattern (string, optional): Text corresponding to the generated stop_pattern. Defaults to None.
+            payload (string): the text corresponding to the last
+                generated token
+            is_punctuation (bool, optional): True if the last generated
+                token correspond to a punctuation. Defaults to None.
+            stop_pattern (string, optional): Text corresponding to the
+                generated stop_pattern. Defaults to None.
         """
         # Construct UM and IU
         next_um = retico_core.UpdateMessage()
@@ -566,10 +644,13 @@ class LlmDmModule(retico_core.AbstractModule):
         self.append(next_um)
 
     def process_incremental(self):
-        """Function that calls the submodule LLamaCppMemoryIncremental to generates a system answer (text) using the chosen LLM.
-        Incremental : Use the subprocess function as a callback function for the submodule to call to check if the current chunk
-        of generated sentence has to be sent to the Children Modules (TTS for example).
+        """Function that calls the submodule LLamaCppMemoryIncremental to
+        generates a system answer (text) using the chosen LLM.
 
+        Incremental : Use the subprocess function as a callback function
+        for the submodule to call to check if the current chunk of
+        generated sentence has to be sent to the Children Modules (TTS
+        for example).
         """
 
         if self.printing:
@@ -670,12 +751,14 @@ class LlmDmModule(retico_core.AbstractModule):
         self.current_input = []
 
     def process_update(self, update_message):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L402.
 
         Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs, if the IUs are COMMIT,
-            it means that these IUs correspond to a complete sentence. All COMMIT IUs (msg) are processed calling the process_incremental function.
+            update_message (UpdateType): UpdateMessage that contains new
+                IUs, if the IUs are COMMIT, it means that these IUs
+                correspond to a complete sentence. All COMMIT IUs (msg)
+                are processed calling the process_incremental function.
 
         Returns:
             _type_: returns None if update message is None.
@@ -744,10 +827,9 @@ class LlmDmModule(retico_core.AbstractModule):
             self.interruption = False
 
     def _llm_thread(self):
-        """
-        function running the LLM, executed ina separated thread so that the generation can be interrupted,
-        if the user starts talking (the reception of an interruption VADTurnAudioIU).
-        """
+        """Function running the LLM, executed ina separated thread so that the
+        generation can be interrupted, if the user starts talking (the
+        reception of an interruption VADTurnAudioIU)."""
         while self.thread_active:
             try:
                 time.sleep(0.01)
@@ -761,12 +843,13 @@ class LlmDmModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def setup(self, **kwargs):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L402.
 
-        Instantiate the model with the given model info, if insufficient info given, raise an NotImplementedError.
-        Init the prompt with the initialize_prompt function.
-        Calculates the stopping with the init_stop_criteria function.
+        Instantiate the model with the given model info, if insufficient
+        info given, raise an NotImplementedError. Init the prompt with
+        the initialize_prompt function. Calculates the stopping with the
+        init_stop_criteria function.
         """
         super().setup(**kwargs)
 
@@ -796,16 +879,14 @@ class LlmDmModule(retico_core.AbstractModule):
         self.init_stop_criteria()
 
     def prepare_run(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L808."""
         super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
 
     def shutdown(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L819."""
         super().shutdown()
         self.thread_active = False

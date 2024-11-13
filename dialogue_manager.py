@@ -390,7 +390,7 @@ class VADModule(retico_core.AbstractModule):
                     VA_user = self.vad.is_speech(audio, self.target_framerate)
                     output_iu = self.create_iu(
                         grounded_in=iu,
-                        audio=audio,
+                        raw_audio=audio,
                         nframes=iu.nframes,
                         rate=self.input_framerate,
                         sample_width=self.sample_width,

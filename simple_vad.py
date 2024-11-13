@@ -30,13 +30,12 @@ from additional_IUs import VADIU
 
 
 class SimpleVADModule(retico_core.AbstractModule):
-    """A retico module that provides Voice Activity Detection (VAD)
-    using WebRTC's VAD. Takes AudioIU as input, resamples the IU's
-    raw_audio to match WebRTC VAD's input frame rate, then call the VAD
-    to predict (user's) voice activity on the resampled raw_audio (True
-    == speech recognized), and finally returns the prediction alognside
-    with the raw_audio (and related parameter such as frame rate, etc)
-    using a new IU type called VADIU.
+    """A retico module that provides Voice Activity Detection (VAD) using
+    WebRTC's VAD. Takes AudioIU as input, resamples the IU's raw_audio to match
+    WebRTC VAD's input frame rate, then call the VAD to predict (user's) voice
+    activity on the resampled raw_audio (True == speech recognized), and
+    finally returns the prediction alognside with the raw_audio (and related
+    parameter such as frame rate, etc) using a new IU type called VADIU.
 
     It also takes TextIU as input, to additionally keep tracks of the
     agent's voice activity (agent == the retico system) by receiving IUs
@@ -63,7 +62,6 @@ class SimpleVADModule(retico_core.AbstractModule):
 
     def __init__(
         self,
-        printing=False,
         target_framerate=16000,
         input_framerate=44100,
         channels=1,
@@ -71,8 +69,23 @@ class SimpleVADModule(retico_core.AbstractModule):
         vad_aggressiveness=3,
         **kwargs,
     ):
+        """Initializes the SimpleVADModule Module.
+
+        Args:
+            target_framerate (int, optional): framerate of the output
+                VADIUs (after resampling). Defaults to 16000.
+            input_framerate (int, optional): framerate of the received
+                AudioIUs. Defaults to 44100.
+            channels (int, optional): number of channels (1=mono,
+                2=stereo) of the received AudioIUs. Defaults to 1.
+            sample_width (int, optional): sample width (number of bits
+                used to encode each frame) of the received AudioIUs.
+                Defaults to 2.
+            vad_aggressiveness (int, optional): The level of
+                aggressiveness of VAD model, the greater the more
+                reactive. Defaults to 3.
+        """
         super().__init__(**kwargs)
-        self.printing = printing
         self.target_framerate = target_framerate
         self.input_framerate = input_framerate
         self.channels = channels
@@ -104,9 +117,8 @@ class SimpleVADModule(retico_core.AbstractModule):
 
     def process_update(self, update_message):
         """Receives TextIU and AudioIU, use the first one to set the
-        self.VA_agent class attribute, and process the second one by
-        predicting whether it contains speech or not to set VA_user IU
-        parameter.
+        self.VA_agent class attribute, and process the second one by predicting
+        whether it contains speech or not to set VA_user IU parameter.
 
         Args:
             update_message (UpdateType): UpdateMessage that contains new
@@ -135,7 +147,7 @@ class SimpleVADModule(retico_core.AbstractModule):
                     VA_user = self.vad.is_speech(audio, self.target_framerate)
                     output_iu = self.create_iu(
                         grounded_in=iu,
-                        audio=audio,
+                        raw_audio=audio,
                         nframes=iu.nframes,
                         rate=self.input_framerate,
                         sample_width=self.sample_width,

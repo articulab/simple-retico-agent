@@ -1,21 +1,21 @@
-"""
-coqui-ai TTS Module
-==================
+"""Coqui-ai TTS Module ==================
 
-A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
-audio), and handles user interruption.
+A retico module that provides Text-To-Speech (TTS), aligns its inputs
+and ouputs (text and audio), and handles user interruption.
 
-When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
-IUs contained in UpdateMessage.
-This module also aligns the inputed words with the outputted audio, providing the outputted
-TextAlignedAudioIU with the information of the word it corresponds to (contained in the
+When receiving COMMIT TurnTextIUs, synthesizes audio
+(TextAlignedAudioIU) corresponding to all IUs contained in
+UpdateMessage. This module also aligns the inputed words with the
+outputted audio, providing the outputted TextAlignedAudioIU with the
+information of the word it corresponds to (contained in the
 grounded_word parameter), and its place in the agent's current sentence.
-The module stops synthesizing if it receives the information that the user started talking
-(user barge-in/interruption of agent turn). The interruption information is recognized by
-an VADTurnAudioIU with a parameter vad_state="interruption".
+The module stops synthesizing if it receives the information that the
+user started talking (user barge-in/interruption of agent turn). The
+interruption information is recognized by an VADTurnAudioIU with a
+parameter vad_state="interruption".
 
-This modules uses the deep learning approach implemented with coqui-ai's TTS library :
-https://github.com/coqui-ai/TTS
+This modules uses the deep learning approach implemented with coqui-ai's
+TTS library : https://github.com/coqui-ai/TTS
 
 Inputs : TurnTextIU, VADTurnAudioIU
 
@@ -42,20 +42,23 @@ from additional_IUs import (
 
 
 class TtsDmModule(retico_core.AbstractModule):
-    """A retico module that provides Text-To-Speech (TTS), aligns its inputs and ouputs (text and
-    audio), and handles user interruption.
+    """A retico module that provides Text-To-Speech (TTS), aligns its inputs
+    and ouputs (text and audio), and handles user interruption.
 
-    When receiving COMMIT TurnTextIUs, synthesizes audio (TextAlignedAudioIU) corresponding to all
-    IUs contained in UpdateMessage.
-    This module also aligns the inputed words with the outputted audio, providing the outputted
-    TextAlignedAudioIU with the information of the word it corresponds to (contained in the
-    grounded_word parameter), and its place in the agent's current sentence.
-    The module stops synthesizing if it receives the information that the user started talking
-    (user barge-in/interruption of agent turn). The interruption information is recognized by
-    an VADTurnAudioIU with a parameter vad_state="interruption".
+    When receiving COMMIT TurnTextIUs, synthesizes audio
+    (TextAlignedAudioIU) corresponding to all IUs contained in
+    UpdateMessage. This module also aligns the inputed words with the
+    outputted audio, providing the outputted TextAlignedAudioIU with the
+    information of the word it corresponds to (contained in the
+    grounded_word parameter), and its place in the agent's current
+    sentence. The module stops synthesizing if it receives the
+    information that the user started talking (user barge-
+    in/interruption of agent turn). The interruption information is
+    recognized by an VADTurnAudioIU with a parameter
+    vad_state="interruption".
 
-    This modules uses the deep learning approach implemented with coqui-ai's TTS library :
-    https://github.com/coqui-ai/TTS
+    This modules uses the deep learning approach implemented with coqui-
+    ai's TTS library : https://github.com/coqui-ai/TTS
 
     Inputs : TurnTextIU, VADTurnAudioIU
 
@@ -108,15 +111,19 @@ class TtsDmModule(retico_core.AbstractModule):
         device=None,
         **kwargs,
     ):
-        """
-        Initializes the CoquiTTSInterruption Module.
+        """Initializes the CoquiTTSInterruption Module.
 
         Args:
-            model (string): name of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            language (string): language of the desired model, has to be contained in the constant LANGUAGE_MAPPING.
-            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice cloning models).
-            frame_duration (float): duration of the audio chunks contained in the outputted TextAlignedAudioIUs.
-            printing (bool, optional): You can choose to print some running info on the terminal. Defaults to False.
+            model (string): name of the desired model, has to be
+                contained in the constant LANGUAGE_MAPPING.
+            language (string): language of the desired model, has to be
+                contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the
+                desired voice to copy (for voice cloning models).
+            frame_duration (float): duration of the audio chunks
+                contained in the outputted TextAlignedAudioIUs.
+            printing (bool, optional): You can choose to print some
+                running info on the terminal. Defaults to False.
         """
         super().__init__(**kwargs)
 
@@ -215,7 +222,8 @@ class TtsDmModule(retico_core.AbstractModule):
         return waveform, outputs
 
     def one_clause_text_and_words(self, clause_ius):
-        """Convert received IUs data accumulated in current_input list into a string.
+        """Convert received IUs data accumulated in current_input list into a
+        string.
 
         Returns:
             string: sentence chunk to synthesize speech from.
@@ -224,11 +232,16 @@ class TtsDmModule(retico_core.AbstractModule):
         return "".join(words), words
 
     def process_update(self, update_message):
-        """overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L402
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L402.
 
         Args:
-            update_message (UpdateType): UpdateMessage that contains new IUs to process, ADD IUs' data are added to the current_input,
-            COMMIT IUs are launching the speech synthesizing (using the synthesize function) with the accumulated text data in current_input (the sentence chunk).
+            update_message (UpdateType): UpdateMessage that contains new
+                IUs to process, ADD IUs' data are added to the
+                current_input, COMMIT IUs are launching the speech
+                synthesizing (using the synthesize function) with the
+                accumulated text data in current_input (the sentence
+                chunk).
 
         Returns:
             _type_: returns None if update message is None.
@@ -327,10 +340,12 @@ class TtsDmModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def get_ius_backchannel(self):
-        """function that creates a list of BackchannelIUs containing audio that are the transcription of the chosen 'self.backchannel' string.
+        """Function that creates a list of BackchannelIUs containing audio that
+        are the transcription of the chosen 'self.backchannel' string.
 
         Returns:
-            list[BackchannelIU]: list of BackchannelIUs, transcriptions of 'self.backchannel'.
+            list[BackchannelIU]: list of BackchannelIUs, transcriptions
+                of 'self.backchannel'.
         """
         new_audio, outputs = self.synthesize(self.backchannel)
         outputs = outputs[0]
@@ -359,13 +374,15 @@ class TtsDmModule(retico_core.AbstractModule):
         return ius
 
     def get_new_iu_buffer_from_clause_ius(self, clause_ius):
-        """Function that aligns the TTS inputs and outputs.
-        It links the words sent by LLM to audio chunks generated by TTS model.
-        As we have access to the durations of the phonems generated by the model,
-        we can link the audio chunks sent to speaker to the words that it corresponds to.
+        """Function that aligns the TTS inputs and outputs. It links the words
+        sent by LLM to audio chunks generated by TTS model. As we have access
+        to the durations of the phonems generated by the model, we can link the
+        audio chunks sent to speaker to the words that it corresponds to.
 
         Returns:
-            list[TextAlignedAudioIU]: the TextAlignedAudioIUs that will be sent to the speaker module, containing the correct informations about grounded_iu, turn_id or char_id.
+            list[TextAlignedAudioIU]: the TextAlignedAudioIUs that will
+                be sent to the speaker module, containing the correct
+                informations about grounded_iu, turn_id or char_id.
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
@@ -530,9 +547,8 @@ class TtsDmModule(retico_core.AbstractModule):
     #             log_exception(module=self, exception=e)
 
     def setup(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L798
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L798."""
         super().setup()
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
@@ -541,9 +557,8 @@ class TtsDmModule(retico_core.AbstractModule):
         self.space_token = self.model.synthesizer.tts_model.tokenizer.encode(" ")[0]
 
     def prepare_run(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L808
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L808."""
         super().prepare_run()
         self.buffer_pointer = 0
         self.iu_buffer = []
@@ -552,8 +567,7 @@ class TtsDmModule(retico_core.AbstractModule):
         threading.Thread(target=self._process_one_clause).start()
 
     def shutdown(self):
-        """
-        overrides AbstractModule : https://github.com/retico-team/retico-core/blob/main/retico_core/abstract.py#L819
-        """
+        """Overrides AbstractModule : https://github.com/retico-team/retico-
+        core/blob/main/retico_core/abstract.py#L819."""
         super().shutdown()
         self._tts_thread_active = False

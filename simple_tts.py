@@ -2,14 +2,16 @@
 SimpleTTSModule
 ===============
 
-A retico module that provides Text-To-Speech (TTS) to a retico system by transforming TextFinalIUs
-into AudioFinalIUs, clause by clause. When receiving COMMIT TextFinalIU from the LLM, i.e. 
-TextFinalIUs that consists in a full clause. Synthesizes audio (AudioFinalIUs) corresponding to all
-IUs contained in UpdateMessage (the complete clause). The module only sends TextFinalIU with a fixed
-raw_audio length.
+A retico module that provides Text-To-Speech (TTS) to a retico system by
+transforming TextFinalIUs into AudioFinalIUs, clause by clause. When
+receiving COMMIT TextFinalIU from the LLM, i.e. TextFinalIUs that
+consists in a full clause. Synthesizes audio (AudioFinalIUs)
+corresponding to all IUs contained in UpdateMessage (the complete
+clause). The module only sends TextFinalIU with a fixed raw_audio
+length.
 
-This modules uses the deep learning approach implemented with coqui-ai's TTS library :
-https://github.com/coqui-ai/TTS
+This modules uses the deep learning approach implemented with coqui-ai's
+TTS library : https://github.com/coqui-ai/TTS
 
 Inputs : TextFinalIU
 
@@ -28,14 +30,15 @@ from additional_IUs import TextFinalIU, AudioFinalIU
 
 
 class SimpleTTSModule(retico_core.AbstractModule):
-    """A retico module that provides Text-To-Speech (TTS) to a retico system by transforming
-    TextFinalIUs into AudioFinalIUs, clause by clause. When receiving COMMIT TextFinalIU from the
-    LLM, i.e. TextFinalIUs that consists in a full clause. Synthesizes audio (AudioFinalIUs)
-    corresponding to all IUs contained in UpdateMessage (the complete clause). The module only sends
+    """A retico module that provides Text-To-Speech (TTS) to a retico system by
+    transforming TextFinalIUs into AudioFinalIUs, clause by clause. When
+    receiving COMMIT TextFinalIU from the LLM, i.e. TextFinalIUs that consists
+    in a full clause. Synthesizes audio (AudioFinalIUs) corresponding to all
+    IUs contained in UpdateMessage (the complete clause). The module only sends
     TextFinalIU with a fixed raw_audio length.
 
-    This modules uses the deep learning approach implemented with coqui-ai's TTS library :
-    https://github.com/coqui-ai/TTS
+    This modules uses the deep learning approach implemented with coqui-
+    ai's TTS library : https://github.com/coqui-ai/TTS
 
     Inputs : TextFinalIU
 
@@ -84,20 +87,21 @@ class SimpleTTSModule(retico_core.AbstractModule):
         device=None,
         **kwargs,
     ):
-        """
-        Initializes the SimpleTTSModule.
+        """Initializes the SimpleTTSModule.
 
         Args:
-            model (string): name of the desired model, has to be contained in the constant
-                LANGUAGE_MAPPING.
-            language (string): language of the desired model, has to be contained in the constant
-                LANGUAGE_MAPPING.
-            speaker_wav (string): path to a wav file containing the desired voice to copy (for voice
-                cloning models).
-            frame_duration (float): duration of the audio chunks contained in the outputted
-                TextAlignedAudioIUs.
-            verbose (bool, optional): the verbose level of the TTS model. Defaults to False.
-            device (string, optional): the device the module will run on (cuda for gpu, or cpu)
+            model (string): name of the desired model, has to be
+                contained in the constant LANGUAGE_MAPPING.
+            language (string): language of the desired model, has to be
+                contained in the constant LANGUAGE_MAPPING.
+            speaker_wav (string): path to a wav file containing the
+                desired voice to copy (for voice cloning models).
+            frame_duration (float): duration of the audio chunks
+                contained in the outputted TextAlignedAudioIUs.
+            verbose (bool, optional): the verbose level of the TTS
+                model. Defaults to False.
+            device (string, optional): the device the module will run on
+                (cuda for gpu, or cpu)
         """
         super().__init__(**kwargs)
 
@@ -141,8 +145,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
         self.space_token = None
 
     def synthesize(self, text):
-        """Takes the given text and synthesizes speech using the TTS model. Returns the synthesized
-        speech as 22050 Hz int16-encoded numpy ndarray.
+        """Takes the given text and synthesizes speech using the TTS model.
+        Returns the synthesized speech as 22050 Hz int16-encoded numpy ndarray.
 
         Args:
             text (str): The text to use to synthesize speech.
@@ -186,7 +190,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
         return waveform, outputs
 
     def one_clause_text_and_words(self, clause_ius):
-        """Convert received IUs data accumulated in current_input list into a string.
+        """Convert received IUs data accumulated in current_input list into a
+        string.
 
         Returns:
             string: sentence chunk to synthesize speech from.
@@ -195,9 +200,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
         return "".join(words), words
 
     def process_update(self, update_message):
-        """Process the COMMIT TextFinalIUs received by appending to self.current_input the list of
-        IUs corresponding to the full clause.
-        """
+        """Process the COMMIT TextFinalIUs received by appending to
+        self.current_input the list of IUs corresponding to the full clause."""
         if not update_message:
             return None
 
@@ -251,12 +255,14 @@ class SimpleTTSModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def get_new_iu_buffer_from_clause_ius(self, clause_ius):
-        """Function that take all TextFinalIUs from one clause, synthesizes the corresponding speech
-        and split the audio into AudioFinalIUs of a fixed raw_audio length.
+        """Function that take all TextFinalIUs from one clause, synthesizes the
+        corresponding speech and split the audio into AudioFinalIUs of a fixed
+        raw_audio length.
 
         Returns:
-            list[AudioFinalIU]: the generated AudioFinalIUs, with a fixed raw_audio length, that
-                will be sent to the speaker module.
+            list[AudioFinalIU]: the generated AudioFinalIUs, with a
+                fixed raw_audio length, that will be sent to the speaker
+                module.
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
@@ -291,7 +297,8 @@ class SimpleTTSModule(retico_core.AbstractModule):
         return new_buffer
 
     def setup(self):
-        """Setup Module by instanciating the TTS model and its related audio attributes."""
+        """Setup Module by instanciating the TTS model and its related audio
+        attributes."""
         super().setup()
         self.model = TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
@@ -299,13 +306,14 @@ class SimpleTTSModule(retico_core.AbstractModule):
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
 
     def prepare_run(self):
-        """Prepare run by instanciating the Thread that synthesizes the audio."""
+        """Prepare run by instanciating the Thread that synthesizes the
+        audio."""
         super().prepare_run()
         self._tts_thread_active = True
         # threading.Thread(target=self._tts_thread).start()
         threading.Thread(target=self._process_one_clause).start()
 
     def shutdown(self):
-        """Shutdown Thread and Module"""
+        """Shutdown Thread and Module."""
         super().shutdown()
         self._tts_thread_active = False

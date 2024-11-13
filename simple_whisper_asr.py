@@ -37,8 +37,8 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class SimpleWhisperASRModule(retico_core.AbstractModule):
-    """A retico module that provides Automatic Speech Recognition (ASR)
-    using a OpenAI's Whisper model.
+    """A retico module that provides Automatic Speech Recognition (ASR) using a
+    OpenAI's Whisper model.
 
     Once the user starts talking, periodically predicts a new
     transcription hypothesis from the incremental speech received, and
@@ -82,8 +82,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         bot_threshold=0.75,
         **kwargs,
     ):
-        """
-        Initializes the SimpleWhisperASRModule Module.
+        """Initializes the SimpleWhisperASRModule Module.
 
         Args:
             whisper_model (str, optional): name of the desired model,
@@ -132,9 +131,9 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         self.vad_state = "user_silent"
 
     def get_n_audio_chunks(self, n_chunks_param_name, duration):
-        """Returns the number of audio chunks corresponding to duration.
-        Stores this number in the n_chunks_param_name class argument if
-        it hasn't been done before.
+        """Returns the number of audio chunks corresponding to duration. Stores
+        this number in the n_chunks_param_name class argument if it hasn't been
+        done before.
 
         Args:
             n_chunks_param_name (str): the name of class argument to
@@ -157,8 +156,8 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         return getattr(self, n_chunks_param_name)
 
     def recognize_user_bot(self):
-        """Return the prediction on user BOT from the current audio
-        buffer. Returns True if enough audio chunks contain speech.
+        """Return the prediction on user BOT from the current audio buffer.
+        Returns True if enough audio chunks contain speech.
 
         Returns:
             bool: the BOT prediction.
@@ -172,8 +171,8 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         )
 
     def recognize_user_eot(self):
-        """Return the prediction on user EOT from the current audio
-        buffer. Returns True if enough audio chunks do not contain speech.
+        """Return the prediction on user EOT from the current audio buffer.
+        Returns True if enough audio chunks do not contain speech.
 
         Returns:
             bool: the EOT prediction.
@@ -187,8 +186,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         )
 
     def recognize_agent_bot(self):
-        """Return True if the last VAIU received presents a positive
-        agent VA.
+        """Return True if the last VAIU received presents a positive agent VA.
 
         Returns:
             bool: the BOT prediction.
@@ -196,8 +194,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
         return self.current_input[-1].va_agent
 
     def recognize_agent_eot(self):
-        """Return True if the last VAIU received presents a negative
-        agent VA.
+        """Return True if the last VAIU received presents a negative agent VA.
 
         Returns:
             bool: the EOT prediction.
@@ -237,8 +234,8 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
 
     def recognize(self):
         """Recreates the audio signal received by the microphone by
-        concatenating the audio chunks from the audio_buffer and
-        transcribes this concatenation into a list of predicted words.
+        concatenating the audio chunks from the audio_buffer and transcribes
+        this concatenation into a list of predicted words.
 
         Returns:
             (list[string], boolean): the list of transcribed words.
@@ -285,13 +282,14 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
                 self.latest_input_iu = iu
 
     def _asr_thread(self):
-        """function that runs on a separate thread. Handles the ASR
-        prediction and IUs sending aspect of the module. Keeps tracks of
-        the "vad_state" (wheter the user is currently speaking or not),
-        and recognizes user BOT or EOT from VADIUs received. When
-        "vad_state" == "user_speaking", predicts periodically new ASR
-        hypothesis. When user EOT is recognized, predicts and sends a
-        final hypothesis.
+        """Function that runs on a separate thread.
+
+        Handles the ASR prediction and IUs sending aspect of the module.
+        Keeps tracks of the "vad_state" (wheter the user is currently
+        speaking or not), and recognizes user BOT or EOT from VADIUs
+        received. When "vad_state" == "user_speaking", predicts
+        periodically new ASR hypothesis. When user EOT is recognized,
+        predicts and sends a final hypothesis.
         """
         while self._asr_thread_active:
             try:
@@ -351,14 +349,13 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
                 log_exception(module=self, exception=e)
 
     def prepare_run(self):
-        """Prepare run by instanciating the Thread that transcribes the
-        user speech.
-        """
+        """Prepare run by instanciating the Thread that transcribes the user
+        speech."""
         super().prepare_run()
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
 
     def shutdown(self):
-        """Shutdown Thread and Module"""
+        """Shutdown Thread and Module."""
         super().shutdown()
         self._asr_thread_active = False
