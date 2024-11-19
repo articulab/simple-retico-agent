@@ -12,28 +12,28 @@ to configure the prefixes, suffixes, roles, for the user, agent, system
 prompt and the prompt itself. It is useful because every LLm has a
 different prefered template for its prompts.
 
-Example of a prompt with the following config : 
+Example of a prompt with the following config :
 {
-    "user": {
-        "role": "Child",
-        "role_sep": ":",
-        "pre": "",
-        "suf": "\n\n"
-    },
-    "agent": {
-        "role": "Teacher",
-        "role_sep": ":",
-        "pre": "",
-        "suf": "\n\n"
-    },
-    "system_prompt": {
-        "pre": "<<SYS>>\n",
-        "suf": "<</SYS>>\n\n"
-    },
-    "prompt": {
-        "pre": "[INST] ",
-        "suf": "[/INST]"
-    }
+"user": {
+"role": "Child",
+"role_sep": ":",
+"pre": "",
+"suf": "\n\n"
+},
+"agent": {
+"role": "Teacher",
+"role_sep": ":",
+"pre": "",
+"suf": "\n\n"
+},
+"system_prompt": {
+"pre": "<<SYS>>\n",
+"suf": "<</SYS>>\n\n"
+},
+"prompt": {
+"pre": "[INST] ",
+"suf": "[/INST]"
+}
 }
 
 prompt = "[INST] <<SYS>>

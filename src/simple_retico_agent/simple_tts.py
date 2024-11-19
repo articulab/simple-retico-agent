@@ -26,7 +26,7 @@ from TTS.api import TTS
 import retico_core
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from additional_IUs import TextFinalIU, AudioFinalIU
+from simple_retico_agent.additional_IUs import TextFinalIU, AudioFinalIU
 
 
 class SimpleTTSModule(retico_core.AbstractModule):

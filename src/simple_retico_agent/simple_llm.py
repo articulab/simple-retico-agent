@@ -47,16 +47,19 @@ Child : I am fine, and I can't wait to learn mathematics!
 Teacher :"
 """
 
+import os
 import threading
 import time
 from llama_cpp import Llama
 
 import retico_core
 from retico_core.text import SpeechRecognitionIU
-from additional_IUs import TextFinalIU
 from retico_core.utils import device_definition
 from retico_core.log_utils import log_exception
-from dialogue_history import DialogueHistory
+from simple_retico_agent.additional_IUs import TextFinalIU
+from simple_retico_agent.dialogue_history import DialogueHistory
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class SimpleLLMModule(retico_core.AbstractModule):

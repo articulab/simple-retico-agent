@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+# [tool.setuptools]
+# py-modules = []
+
+[project]
+name = "simple-retico-agent"
+authors = [{ name = "Marius Le Chapelier", email = "mariuslechaper@gmail.com" }]
+description = ""
+readme = "README.md"
+license = { file = "LICENSE" }
+version = "0.0.1"
+requires-python = ">=3.11.7"
+dependencies = [
+    # "transformers==4.39.1",                                           # requirement from CoquiTTS that was very slow to install
+    # "spacy==3.7.4",                                                   # requirement from CoquiTTS that was very slow to install
+    # "pydub",
+    # "webrtcvad",
+    # "faster_whisper==1.0.1",
+    "retico-core @ git+https://github.com/articulab/retico-core.git",
+    # "TTS @ git+https://github.com/articulab/CoquiTTS.git",
+]

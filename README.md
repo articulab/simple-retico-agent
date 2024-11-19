@@ -1,89 +1,108 @@
-### Son-of-Sara's retico-based dialog system
+# Simple Retico Agent (part of Articulab's Son of Sara project)
 
-## Prerequisties
+This repository is a presentation of a simple conversational agent, build upon an incremental platform for dialogue system called [retico](https://github.com/retico-team/). The agent is built to have a oral conversation  with the user, following a pre-defined scenario.
 
-- Anaconda
+This agent is composed of multiple retico modules, each providing the system with a dialogue-related capacity (comprehension, answer generation, memory, etc). Some module use deep learning models to perform complex tasks.
+The system contains the following new modules :
+
+- VAD : calculates the voice activity of the user from the audio captured by the microphone.
+- ASR : predicts the transcription of the user speech, alongside with a prediction of its beginning and end of turns (using VAD information).
+- LLM : generates a textual answer to the user turn, and the dialogue history (previous turns of agent and user).
+- DialogueHistory : keeps the previous turns of agent and user, calculates the largest possible history and formats the previous turns into a LLM prompt with the desired template.
+- TTS : generates the voice of the agent corresponding to the textual answer from the LLM.
+- Speaker : outputs the voice of the agent through computer's speakers, and send agent's voice activity information to VAD.
+
+## Pre-requisties
+
+- Cuda
 
 ## Installation
 
 Clone the github repository
 
 ```bash
-git clone https://github.com/articulab/retico_test.git
+git clone https://github.com/articulab/simple-retico-agent.git
 ```
 
-Go to the Getting started branch
+Install package
 
 ```bash
-git checkout getting_started
-```
-
-Create a new conda environment `retico` from the YAML file `retico.yml` to get all required packages.
-
-```bash
-conda env create -n retico -f env_requirements/retico.yml
-```
-
-```bash
-CMAKE_ARGS="-DGGML_CUDA=on" conda env create -n retico -f env_requirements/retico.yml
-```
-
-Download the LLM weights of a quantized version of the Mistral-7B-Instruct-v0.2 model (from MistralAI) with [this link](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true), it is from [this Huggingface page](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
-At the root of your `retico_test` folder, create a `models` folder and put your newly downloaded `mistral-7b-instruct-v0.2.Q4_K_S.gguf` LLM weights file in it.
-
-### retico-core fork
-
-Clone the github repository
-
-```bash
-git clone https://github.com/articulab/retico-core.git
-```
-
-Install the package on pip to make it available for imports
-
-```bash
+cd simple-retico-agent
 pip install .
 ```
 
-### CoquiTTS fork
-
-Clone the github repository
+Install llama-cpp-python (on its own because of the special installation). The cuda wheel needs to match your cuda version (here cu124 is for cuda version 12.4)
 
 ```bash
-git clone <https://github.com/articulab/CoquiTTS.git>
-```
-
-Install the package on pip to make it available for imports
-
-```bash
-pip install -e .
-```
-
-### retico-amq fork
-
-If you want to communicate with external tools through a message broker, clone the retico-amq fork to provide your system with communciation through ActiveMQ.
-
-Clone the github repository
-
-```bash
-git clone https://github.com/articulab/retico-amq.git
-```
-
-Install the package on pip to make it available for imports
-
-```bash
-pip install .
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
 ```
 
 ## Run the system
 
-Activate your new conda environment
+The package contains a main file, showing an example of how to initialize the network of modules and run the system.
 
-```bash
-conda activate retico
+### Presentation of the main file
+
+In the `main_simple` function of this file are set some variable required by the modules :
+
+```python
+frame_length = 0.02
+tts_frame_length = 0.2
+rate = 16000
+...
 ```
 
-Run the dialog system
+Logging and plotting is configured :
+
+```python
+terminal_logger, _ = retico_core.log_utils.configurate_logger(
+    log_folder, filters=filters
+)
+
+# configure plot
+configurate_plot(
+    is_plot_live=plot_live,
+    refreshing_time=1,
+    plot_config_path=plot_config_path,
+    module_order=module_order,
+    window_duration=30,
+)
+...
+```
+
+Modules are initialized :
+
+```python
+mic = audio.MicrophoneModule()
+
+vad = SimpleVADModule(
+    input_framerate=rate,
+    frame_length=frame_length,
+)
+...
+```
+
+Network is constructed :
+
+```python
+mic.subscribe(vad)
+vad.subscribe(asr)
+asr.subscribe(llm)
+...
+```
+
+System is executed, until the `ENTER` key is pressed :
+
+```python
+network.run(mic)
+print("Dialog system running until ENTER key is pressed")
+input()
+network.stop(mic)
+```
+
+### Run
+
+To run the system, just call the main file :
 
 ```bash
 python main.py
@@ -94,4 +113,9 @@ The message `Dialog system running until ENTER key is pressed` will be printed i
 If you speak to the system, after a short time, you should hear the system answering you.
 If you want to quit, and close the system, press the `ENTER` key.
 
-If you choose the Microphone Push to Talk, to be heard, you must press the `M` key while speaking.
+A log file will be created (in `src/simple_retico_agent/logs/run_0/log.log` if it wasn't modified), and will receive every log message of every module during the system's execution.
+
+A plot of the system's execution will be created (in `src/simple_retico_agent/run_plots/run_0/plot_IU_exchange.png` if it wasn't modified), and will show information, in real time, about IUs exchanges between modules (create_iu, process_update, etc), dialogue events (user BOT, user EOT, etc), or internal events (start_generation, etc).
+
+![docs/img/plot_IU_exchange.png](docs/img/plot_IU_exchange.png)
+![img/plot_IU_exchange.png](img/plot_IU_exchange.png)

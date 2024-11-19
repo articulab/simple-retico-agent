@@ -3,6 +3,6 @@ __pycache__/
 models
 logs/
 run_plots/
-bodies/sara/Archive
-bodies/sara/davos2017_Data
-bodies/sara/2021-10-11_150610
+simple_retico_agent.egg-info
+build/
+_build/
