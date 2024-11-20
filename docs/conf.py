@@ -14,7 +14,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-MOCK_MODULES = ["retico-core"]
+MOCK_MODULES = ["retico-core", "numpy", "pyaudio", "torch", "pydub", "llama_cpp"]
 sys.modules.update((mod_name, MagicMock()) for mod_name in MOCK_MODULES)
 
 sys.path.insert(0, os.path.abspath(os.path.join("../src")))
