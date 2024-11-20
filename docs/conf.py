@@ -15,7 +15,7 @@ import sys
 from unittest.mock import MagicMock
 
 MOCK_MODULES = [
-    "retico-core",
+    # "retico-core",
     "numpy",
     "pyaudio",
     "torch",
@@ -24,15 +24,16 @@ MOCK_MODULES = [
     "webrtcvad",
     "transformers",
     "TTS",
-    "retico_core",
+    # "retico_core",
+    "faster_whisper",
 ]
 sys.modules.update((mod_name, MagicMock()) for mod_name in MOCK_MODULES)
 
 sys.path.insert(0, os.path.abspath(os.path.join("../src")))
 sys.path.insert(0, os.path.abspath(".."))
 
-# import retico_core
-# import simple_retico_agent
+import retico_core
+import simple_retico_agent
 
 # -- Project information -----------------------------------------------------
 
