@@ -20,9 +20,8 @@ import platform
 import pyaudio
 
 import retico_core
-from retico_core.text import TextIU
+from retico_core import text
 
-# from .additional_IUs import AudioFinalIU
 # import simple_retico_agent
 
 from simple_retico_agent.additional_IUs import AudioFinalIU
@@ -59,7 +58,7 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
 
     @staticmethod
     def output_iu():
-        return TextIU
+        return text.TextIU
 
     def __init__(
         self,

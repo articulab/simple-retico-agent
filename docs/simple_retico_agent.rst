@@ -50,3 +50,8 @@ Submodules
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. automodule:: simple_retico_agent.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:

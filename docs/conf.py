@@ -12,28 +12,27 @@
 #
 import os
 import sys
-from unittest.mock import MagicMock
-
-MOCK_MODULES = [
-    # "retico-core",
-    "numpy",
-    "pyaudio",
-    "torch",
-    "pydub",
-    "llama_cpp",
-    "webrtcvad",
-    "transformers",
-    "TTS",
-    # "retico_core",
-    "faster_whisper",
-]
-sys.modules.update((mod_name, MagicMock()) for mod_name in MOCK_MODULES)
 
 sys.path.insert(0, os.path.abspath(os.path.join("../src")))
 sys.path.insert(0, os.path.abspath(".."))
 
-import retico_core
+# mock deps with system level requirements.
+autodoc_mock_imports = [
+    "torch",
+    "pydub",
+    "webrtcvad",
+    "transformers",
+    "faster_whisper",
+    "llama_cpp",
+    "TTS",
+    "numpy",
+    "pyaudio",
+    # "retico_core",
+    # "retico-core @ git+https://github.com/articulab/retico-core.git",
+]
+
 import simple_retico_agent
+import numpy  # mandatory import to avoid readthedocs build crash
 
 # -- Project information -----------------------------------------------------
 

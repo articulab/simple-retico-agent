@@ -1,3 +1,10 @@
+"""
+Additional IUs
+==============
+
+Additional Incremental Unit classes used in Simple Retico Agent.
+"""
+
 import retico_core
 
 

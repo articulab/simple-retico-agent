@@ -4,9 +4,10 @@ Welcome to simple-retico-agent's documentation!
 ===============================================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents:
 
+   installation
    simple_retico_agent
 
 .. include:: ../README.md
