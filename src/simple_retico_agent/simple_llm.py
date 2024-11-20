@@ -53,9 +53,10 @@ import time
 from llama_cpp import Llama
 
 import retico_core
-from retico_core.text import SpeechRecognitionIU
-from retico_core.utils import device_definition
-from retico_core.log_utils import log_exception
+from retico_core import text, log_utils
+
+# from retico_core.log_utils import log_exception
+from simple_retico_agent.utils import device_definition
 from simple_retico_agent.additional_IUs import TextFinalIU
 from simple_retico_agent.dialogue_history import DialogueHistory
 
@@ -101,7 +102,7 @@ class SimpleLLMModule(retico_core.AbstractModule):
     @staticmethod
     def input_ius():
         return [
-            SpeechRecognitionIU,
+            text.SpeechRecognitionIU,
         ]
 
     @staticmethod
@@ -645,7 +646,7 @@ class SimpleLLMModule(retico_core.AbstractModule):
 
         msg = []
         for iu, ut in update_message:
-            if isinstance(iu, SpeechRecognitionIU):
+            if isinstance(iu, text.SpeechRecognitionIU):
                 if ut == retico_core.UpdateType.ADD:
                     continue
                 elif ut == retico_core.UpdateType.REVOKE:
@@ -671,7 +672,7 @@ class SimpleLLMModule(retico_core.AbstractModule):
                     self.file_logger.info("EOT")
                     self.full_sentence = False
             except Exception as e:
-                log_exception(module=self, exception=e)
+                log_utils.log_exception(module=self, exception=e)
 
     def setup(self, **kwargs):
         """Instantiate the model with the given model info, if insufficient

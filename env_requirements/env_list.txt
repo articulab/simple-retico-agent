@@ -1,0 +1,69 @@
+# s1
+create conda env from retico_cuda_curr.yml
+install the same version of llama-cpp-python that is in retico_cuda env (0.2.79) with `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+-> LLM on CUDA working  
+
+# s2
+create conda env from retico_cuda_curr.yml
+install last version of llama-cpp-python (0.3.2) with `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+-> LLM on CUDA working  
+
+# s3
+create conda env with python 3.11.7 
+update conda env from retico_cuda_curr.yml
+install last version of llama-cpp-python (0.3.2) with `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+-> LLM on CUDA working
+
+# s4 
+create conda env with python 3.11.7 
+install all dependencies (highest possible version)
+- `pip install .` (all dependencies in pyproject)
+-> System working for cpu
+install cuda and C related libs for CUDA support (TTS, ASR, LLM)
+- `conda install cuda -c nvidia/label/cuda-11.8.0`
+- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+-> PB with nvcc (error when running simple-retico-agent)
+- `conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
+reinstall llama-cpp-python with CUDA support with `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+-> LLM on CUDA working ???
+
+# s5
+create conda env with python 3.11.7
+- `conda create -n env python=3.11.7
+install all dependencies (highest possible version)
+- `pip install .` (all dependencies in pyproject)
+-> System working for cpu
+install cuda and C related libs for CUDA support (TTS, ASR, LLM)
+- `conda install pytorch torchvision=0.16.2 torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia`
+- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall --no-cache`
+-> System (but LLM) working on CUDA ??? YES
+reinstall llama-cpp-python with CUDA support with `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+-> could not install a llama-cpp-python cuda version
+-> LLM on CUDA working ???
+
+# s6
+create conda env with python 3.11.7
+- `conda create -n env python=3.11.7`
+install all dependencies (highest possible version, but fixed depndencies version for TTS)
+- `pip install .` (all dependencies in pyproject)
+-> System working for cpu : YES
+install cuda and C related libs for CUDA support (TTS, ASR, LLM)
+- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall --no-cache`
+-> System (but LLM) working on CUDA : YES
+reinstall llama-cpp-python with CUDA support with :
+- `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install --no-cache-dir llama-cpp-python`
+-> error while trying to install cuda version of llama-cpp-python
+-> LLM on CUDA working ???
+
+# s8
+create conda env with python 3.11.7
+- `conda create -n env python=3.11.7`
+install all dependencies (highest possible version)
+- `pip install .` (all dependencies in pyproject)
+-> System working for cpu : YES
+install cuda and C related libs for CUDA support (TTS, ASR, LLM)
+- `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall --no-cache`
+-> System (but LLM) working on CUDA : YES
+reinstall llama-cpp-python with CUDA support with :
+- `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install --no-cache-dir llama-cpp-python`
+-> LLM on CUDA working ???

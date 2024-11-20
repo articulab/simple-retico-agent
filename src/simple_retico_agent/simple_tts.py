@@ -21,11 +21,11 @@ Outputs : AudioFinalIU
 import threading
 import time
 import numpy as np
-from TTS.api import TTS
+from TTS import api
 
 import retico_core
-from retico_core.utils import device_definition
-from retico_core.log_utils import log_exception
+from retico_core import log_utils
+from simple_retico_agent.utils import device_definition
 from simple_retico_agent.additional_IUs import TextFinalIU, AudioFinalIU
 
 
@@ -252,7 +252,7 @@ class SimpleTTSModule(retico_core.AbstractModule):
                         self.file_logger.info("send_clause")
                     self.append(um)
             except Exception as e:
-                log_exception(module=self, exception=e)
+                log_utils.log_exception(module=self, exception=e)
 
     def get_new_iu_buffer_from_clause_ius(self, clause_ius):
         """Function that take all TextFinalIUs from one clause, synthesizes the
@@ -300,7 +300,7 @@ class SimpleTTSModule(retico_core.AbstractModule):
         """Setup Module by instanciating the TTS model and its related audio
         attributes."""
         super().setup()
-        self.model = TTS(self.model_name).to(self.device)
+        self.model = api.TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
         self.chunk_size = int(self.samplerate * self.frame_duration)
         self.chunk_size_bytes = self.chunk_size * self.samplewidth

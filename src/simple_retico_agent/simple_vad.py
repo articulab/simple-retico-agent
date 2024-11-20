@@ -24,8 +24,7 @@ import pydub
 import webrtcvad
 
 import retico_core
-from retico_core.audio import AudioIU
-from retico_core.text import TextIU
+from retico_core import audio, text
 from simple_retico_agent.additional_IUs import VADIU
 
 
@@ -54,7 +53,7 @@ class SimpleVADModule(retico_core.AbstractModule):
 
     @staticmethod
     def input_ius():
-        return [AudioIU, TextIU]
+        return [audio.AudioIU, text.TextIU]
 
     @staticmethod
     def output_iu():
@@ -93,12 +92,12 @@ class SimpleVADModule(retico_core.AbstractModule):
         self.vad = webrtcvad.Vad(vad_aggressiveness)
         self.VA_agent = False
 
-    def resample_audio(self, audio):
+    def resample_audio(self, raw_audio):
         """Resample the audio's frame_rate to correspond to
         self.target_framerate.
 
         Args:
-            audio (bytes): the audio received from the microphone that
+            raw_audio (bytes): the audio received from the microphone that
                 could need resampling.
 
         Returns:
@@ -106,14 +105,14 @@ class SimpleVADModule(retico_core.AbstractModule):
         """
         if self.input_framerate != self.target_framerate:
             s = pydub.AudioSegment(
-                audio,
+                raw_audio,
                 sample_width=self.sample_width,
                 channels=self.channels,
                 frame_rate=self.input_framerate,
             )
             s = s.set_frame_rate(self.target_framerate)
             return s._data
-        return audio
+        return raw_audio
 
     def process_update(self, update_message):
         """Receives TextIU and AudioIU, use the first one to set the
@@ -128,7 +127,7 @@ class SimpleVADModule(retico_core.AbstractModule):
         """
         for iu, ut in update_message:
             # IUs from SpeakerModule, can be either agent BOT or EOT
-            if isinstance(iu, TextIU):
+            if isinstance(iu, text.TextIU):
                 if ut == retico_core.UpdateType.ADD:
                     # agent BOT
                     if iu.payload == "agent_BOT":
@@ -136,18 +135,18 @@ class SimpleVADModule(retico_core.AbstractModule):
                     # agent EOT
                     elif iu.payload == "agent_EOT":
                         self.VA_agent = False
-            elif isinstance(iu, AudioIU):
+            elif isinstance(iu, audio.AudioIU):
                 if ut == retico_core.UpdateType.ADD:
                     if self.input_framerate != iu.rate:
                         raise ValueError(
                             f"input framerate differs from iu framerate : {self.input_framerate}\
                             vs {iu.rate}"
                         )
-                    audio = self.resample_audio(iu.raw_audio)
-                    VA_user = self.vad.is_speech(audio, self.target_framerate)
+                    raw_audio = self.resample_audio(iu.raw_audio)
+                    VA_user = self.vad.is_speech(raw_audio, self.target_framerate)
                     output_iu = self.create_iu(
                         grounded_in=iu,
-                        raw_audio=audio,
+                        raw_audio=raw_audio,
                         nframes=iu.nframes,
                         rate=self.input_framerate,
                         sample_width=self.sample_width,

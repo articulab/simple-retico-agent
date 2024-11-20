@@ -1,6 +1,21 @@
-conda env create --name [env_name] -f env_requirements/retico_cuda_curr.yml
+# clone repo
+`git clone https://github.com/articulab/simple-retico-agent`
 
-pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DLLAMA_CUBLAS=on" && pip install llama-cpp-python --no-cache-dir
+# Create your virtual environment with python 3.11.7 version 
 
-set "CMAKE_ARGS=-DLLAMA_CUBLAS=on" && pip install llama-cpp-python --no-cache-dir
-set "CMAKE_ARGS=-DGGML_CUDA=on" && pip install llama-cpp-python --no-cache-dir
+With conda : 
+`conda env create -n [env_name] python=3.11.7`
+
+# install package and its dependencies
+`pip install .`
+
+# install cuda support for Deep Learning retico modules (ASR, LLM, TTS) (to speed up greatly the system's execution)
+modify this line with your installed cuda toolkit version (I put `cu118` because I am using cuda 11.8 version)
+`pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 --force-reinstall --no-cache`
+
+# installation for llama-cpp-python's cuda support (GPU execution)
+`pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+
+if it doesn't work, and you are using conda, you can copy the exact environement I am using, and try to reinstall llama-cpp-python's cuda supported version: 
+`conda env update -n [env_name] -f env_requirements/retico_cuda_curr.yml --prune`
+`pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`

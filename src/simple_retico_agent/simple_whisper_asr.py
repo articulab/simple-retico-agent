@@ -27,9 +27,8 @@ import transformers
 from faster_whisper import WhisperModel
 
 import retico_core
-from retico_core.utils import device_definition
-from retico_core.log_utils import log_exception
-from retico_core.text import SpeechRecognitionIU
+from retico_core import log_utils, text
+from simple_retico_agent.utils import device_definition
 from simple_retico_agent.additional_IUs import VADIU
 
 transformers.logging.set_verbosity_error()
@@ -69,7 +68,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
 
     @staticmethod
     def output_iu():
-        return SpeechRecognitionIU
+        return text.SpeechRecognitionIU
 
     def __init__(
         self,
@@ -346,7 +345,7 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
                         self.update_current_input()
 
             except Exception as e:
-                log_exception(module=self, exception=e)
+                log_utils.log_exception(module=self, exception=e)
 
     def prepare_run(self):
         """Prepare run by instanciating the Thread that transcribes the user

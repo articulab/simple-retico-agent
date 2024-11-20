@@ -12,6 +12,10 @@ The system contains the following new modules :
 - TTS : generates the voice of the agent corresponding to the textual answer from the LLM.
 - Speaker : outputs the voice of the agent through computer's speakers, and send agent's voice activity information to VAD.
 
+## Documentation
+
+The documentation is available on ReadTheDocs here : [https://simple-conversational-retico-agent.readthedocs.io](https://simple-conversational-retico-agent.readthedocs.io/en/latest).
+
 ## Pre-requisties
 
 - Cuda installation
@@ -31,11 +35,7 @@ cd simple-retico-agent
 pip install .
 ```
 
-Install llama-cpp-python (on its own because of the special installation). The cuda wheel needs to match your cuda version (here cu124 is for cuda version 12.4)
-
-```bash
-pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-```
+For a more precise installation process, to install cuda support, etc, check the documentation's [Installation page](https://simple-conversational-retico-agent.readthedocs.io/en/latest/installation.html).
 
 ## Run the system
 
