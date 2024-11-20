@@ -21,7 +21,11 @@ import pyaudio
 
 import retico_core
 from retico_core.text import TextIU
-from additional_IUs import AudioFinalIU
+
+# from .additional_IUs import AudioFinalIU
+# import simple_retico_agent
+
+from simple_retico_agent.additional_IUs import AudioFinalIU
 
 
 class SimpleSpeakerModule(retico_core.AbstractModule):

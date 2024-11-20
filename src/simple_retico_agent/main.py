@@ -1,14 +1,19 @@
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import retico_core
-from retico_core import network, audio, debug, text
+from retico_core import network, audio
 from functools import partial
 import torch
 
-from dialogue_history import DialogueHistory
-from simple_vad import SimpleVADModule
-from simple_whisper_asr import SimpleWhisperASRModule
-from simple_llm import SimpleLLMModule
-from simple_tts import SimpleTTSModule
-from simple_speaker import SimpleSpeakerModule
+
+from simple_retico_agent.dialogue_history import DialogueHistory
+from simple_retico_agent.simple_vad import SimpleVADModule
+from simple_retico_agent.simple_whisper_asr import SimpleWhisperASRModule
+
+from simple_retico_agent.simple_llm import SimpleLLMModule
+from simple_retico_agent.simple_tts import SimpleTTSModule
+from simple_retico_agent.simple_speaker import SimpleSpeakerModule
 
 
 from retico_core.log_utils import (
@@ -61,6 +66,7 @@ def main_simple():
             ],
         )
     ]
+    # filters = []
     # configurate logger
     terminal_logger, _ = retico_core.log_utils.configurate_logger(
         log_folder, filters=filters
@@ -99,6 +105,7 @@ def main_simple():
         dialogue_history=dialogue_history,
         device=device,
         context_size=context_size,
+        verbose=True,
     )
 
     tts = SimpleTTSModule(
@@ -134,3 +141,15 @@ def main_simple():
 
 if __name__ == "__main__":
     main_simple()
+
+    # module_order = [
+    #     "Microphone",
+    #     "VAD",
+    #     "ASR",
+    #     "LLM",
+    #     "TTS",
+    #     "Speaker",
+    # ]
+    # plot_once(
+    #     plot_config_path="configs/prompt_format_config.json", module_order=module_order
+    # )

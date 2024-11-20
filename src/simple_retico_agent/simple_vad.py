@@ -26,7 +26,7 @@ import webrtcvad
 import retico_core
 from retico_core.audio import AudioIU
 from retico_core.text import TextIU
-from additional_IUs import VADIU
+from simple_retico_agent.additional_IUs import VADIU
 
 
 class SimpleVADModule(retico_core.AbstractModule):
