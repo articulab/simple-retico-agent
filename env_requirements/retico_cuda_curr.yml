@@ -167,7 +167,6 @@ dependencies:
       - langcodes==3.3.0
       - lazy-loader==0.3
       - librosa==0.10.1
-      - llama-cpp-python==0.2.79
       - llvmlite==0.42.0
       - markdown==3.6
       - markdown-it-py==3.0.0

@@ -1,6 +1,6 @@
-# Simple Retico Agent (part of Articulab's Son of Sara project)
+# Simple Retico Conversational Agent (part of Articulab's Son of Sara project)
 
-This repository is a presentation of a simple conversational agent, build upon an incremental platform for dialogue system called [retico](https://github.com/retico-team/). The agent is built to have a oral conversation  with the user, following a pre-defined scenario.
+This repository is a presentation of a simple conversational agent, build upon an incremental platform for dialogue system called [retico](https://github.com/retico-team/). The agent is built to have a oral conversation  with the user, following a pre-defined scenario. This agent was developped as part of Son-of-Sara project, by [Articulab](https://articulab.hcii.cs.cmu.edu/), a multi-disciplinary cognitive science team, member of the Almanach project team, of the French public research center [Inria Paris](https://www.inria.fr/en).
 
 This agent is composed of multiple retico modules, each providing the system with a dialogue-related capacity (comprehension, answer generation, memory, etc). Some module use deep learning models to perform complex tasks.
 The system contains the following new modules :
@@ -14,7 +14,7 @@ The system contains the following new modules :
 
 ## Pre-requisties
 
-- Cuda
+- Cuda installation
 
 ## Installation
 
