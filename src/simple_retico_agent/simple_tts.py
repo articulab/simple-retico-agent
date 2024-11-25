@@ -226,12 +226,6 @@ class SimpleTTSModule(retico_core.AbstractModule):
                     end_of_turn = clause_ius[-1].final
                     um = retico_core.UpdateMessage()
                     if end_of_turn:
-                        self.terminal_logger.info(
-                            "EOT TTS",
-                            debug=True,
-                            end_of_turn=end_of_turn,
-                            clause_ius=clause_ius,
-                        )
                         self.terminal_logger.info("EOT TTS")
                         self.file_logger.info("EOT")
                         self.first_clause = True
@@ -266,9 +260,6 @@ class SimpleTTSModule(retico_core.AbstractModule):
         """
         # preprocess on words
         current_text, words = self.one_clause_text_and_words(clause_ius)
-        self.terminal_logger.info(
-            "TTS get iu clause", debug=True, current_text=current_text, words=words
-        )
         self.file_logger.info("before_synthesize")
         new_audio, final_outputs = self.synthesize(current_text)
         self.file_logger.info("after_synthesize")

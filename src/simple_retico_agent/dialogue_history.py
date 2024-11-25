@@ -177,14 +177,10 @@ class DialogueHistory:
         utterance["turn_id"] = (
             len(self.dialogue_history) if utterance["turn_id"] else utterance["turn_id"]
         )
-        self.terminal_logger.info(
-            "DH append utterance",
-            turn_id=utterance["turn_id"],
-            sentence=utterance["text"],
-            speaker=utterance["speaker"],
-            debug=True,
-        )
         self.dialogue_history.append(utterance)
+        c = self.prompt_format_config
+        s = utterance["speaker"]
+        print(f"\n{c[s]['role']} {c[s]['role_sep']} {utterance['text']}")
 
     def reset_system_prompt(self):
         """Set the system prompt to initial_system_prompt, which is the prompt
@@ -278,13 +274,6 @@ class DialogueHistory:
 
         # decode
         new_agent_sentence = new_agent_sentence.decode("utf-8")
-
-        self.terminal_logger.info(
-            "DH interruption alignement func",
-            utterance=utterance,
-            new_agent_sentence=new_agent_sentence,
-            debug=True,
-        )
 
         # store the new sentence in the dialogue history
         utterance["text"] = new_agent_sentence

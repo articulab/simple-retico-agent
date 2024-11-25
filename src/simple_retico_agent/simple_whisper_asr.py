@@ -320,10 +320,6 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
 
                     if user_EOT:
                         self.vad_state = "user_silent"
-                        self.terminal_logger.info(
-                            "ASR COMMIT text ius",
-                            debug=True,
-                        )
                         for iu in self.current_output:
                             self.commit(iu)
                             um.add_iu(iu, retico_core.UpdateType.COMMIT)

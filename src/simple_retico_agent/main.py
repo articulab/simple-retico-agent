@@ -106,7 +106,7 @@ def main_simple():
         dialogue_history=dialogue_history,
         device=device,
         context_size=context_size,
-        verbose=True,
+        # verbose=True,
     )
 
     tts = SimpleTTSModule(
@@ -152,5 +152,5 @@ if __name__ == "__main__":
     #     "Speaker",
     # ]
     # plot_once(
-    #     plot_config_path="configs/prompt_format_config.json", module_order=module_order
+    #     plot_config_path="configs/plot_config_simple.json", module_order=module_order
     # )

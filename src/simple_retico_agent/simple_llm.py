@@ -567,7 +567,7 @@ class SimpleLLMModule(retico_core.AbstractModule):
         user_sentence = self.recreate_sentence_from_um(self.current_input)
         self.new_user_sentence(user_sentence)
         prompt, prompt_tokens = self.prepare_dialogue_history()
-        print("final prompt = ", prompt)
+        # self.terminal_logger.info(prompt, debug=True)
         agent_sentence, agent_sentence_nb_tokens = self.generate_next_sentence(
             prompt_tokens
         )
@@ -576,11 +576,6 @@ class SimpleLLMModule(retico_core.AbstractModule):
 
         if self.which_stop_criteria.startswith("stop_pattern"):
             # Remove from agent sentence every word contained in the stop pattern encountered
-            self.terminal_logger.info(
-                self.which_stop_criteria,
-                type=type(self.which_stop_criteria),
-                debug=True,
-            )
             pattern_id = int(self.which_stop_criteria.rsplit("_", maxsplit=1)[-1])
             agent_sentence, nb_token_removed = self.remove_stop_patterns(
                 agent_sentence, pattern_id
@@ -598,10 +593,6 @@ class SimpleLLMModule(retico_core.AbstractModule):
                 final=True,
             )
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-            self.terminal_logger.info(
-                "stop_pattern",
-                debug=True,
-            )
 
         elif self.which_stop_criteria == "stop_token":
             # COMMIT an IU significating that the agent turn is complete (EOT)
@@ -610,10 +601,6 @@ class SimpleLLMModule(retico_core.AbstractModule):
                 final=True,
             )
             next_um.add_iu(iu, retico_core.UpdateType.COMMIT)
-            self.terminal_logger.info(
-                "stop_token",
-                debug=True,
-            )
 
         else:
             raise NotImplementedError(
@@ -623,7 +610,7 @@ class SimpleLLMModule(retico_core.AbstractModule):
         # Add the sentence to dialogue history
         agent_sentence = agent_sentence.decode("utf-8")
         self.new_agent_sentence(agent_sentence)
-        print(f"LLM:\n{agent_sentence}")
+        # print(f"LLM:\n{agent_sentence}")
 
         self.append(next_um)
 
