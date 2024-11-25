@@ -41,7 +41,11 @@ On the top right, we can see that the maximum version supported by computer's dr
 git clone https://github.com/articulab/simple-retico-agent
 ```
 
-### Create and activate your virtual environment with python 3.11.7 version
+### Create and activate your virtual environment
+
+````{warning}
+**python 3.11.7** recommended as the installation has only been tested on this version.
+```
 
 With conda :
 
@@ -99,7 +103,7 @@ python main.py
 
 ### Installation for llama-cpp-python's cuda support (GPU execution)
 
-`llama-ccp-python` is a little bit particular and you will need to reinstall a cuda-supported version to make your LLM run on GPU.
+`llama-ccp-python` is a little bit particular and you will need to reinstall a cuda-supported version to make your LLM run on GPU. Here is the full installation documentation : [https://llama-cpp-python.readthedocs.io/en/latest/](https://llama-cpp-python.readthedocs.io/en/latest/)
 
 To reinstall llama-cpp-python with cuda support on Windows :
 
@@ -146,7 +150,7 @@ llm_load_tensors:   CPU_Mapped model buffer size =  4165.37 MiB
 If it works, you will experience an even faster system than previously when you installed the cuda support, as the LLM inference should be very quick (first clause delivered in less than 500ms)
 
 ````{note}
-If it doesn't work (many people at Articulab had a lot of troubles installing llama-cpp-python), you could still have a solution. If you are using conda, you can try to copy an exact conda environement that was able to run the system on GPU with llama-cpp-python cuda support. After the env installed, try to reinstall llama-cpp-python's cuda supported version:
+If it doesn't work (many people at Articulab had a lot of troubles installing llama-cpp-python), you can try to reinstall it a second time with the same command (it works sometimes). You could also have a final solution, if you are using conda, you can try to copy an exact conda environement that was able to run the system on GPU with llama-cpp-python cuda support. After the env installed, try to reinstall llama-cpp-python's cuda supported version:
 
 ```bash
 conda env update -n [env_name] -f env_requirements/retico_cuda_curr.yml --prune

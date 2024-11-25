@@ -66,7 +66,8 @@ install cuda and C related libs for CUDA support (TTS, ASR, LLM)
 -> System (but LLM) working on CUDA : YES
 reinstall llama-cpp-python with CUDA support with :
 - `set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install --no-cache-dir llama-cpp-python`
--> LLM on CUDA working ??? YES
+-> LLM on CUDA working YES
+-> how to reproduce ? llama-cpp-python not installable in s9...
 
 # s9
 create conda env with python 3.11.7
@@ -90,4 +91,19 @@ Successfully installed MarkupSafe-2.1.5 filelock-3.13.1 fsspec-2024.2.0 jinja2-3
 -> System (but LLM) working on CUDA : YES
 reinstall llama-cpp-python with CUDA support with :
 - `pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install --no-cache-dir llama-cpp-python`
--> LLM on CUDA working ?
+-> LLM on CUDA working ? Not the first time
+reinstall it : 
+- `pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install --no-cache-dir llama-cpp-python`
+-> LLM on CUDA working ? YES
+
+# cuda122
+conda create -n env python=3.11.7
+pip install .
+pip install torch torchvision torchaudio
+-> cuda torch not available
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --no-cache
+-> cuda torch available !
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+-> not working, LLM on CPU
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+-> not working, LLM on CPU
