@@ -57,15 +57,13 @@ pip install .
 ```
 
 ```{note}
+
 After this, you should be able to run the system on your CPU (but it is not recommended as it will be very slow). You can test the system by executing the main file from `src/simple_retico_agent/` :
 
 ```bash
 python main.py
-```
 
 ```
-
-
 
 ## Installation to execute system on GPU (with CUDA support)
 
