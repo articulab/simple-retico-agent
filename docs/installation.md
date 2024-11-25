@@ -43,7 +43,7 @@ git clone https://github.com/articulab/simple-retico-agent
 
 ### Create and activate your virtual environment
 
-````{warning}
+```{warning}
 **python 3.11.7** recommended as the installation has only been tested on this version.
 ```
 
