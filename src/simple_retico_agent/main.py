@@ -12,6 +12,7 @@ from simple_retico_agent.simple_vad import SimpleVADModule
 from simple_retico_agent.simple_whisper_asr import SimpleWhisperASRModule
 
 from simple_retico_agent.simple_llm import SimpleLLMModule
+
 from simple_retico_agent.simple_tts import SimpleTTSModule
 from simple_retico_agent.simple_speaker import SimpleSpeakerModule
 
