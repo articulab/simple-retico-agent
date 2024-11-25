@@ -25,8 +25,8 @@ autodoc_mock_imports = [
     "faster_whisper",
     "llama_cpp",
     "TTS",
-    "numpy",
-    "pyaudio",
+    # "numpy",
+    "pyaudio",  # from retico-core
     # "retico_core",
     # "retico-core @ git+https://github.com/articulab/retico-core.git",
 ]
