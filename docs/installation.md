@@ -89,10 +89,14 @@ torch.cuda.is_available()
 
 If `torch.cuda.is_available()` returns `True`, it worked and your DL models should be able to run on GPU. If it returns `False` your torch or cuda installation has problems (maybe the cuda and torch versions do not correspond to one another).
 
+```{note}
+
 If it returns `True`, you can test the system's execution on GPU (it should speed up the execution greatly, as the system should be able to answer in less than 3 seconds) by executing the main file from `src/simple_retico_agent/` :
 
-```bash
-python main.py
+    ```bash
+    python main.py
+    ```
+
 ```
 
 ### Installation for llama-cpp-python's cuda support (GPU execution)
@@ -143,6 +147,13 @@ llm_load_tensors:   CPU_Mapped model buffer size =  4165.37 MiB
 
 If it works, you will experience an even faster system than previously when you installed the cuda support, as the LLM inference should be very quick (first clause delivered in less than 500ms)
 
-if it doesn't work (many people at Articulab had a lot of troubles installing llama-cpp-python), you could still have a solution. If you are using conda, you can try to copy an exact conda environement that was able to run the system on GPU with llama-cpp-python cuda support. After the env installed, try to reinstall llama-cpp-python's cuda supported version:
-`conda env update -n [env_name] -f env_requirements/retico_cuda_curr.yml --prune`
-`pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir`
+```{note}
+
+If it doesn't work (many people at Articulab had a lot of troubles installing llama-cpp-python), you could still have a solution. If you are using conda, you can try to copy an exact conda environement that was able to run the system on GPU with llama-cpp-python cuda support. After the env installed, try to reinstall llama-cpp-python's cuda supported version:
+
+    ```bash
+    conda env update -n [env_name] -f env_requirements/retico_cuda_curr.yml --prune
+    pip uninstall llama-cpp-python && set "CMAKE_ARGS=-DGGML_CUDA=on" && set "FORCE_CMAKE=1" && pip install llama-cpp-python --no-cache-dir
+    ```
+
+```
