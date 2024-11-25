@@ -71,7 +71,21 @@ python main.py
 
 ## Installation to execute system on GPU (with CUDA support)
 
-As many modules dialogue tasks (ASR, NLG, TTS, etc) are fullfilled by Deep Learning models, that needs high computing power to run on a human-like dialogue time-scale (<1 second..), it is highly recommended to execute the system using GPUs. In order to do that you will need to install few GPU-related dependencies.
+As many modules dialogue tasks (ASR, NLG, TTS, etc) are fullfilled by Deep Learning models, that needs high computing power to run on a human-like dialogue time-scale (<1 second..), it is highly recommended to execute the system using GPUs. In order to do that you will need to install few GPU-related dependencies. A CUDA Toolkit is required before following this cuda support installation process. To check your installed version of CUDA toolkit, you can run the following command :
+
+```bash
+nvcc --version
+```
+
+the command will return something like that if you have cuda toolkit version **12.2** installed :
+
+```bash
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2023 NVIDIA Corporation
+Built on Tue_Jun_13_19:42:34_Pacific_Daylight_Time_2023
+Cuda compilation tools, release 12.2, V12.2.91
+Build cuda_12.2.r12.2/compiler.32965470_0
+```
 
 ### Install cuda support for Deep Learning retico modules (ASR, LLM, TTS) (to speed up greatly the system's execution)
 
