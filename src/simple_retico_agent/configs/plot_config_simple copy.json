@@ -4,43 +4,43 @@
             "process_update": {
                 "plot_settings": {
                     "marker": "|",
-                    "marker_color": "navy",
+                    "marker_color": "mediumblue",
                     "marker_size": 2
                 }
             },
             "append UM": {
                 "plot_settings": {
                     "marker": "|",
-                    "marker_color": "cyan",
+                    "marker_color": "deepskyblue",
                     "marker_size": 6
                 }
             },
             "create_iu": {
                 "plot_settings": {
                     "marker": "|",
-                    "marker_color": "navy",
+                    "marker_color": "mediumblue",
                     "marker_size": 10
-                }
-            },
-            "send_clause": {
-                "plot_settings": {
-                    "marker": "|",
-                    "marker_color": "deepskyblue",
-                    "marker_size": 15
                 }
             },
             "EOT": {
                 "plot_settings": {
                     "marker": "|",
                     "marker_color": "r",
-                    "marker_size": 35
+                    "marker_size": 25
                 }
             },
             "start_answer_generation": {
                 "plot_settings": {
                     "marker": "|",
                     "marker_color": "seagreen",
-                    "marker_size": 35
+                    "marker_size": 25
+                }
+            },
+            "send_clause": {
+                "plot_settings": {
+                    "marker": "|",
+                    "marker_color": "violet",
+                    "marker_size": 20
                 }
             },
             "any_event": {
@@ -99,14 +99,14 @@
                 "plot_settings": {
                     "marker": "|",
                     "marker_color": "darkmagenta",
-                    "marker_size": 25
+                    "marker_size": 30
                 }
             },
             "before_synthesize": {
                 "plot_settings": {
                     "marker": "|",
                     "marker_color": "violet",
-                    "marker_size": 30
+                    "marker_size": 35
                 }
             }
         }
@@ -116,8 +116,8 @@
             "predict": {
                 "plot_settings": {
                     "marker": "|",
-                    "marker_color": "darkmagenta",
-                    "marker_size": 25
+                    "marker_color": "darkviolet",
+                    "marker_size": 30
                 }
             }
         }

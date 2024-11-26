@@ -97,7 +97,7 @@ class SimpleTTSModule(retico_core.AbstractModule):
             speaker_wav (string): path to a wav file containing the
                 desired voice to copy (for voice cloning models).
             frame_duration (float): duration of the audio chunks
-                contained in the outputted TextAlignedAudioIUs.
+                contained in the outputted AudioFinalIUs.
             verbose (bool, optional): the verbose level of the TTS
                 model. Defaults to False.
             device (string, optional): the device the module will run on

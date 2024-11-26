@@ -5,34 +5,6 @@
 - pyaudio (installation process depends on your OS : [installation documentation](https://pypi.org/project/PyAudio/))
 - CUDA Toolkit installed ([all versions here](https://developer.nvidia.com/cuda-toolkit-archive))
 
-To check which version to install you can run the `nvidia-smi` command on the terminal :
-
-```bash
-$ nvidia-smi
-Wed Nov 21 19:41:32 2018       
-+-----------------------------------------------------------------------------+
-| NVIDIA-SMI 410.72       Driver Version: 410.72       CUDA Version: 10.0     |
-|-------------------------------+----------------------+----------------------+
-| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
-|===============================+======================+======================|
-|   0  GeForce GTX 106...  Off  | 00000000:01:00.0 Off |                  N/A |
-| N/A   53C    P0    26W /  N/A |    379MiB /  6078MiB |      2%      Default |
-+-------------------------------+----------------------+----------------------+
-                                                                               
-+-----------------------------------------------------------------------------+
-| Processes:                                                       GPU Memory |
-|  GPU       PID   Type   Process name                             Usage      |
-|=============================================================================|
-|    0      1324      G   /usr/lib/xorg/Xorg                           225MiB |
-|    0      2844      G   compiz                                       146MiB |
-|    0     15550      G   /usr/lib/firefox/firefox                       1MiB |
-|    0     19992      G   /usr/lib/firefox/firefox                       1MiB |
-|    0     23605      G   /usr/lib/firefox/firefox                       1MiB |
-```
-
-On the top right, we can see that the maximum version supported by computer's drivers is `CUDA Version: 10.0`.
-
 ## Basic installation (CPU support)
 
 ### clone repo
@@ -71,13 +43,47 @@ python main.py
 
 ## Installation to execute system on GPU (with CUDA support)
 
-As many modules dialogue tasks (ASR, NLG, TTS, etc) are fullfilled by Deep Learning models, that needs high computing power to run on a human-like dialogue time-scale (<1 second..), it is highly recommended to execute the system using GPUs. In order to do that you will need to install few GPU-related dependencies. A CUDA Toolkit is required before following this cuda support installation process. To check your installed version of CUDA toolkit, you can run the following command :
+As many modules dialogue tasks (ASR, NLG, TTS, etc) are fullfilled by Deep Learning models, that needs high computing power to run on a human-like dialogue time-scale (<1 second..), it is highly recommended to execute the system using GPUs. In order to do that you will need to install few GPU-related dependencies.
+
+### CUDA
+
+A CUDA Toolkit is required before following this cuda support installation process.
+
+If you haven't installed CUDA, to check which version to install you can run the `nvidia-smi` command on the terminal :
+
+```bash
+$ nvidia-smi
+Wed Nov 21 19:41:32 2018       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 410.72       Driver Version: 410.72       CUDA Version: 10.0     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 106...  Off  | 00000000:01:00.0 Off |                  N/A |
+| N/A   53C    P0    26W /  N/A |    379MiB /  6078MiB |      2%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      1324      G   /usr/lib/xorg/Xorg                           225MiB |
+|    0      2844      G   compiz                                       146MiB |
+|    0     15550      G   /usr/lib/firefox/firefox                       1MiB |
+|    0     19992      G   /usr/lib/firefox/firefox                       1MiB |
+|    0     23605      G   /usr/lib/firefox/firefox                       1MiB |
+```
+
+On the top right, we can see that the maximum version supported by computer's drivers is `CUDA Version: 10.0`.
+
+If you have installed a CUDA Toolkit, to check your installed version, you can run the following command :
 
 ```bash
 nvcc --version
 ```
 
-the command will return something like that if you have cuda toolkit version **12.2** installed :
+the command will return something similar if you have cuda toolkit version **12.2** installed :
 
 ```bash
 nvcc: NVIDIA (R) Cuda compiler driver

@@ -140,17 +140,29 @@ def main_simple():
         )
 
 
-if __name__ == "__main__":
-    main_simple()
+import numpy as np
 
-    # module_order = [
-    #     "Microphone",
-    #     "VAD",
-    #     "ASR",
-    #     "LLM",
-    #     "TTS",
-    #     "Speaker",
-    # ]
-    # plot_once(
-    #     plot_config_path="configs/plot_config_simple.json", module_order=module_order
-    # )
+if __name__ == "__main__":
+    # main_simple()
+
+    module_order = [
+        "Microphone",
+        "VAD",
+        "ASR",
+        "LLM",
+        "TTS",
+        "Speaker",
+    ]
+    plot_once(
+        plot_config_path="configs/plot_config_simple.json", module_order=module_order
+    )
+
+    # ids = np.array(["VAD_A", "VAD_B", "VAD_A", "ASR"])
+    # module_order = ["ASR", "VAD"]
+    # config_order = ["ASR", "VAD_A", "VAD_B"]
+    # # reordered_indices1 = np.concatenate(
+    # #     [np.where(np.array(o in ids))[0] for o in module_order]
+    # # )
+    # # print(reordered_indices1)
+    # reordered_indices2 = np.concatenate([np.where(ids == o)[0] for o in config_order])
+    # print(reordered_indices2)

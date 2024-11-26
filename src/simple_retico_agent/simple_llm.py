@@ -435,7 +435,6 @@ class SimpleLLMModule(retico_core.AbstractModule):
         last_sentence_nb_tokens = 0
         self.which_stop_criteria = None
 
-        self.file_logger.info("start_process")
         # IMPORTANT : the stop crit is executed after the body of the for loop,
         # which means token here is seen inside the loop before being accessible in stop crit funct
         for token in self.model.generate(
