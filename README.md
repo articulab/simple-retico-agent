@@ -12,6 +12,8 @@ The system contains the following new modules :
 - TTS : generates the voice of the agent corresponding to the textual answer from the LLM.
 - Speaker : outputs the voice of the agent through computer's speakers, and send agent's voice activity information to VAD.
 
+The retico system is meant to be used with a **headphone** ! If you don't use one, the agent will be able to listen to itself and will mistake its own voice for the voice of the user (and will most likely continuously answer itself). The voice cancellation model necessary to tackle this issue is not included (yet?) in this system.
+
 ## Documentation
 
 The documentation is available on ReadTheDocs here : [https://simple-conversational-retico-agent.readthedocs.io](https://simple-conversational-retico-agent.readthedocs.io/en/latest).
@@ -64,7 +66,6 @@ configurate_plot(
     is_plot_live=plot_live,
     refreshing_time=1,
     plot_config_path=plot_config_path,
-    module_order=module_order,
     window_duration=30,
 )
 ...

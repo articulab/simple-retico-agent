@@ -46,14 +46,6 @@ def main_simple():
         You play the role of a teacher. Here is the beginning of the conversation :"
     plot_config_path = "configs/plot_config_simple.json"
     plot_live = True
-    module_order = [
-        "Microphone",
-        "VAD",
-        "ASR",
-        "LLM",
-        "TTS",
-        "Speaker",
-    ]
     prompt_format_config = "configs/prompt_format_config.json"
     context_size = 2000
 
@@ -78,7 +70,6 @@ def main_simple():
         is_plot_live=plot_live,
         refreshing_time=1,
         plot_config_path=plot_config_path,
-        module_order=module_order,
         window_duration=30,
     )
 
@@ -134,35 +125,12 @@ def main_simple():
         terminal_logger.exception("exception in main")
         network.stop(mic)
     finally:
-        plot_once(
-            plot_config_path=plot_config_path,
-            module_order=module_order,
-        )
+        plot_once(plot_config_path=plot_config_path)
 
 
 import numpy as np
 
 if __name__ == "__main__":
-    # main_simple()
+    main_simple()
 
-    module_order = [
-        "Microphone",
-        "VAD",
-        "ASR",
-        "LLM",
-        "TTS",
-        "Speaker",
-    ]
-    plot_once(
-        plot_config_path="configs/plot_config_simple.json", module_order=module_order
-    )
-
-    # ids = np.array(["VAD_A", "VAD_B", "VAD_A", "ASR"])
-    # module_order = ["ASR", "VAD"]
-    # config_order = ["ASR", "VAD_A", "VAD_B"]
-    # # reordered_indices1 = np.concatenate(
-    # #     [np.where(np.array(o in ids))[0] for o in module_order]
-    # # )
-    # # print(reordered_indices1)
-    # reordered_indices2 = np.concatenate([np.where(ids == o)[0] for o in config_order])
-    # print(reordered_indices2)
+    # plot_once(plot_config_path="configs/plot_config_simple.json")

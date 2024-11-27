@@ -8,6 +8,7 @@ Welcome to simple-retico-agent's documentation!
    :caption: Contents:
 
    installation
+   plot_and_visualization
    simple_retico_agent
 
 .. include:: ../README.md
