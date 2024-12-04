@@ -1,6 +1,6 @@
 """
-SimpleWhisperASRModule
-======================
+Simple Whisper ASR Module
+=========================
 
 A retico module that provides Automatic Speech Recognition (ASR) using a
 OpenAI's Whisper model.
@@ -344,13 +344,10 @@ class SimpleWhisperASRModule(retico_core.AbstractModule):
                 log_utils.log_exception(module=self, exception=e)
 
     def prepare_run(self):
-        """Prepare run by instanciating the Thread that transcribes the user
-        speech."""
         super().prepare_run()
         self._asr_thread_active = True
         threading.Thread(target=self._asr_thread).start()
 
     def shutdown(self):
-        """Shutdown Thread and Module."""
         super().shutdown()
         self._asr_thread_active = False

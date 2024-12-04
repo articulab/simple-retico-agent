@@ -1,6 +1,6 @@
 """
-SimpleVADModule
-===============
+Simple VAD Module
+=================
 
 A retico module that provides Voice Activity Detection (VAD) using
 WebRTC's VAD. Takes AudioIU as input, resamples the IU's raw_audio to

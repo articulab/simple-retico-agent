@@ -16,23 +16,22 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join("../src")))
 sys.path.insert(0, os.path.abspath(".."))
 
-# mock deps with system level requirements.
-autodoc_mock_imports = [
-    "torch",
-    "pydub",
-    "webrtcvad",
-    "transformers",
-    "faster_whisper",
-    "llama_cpp",
-    "TTS",
-    "pyaudio",
-    # "numpy",
-    # "retico_core",
-    # "retico-core @ git+https://github.com/articulab/retico-core.git",
-]
-
 import simple_retico_agent
-import numpy  # mandatory import to avoid readthedocs build crash
+
+autoapi_dirs = ["../src"]
+autodoc_inherit_docstrings = True
+autoapi_add_toctree_entry = False
+autoapi_template_dir = "_templates/"
+autoapi_options = [
+    "members",
+    "private-members",
+    "show-inheritance",
+    "show-module-summary",
+    "special-members",
+    "imported-members",
+    # "undoc-members",
+    # "inherited-members",
+]
 
 # -- Project information -----------------------------------------------------
 
@@ -50,7 +49,8 @@ author = "Marius Le Chapelier"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    "sphinx.ext.autodoc",
+    "autoapi.extension",
+    # "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "myst_parser",
     "sphinx.ext.autosectionlabel",

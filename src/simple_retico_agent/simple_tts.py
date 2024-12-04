@@ -1,6 +1,6 @@
 """
-SimpleTTSModule
-===============
+Simple TTS Module
+=================
 
 A retico module that provides Text-To-Speech (TTS) to a retico system by
 transforming TextFinalIUs into AudioFinalIUs, clause by clause. When
@@ -288,8 +288,6 @@ class SimpleTTSModule(retico_core.AbstractModule):
         return new_buffer
 
     def setup(self):
-        """Setup Module by instanciating the TTS model and its related audio
-        attributes."""
         super().setup()
         self.model = api.TTS(self.model_name).to(self.device)
         self.samplerate = self.model.synthesizer.tts_config.get("audio")["sample_rate"]
@@ -297,14 +295,11 @@ class SimpleTTSModule(retico_core.AbstractModule):
         self.chunk_size_bytes = self.chunk_size * self.samplewidth
 
     def prepare_run(self):
-        """Prepare run by instanciating the Thread that synthesizes the
-        audio."""
         super().prepare_run()
         self._tts_thread_active = True
         # threading.Thread(target=self._tts_thread).start()
         threading.Thread(target=self._process_one_clause).start()
 
     def shutdown(self):
-        """Shutdown Thread and Module."""
         super().shutdown()
         self._tts_thread_active = False

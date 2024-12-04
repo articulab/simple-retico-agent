@@ -4,12 +4,17 @@ Welcome to simple-retico-agent's documentation!
 ===============================================
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 3
+   :caption: Documentation summary
 
    installation
    plot_and_visualization
-   simple_retico_agent
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Package API
+
+   autoapi/simple_retico_agent/index
 
 .. include:: ../README.md
    :parser: myst

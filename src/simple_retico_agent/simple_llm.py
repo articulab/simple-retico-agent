@@ -1,6 +1,6 @@
 """
-SimpleLLMModule
-===============
+Simple LLM Module
+=================
 
 A retico module that provides Natural Language Generation (NLG) using a
 Large Language Model (LLM).
@@ -661,12 +661,6 @@ class SimpleLLMModule(retico_core.AbstractModule):
                 log_utils.log_exception(module=self, exception=e)
 
     def setup(self, **kwargs):
-        """Instantiate the model with the given model info, if insufficient
-        info given, raise an NotImplementedError.
-
-        Calculates stopping criteria (tokens, patterns, roles, etc) with
-        the init_stop_criteria function.
-        """
         super().setup(**kwargs)
 
         if self.model_path is not None:
@@ -695,12 +689,10 @@ class SimpleLLMModule(retico_core.AbstractModule):
         self.init_stop_criteria()
 
     def prepare_run(self):
-        """Prepare module execution by instanciating the generation Thread."""
         super().prepare_run()
         self.thread_active = True
         threading.Thread(target=self._llm_thread).start()
 
     def shutdown(self):
-        """Shutdown the module and its separate Thread."""
         super().shutdown()
         self.thread_active = False

@@ -1,6 +1,6 @@
 """
-DialogueHistory
-===============
+Dialogue History
+================
 
 The dialogue history can be used to store every user and agent previous
 turns during a dialogue. You can add data using update its data using

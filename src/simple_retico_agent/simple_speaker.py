@@ -1,6 +1,6 @@
 """
-SimpleSpeakerModule
-===================
+Simple Speaker Module
+=====================
 
 A retico module that outputs through the computer's speakers the audio
 contained in AudioFinalIU. The module is similar to the original
@@ -167,7 +167,6 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
         return (data, pyaudio.paContinue)
 
     def prepare_run(self):
-        """Open the stream to enable sound outputting through speakers."""
         super().prepare_run()
         p = self._p
 
@@ -198,7 +197,6 @@ class SimpleSpeakerModule(retico_core.AbstractModule):
         self.stream.start_stream()
 
     def shutdown(self):
-        """Close the audio stream."""
         super().shutdown()
         self.stream.stop_stream()
         self.stream.close()
