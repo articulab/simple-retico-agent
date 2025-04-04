@@ -21,6 +21,11 @@ The documentation is available on ReadTheDocs here : [https://simple-conversatio
 ## Pre-requisties
 
 - Cuda installation
+- C compiler
+    - Linux: gcc or clang
+    - Windows: Visual Studio or MinGW
+    - MacOS: Xcode
+
 
 ## Installation
 
